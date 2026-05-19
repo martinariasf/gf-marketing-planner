@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monthly Planning — Marketing Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="assets/auth.js"></script>
+  <script src="data/plan.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-mark">GF</div>
+      <div>
+        Marketing Planner
+        <small>GF INNOVATIVE SOLUTIONS</small>
+      </div>
+    </div>
+    <nav>
+      <a href="trimester.html">Trimester</a>
+      <a href="monthly.html" class="active">Monthly</a>
+    </nav>
+  </header>
+
+  <div class="month-toolbar">
+    <div>
+      <h1 class="month-title" id="toolbar-title">Monthly Plan</h1>
+      <div class="month-meta" id="toolbar-meta"></div>
+    </div>
+    <div class="month-tabs" id="month-tabs"></div>
+  </div>
+
+  <main id="posts-container">
+    <!-- Post sections injected here -->
+  </main>
+
+  <footer>
+    Built for <strong>GF Innovative Solutions</strong> · Corporate Identity compliant · Marketing Planner v1.0
+  </footer>
+
+  <script>
+    (function () {
+      const p = window.MARKETING_PLAN;
+      if (!p) {
+        document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif">No plan data loaded. Check data/plan.js</div>';
+        return;
+      }
+
+      document.getElementById('toolbar-title').textContent = p.client.name + ' — Monthly Posts';
+      document.getElementById('toolbar-meta').textContent = `${p.agency.name} · ${p.quarter.label}`;
+
+      // Month tabs (All + each month)
+      const tabsEl = document.getElementById('month-tabs');
+      const months = ['All', ...p.quarter.months.map(m => m.name)];
+      let activeMonth = 'All';
+
+      function renderTabs() {
+        tabsEl.innerHTML = '';
+        months.forEach(m => {
+          const b = document.createElement('button');
+          b.textContent = m;
+          if (m === activeMonth) b.classList.add('active');
+          b.onclick = () => { activeMonth = m; renderTabs(); renderPosts(); };
+          tabsEl.appendChild(b);
+        });
+      }
+
+      function formatDate(iso) {
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      }
+
+      function monthOf(iso) {
+        return new Date(iso).toLocaleDateString('en-US', { month: 'long' });
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+
+      function captionWithHashtags(copy, hashtags) {
+        const c = escapeHtml(copy);
+        const h = (hashtags || []).map(t => `<span class="ig-hash">${escapeHtml(t)}</span>`).join(' ');
+        return c.replace(/\n/g, '<br>') + (h ? '<br><br>' + h : '');
+      }
+
+      function captionLinkedIn(copy, hashtags) {
+        const c = escapeHtml(copy);
+        const h = (hashtags || []).map(t => `<span class="li-hash">${escapeHtml(t)}</span>`).join(' ');
+        return c.replace(/\n/g, '<br>') + (h ? '<br><br>' + h : '');
+      }
+
+      function renderMockup(post) {
+        if (post.channel === 'linkedin') {
+          return `
+            <div class="li-card">
+              <div class="li-header">
+                <div class="li-avatar">${escapeHtml(p.client.logoInitials || 'FV')}</div>
+                <div>
+                  <div class="li-name">${escapeHtml(p.client.name)}</div>
+                  <div class="li-sub">${escapeHtml(p.client.industry)} · Sponsored</div>
+                  <div class="li-sub">${formatDate(post.date)}</div>
+                </div>
+              </div>
+              <div class="li-text">${captionLinkedIn(post.copy, post.hashtags)}</div>
+              <div class="li-image" style="background-image: url('${escapeHtml(post.image)}')"></div>
+              <div class="li-stats">
+                <span>👍 ❤️ 💡  342 reactions</span>
+                <span>48 comments · 27 reposts</span>
+              </div>
+            </div>`;
+        }
+        // default: instagram phone mockup (also fine for TikTok/general)
+        return `
+          <div class="ig-phone">
+            <div class="ig-notch"></div>
+            <div class="ig-header">
+              <div class="ig-avatar"><div>${escapeHtml(p.client.logoInitials || 'FV')}</div></div>
+              <div class="ig-handle">
+                ${escapeHtml((p.client.handle || '@brand').replace('@',''))}
+                <small>${escapeHtml(post.format || 'Post')}</small>
+              </div>
+              <div class="ig-more">⋯</div>
+            </div>
+            <div class="ig-image" style="background-image: url('${escapeHtml(post.image)}')"></div>
+            <div class="ig-actions">
+              <span>♡</span><span>💬</span><span>↗</span><span class="bookmark">🔖</span>
+            </div>
+            <div class="ig-likes">2,847 likes</div>
+            <div class="ig-caption">
+              <strong>${escapeHtml((p.client.handle || '@brand').replace('@',''))}</strong>
+              ${captionWithHashtags(post.copy, post.hashtags)}
+            </div>
+          </div>`;
+      }
+
+      function statusPill(status) {
+        const map = {
+          approved:  { txt: 'Approved',   cls: 'pill-green' },
+          in_review: { txt: 'In review',  cls: 'pill-blue'  },
+          draft:     { txt: 'Draft',      cls: 'pill-gray'  }
+        };
+        const s = map[status] || map.draft;
+        return `<span class="pill ${s.cls}">${s.txt}</span>`;
+      }
+
+      function renderPosts() {
+        const container = document.getElementById('posts-container');
+        container.innerHTML = '';
+        const filtered = p.posts.filter(post =>
+          activeMonth === 'All' || monthOf(post.date) === activeMonth
+        );
+
+        if (filtered.length === 0) {
+          container.innerHTML = '<div style="padding:96px 32px;text-align:center;color:var(--dark-gray)"><h3>No posts planned for ' + activeMonth + ' yet.</h3></div>';
+          return;
+        }
+
+        filtered.forEach(post => {
+          const section = document.createElement('section');
+          section.className = 'post-section';
+          section.innerHTML = `
+            <div class="post-copy-block">
+              <div class="post-date">${formatDate(post.date)}</div>
+              <h2>${escapeHtml(post.title)}</h2>
+              <div class="post-meta">
+                <span class="pill pill-channel-${post.channel}">${escapeHtml(post.channel)}</span>
+                <span class="pill pill-blue">${escapeHtml(post.format)}</span>
+                <span class="pill pill-gray">${escapeHtml(post.pillar)}</span>
+                ${post.campaign ? `<span class="pill pill-green">${escapeHtml(post.campaign)}</span>` : ''}
+                ${statusPill(post.status)}
+              </div>
+              <div class="copy-body">${escapeHtml(post.copy)}</div>
+              <div class="hashtags">${(post.hashtags || []).map(escapeHtml).join(' ')}</div>
+              <div class="cta-line"><strong>CTA:</strong> ${escapeHtml(post.cta || '—')}</div>
+            </div>
+            <div class="mockup-col">
+              ${renderMockup(post)}
+            </div>
+          `;
+          container.appendChild(section);
+        });
+      }
+
+      renderTabs();
+      renderPosts();
+    })();
+  </script>
+</body>
+</html>

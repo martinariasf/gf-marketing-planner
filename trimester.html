@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trimester Plan — Marketing Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="assets/auth.js"></script>
+  <script src="data/plan.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-mark">GF</div>
+      <div>
+        Marketing Planner
+        <small>GF INNOVATIVE SOLUTIONS</small>
+      </div>
+    </div>
+    <nav>
+      <a href="trimester.html" class="active">Trimester</a>
+      <a href="monthly.html">Monthly</a>
+    </nav>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="quarter-label" id="hero-quarter">Quarter</div>
+    <h1 id="hero-theme">Theme</h1>
+    <div class="client-line"><span id="hero-agency"></span> &middot; strategy brief for <strong id="hero-client"></strong></div>
+    <div class="priorities" id="priorities"></div>
+  </section>
+
+  <div class="container">
+
+    <!-- STRATEGIC ANGLE -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Strategic Angle</div>
+        <h2>The big bet for the quarter</h2>
+      </div>
+    </div>
+    <div class="card card-feature" style="margin-bottom: 48px;">
+      <p id="positioning-statement" style="font-size: 17px; line-height: 1.7; margin: 0; color: var(--primary-blue); font-weight: 500;"></p>
+    </div>
+
+    <!-- BRAND SNAPSHOT -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Brand Snapshot</div>
+        <h2>How we'll position the brand</h2>
+      </div>
+    </div>
+    <div class="brand-snapshot">
+      <div class="quote-card">
+        <div class="lbl">Positioning</div>
+        <div class="positioning" id="positioning"></div>
+        <div class="valueprop" id="valueprop"></div>
+      </div>
+      <div class="card diff-card">
+        <h4>What makes us different</h4>
+        <ul id="differentiators"></ul>
+      </div>
+    </div>
+
+    <!-- WE ARE / WE ARE NOT -->
+    <div class="are-arent">
+      <div class="col we-are">
+        <h4>We are <span class="tag">YES</span></h4>
+        <ul id="we-are"></ul>
+      </div>
+      <div class="col we-arent">
+        <h4>We are not <span class="tag">NO</span></h4>
+        <ul id="we-arent"></ul>
+      </div>
+    </div>
+
+    <!-- TARGET AUDIENCE -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Target Audience</div>
+        <h2>Who we're actually talking to</h2>
+      </div>
+    </div>
+    <div class="audience-grid" id="audience-grid"></div>
+
+    <!-- VOICE & TONE -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Voice &amp; Tone</div>
+        <h2>How we sound</h2>
+      </div>
+    </div>
+    <div class="voice-block">
+      <div class="platform-section-label">Tone descriptors</div>
+      <div class="voice-tones" id="voice-tones"></div>
+      <div class="voice-do-dont">
+        <div class="voice-col">
+          <h4><span class="do-icon">&#10003;</span> Do</h4>
+          <ul id="voice-do"></ul>
+        </div>
+        <div class="voice-col">
+          <h4><span class="dont-icon">&#10005;</span> Don't</h4>
+          <ul id="voice-dont"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLATFORM STRATEGY -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Platform Strategy</div>
+        <h2>Where we'll show up &mdash; and why</h2>
+      </div>
+      <div class="meta">Each platform plays a different role in the funnel.</div>
+    </div>
+    <div class="platforms-grid" id="platforms-grid"></div>
+
+    <!-- KEY DATES -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Key Dates</div>
+        <h2>What's happening in the world this quarter</h2>
+      </div>
+      <div class="meta">Holidays, observances, seasonal moments & owned events &mdash; with a brand angle for each.</div>
+    </div>
+    <div class="dates-section" id="dates-section"></div>
+
+    <!-- CONTENT PILLARS -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Content Mix</div>
+        <h2>What we'll talk about</h2>
+      </div>
+      <div class="meta">Distribution across the quarter</div>
+    </div>
+    <div class="pillars-grid" id="pillars-grid"></div>
+
+    <!-- CAMPAIGN ROADMAP -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Campaigns</div>
+        <h2>12-week campaign roadmap</h2>
+      </div>
+      <div class="meta">Each bar &#61; active campaign window</div>
+    </div>
+    <div class="timeline">
+      <div class="timeline-month-spans">
+        <div></div>
+        <div class="timeline-month" id="month-1">Month 1</div>
+        <div class="timeline-month" id="month-2">Month 2</div>
+        <div class="timeline-month" id="month-3">Month 3</div>
+      </div>
+      <div class="timeline-grid" id="timeline-grid"></div>
+    </div>
+
+    <!-- MONTHLY FOCUS -->
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Per-month focus</div>
+        <h2>Monthly themes &amp; what to watch</h2>
+      </div>
+      <a href="monthly.html" class="btn btn-secondary">See monthly posts &rarr;</a>
+    </div>
+    <div class="focus-grid" id="focus-grid"></div>
+  </div>
+
+  <footer>
+    Built for <strong>GF Innovative Solutions</strong> &middot; Corporate Identity compliant &middot; Marketing Planner v1.1
+  </footer>
+
+  <script>
+    (function () {
+      const p = window.MARKETING_PLAN;
+      if (!p) {
+        document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif">No plan data loaded. Check data/plan.js</div>';
+        return;
+      }
+
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+      // ---- Hero ----
+      document.getElementById('hero-quarter').textContent = p.quarter.label;
+      document.getElementById('hero-theme').textContent = (p.quarter && p.quarter.theme) || p.headline || '';
+      document.getElementById('hero-agency').textContent = p.agency.name;
+      document.getElementById('hero-client').textContent = p.client.name;
+
+      const prioritiesEl = document.getElementById('priorities');
+      (p.strategicPriorities || []).forEach(pr => {
+        const d = document.createElement('div');
+        d.className = 'priority-chip';
+        d.innerHTML = `<div class="lbl">${esc(pr.label)}</div><div class="desc">${esc(pr.description)}</div>`;
+        prioritiesEl.appendChild(d);
+      });
+
+      // ---- Strategic angle ----
+      document.getElementById('positioning-statement').textContent = p.positioningStatement || p.strategy || '';
+
+      // ---- Brand snapshot ----
+      document.getElementById('positioning').textContent = p.client.positioning || '';
+      document.getElementById('valueprop').textContent = p.client.valueProp || '';
+
+      const diffEl = document.getElementById('differentiators');
+      (p.client.differentiators || []).forEach(d => {
+        const li = document.createElement('li');
+        li.textContent = d;
+        diffEl.appendChild(li);
+      });
+
+      // We are / We are not
+      const weAreEl = document.getElementById('we-are');
+      (p.client.weAre || []).forEach(x => { const li = document.createElement('li'); li.textContent = x; weAreEl.appendChild(li); });
+      const weArentEl = document.getElementById('we-arent');
+      (p.client.weAreNot || []).forEach(x => { const li = document.createElement('li'); li.textContent = x; weArentEl.appendChild(li); });
+
+      // ---- Audience ----
+      const audEl = document.getElementById('audience-grid');
+      (p.client.targetAudience || []).forEach((a, i) => {
+        const d = document.createElement('div');
+        d.className = 'audience-card';
+        d.innerHTML = `
+          <div class="segment">Segment ${i + 1}</div>
+          <h4>${esc(a.segment)}</h4>
+          <div class="row"><strong>Demographics</strong>${esc(a.demo)}</div>
+          <div class="row"><strong>Psychographics</strong>${esc(a.psycho)}</div>
+          <div class="row"><strong>Where they live</strong>${esc(a.where)}</div>
+        `;
+        audEl.appendChild(d);
+      });
+
+      // ---- Voice ----
+      const tonesEl = document.getElementById('voice-tones');
+      ((p.client.voice && p.client.voice.tone) || []).forEach(t => {
+        const s = document.createElement('span');
+        s.className = 'voice-tone-chip';
+        s.textContent = t;
+        tonesEl.appendChild(s);
+      });
+      const doEl = document.getElementById('voice-do');
+      ((p.client.voice && p.client.voice.do) || []).forEach(t => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="do-icon">&#10003;</span><span>${esc(t)}</span>`;
+        doEl.appendChild(li);
+      });
+      const dontEl = document.getElementById('voice-dont');
+      ((p.client.voice && p.client.voice.dont) || []).forEach(t => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="dont-icon">&#10005;</span><span>${esc(t)}</span>`;
+        dontEl.appendChild(li);
+      });
+
+      // ---- Platforms ----
+      const platEl = document.getElementById('platforms-grid');
+      (p.platforms || []).forEach(pl => {
+        const card = document.createElement('div');
+        card.className = 'platform-card';
+        const fmt = (pl.formatMix || []).map(f =>
+          `<span class="item">${esc(f.label)}<strong>${esc(f.weight)}</strong></span>`).join('');
+        const watch = (pl.watch || []).map(w =>
+          `<div><span class="dot-g">&#9679;</span> ${esc(w)}</div>`).join('');
+        card.innerHTML = `
+          <div class="platform-header bg-${esc(pl.channelKey)}">
+            <div class="name">${esc(pl.name)}</div>
+            <div class="cadence">${esc(pl.cadence)}</div>
+          </div>
+          <div class="platform-body">
+            <div class="platform-role">${esc(pl.role)}</div>
+            <div class="platform-rationale">${esc(pl.rationale)}</div>
+            <div class="platform-section-label">Format mix</div>
+            <div class="format-mix">${fmt}</div>
+            <div class="platform-section-label">What to watch</div>
+            <div class="watch-list">${watch}</div>
+          </div>
+        `;
+        platEl.appendChild(card);
+      });
+
+      // ---- Key dates ----
+      const datesEl = document.getElementById('dates-section');
+      const byMonth = {};
+      (p.keyDates || []).forEach(d => {
+        const dt = new Date(d.date);
+        const moName = dt.toLocaleDateString('en-US', { month: 'long' });
+        if (!byMonth[moName]) byMonth[moName] = [];
+        byMonth[moName].push({ ...d, _date: dt });
+      });
+      // preserve quarter month order
+      (p.quarter.months || []).forEach(m => {
+        const items = byMonth[m.name];
+        if (!items || items.length === 0) return;
+        items.sort((a, b) => a._date - b._date);
+        const block = document.createElement('div');
+        block.className = 'dates-month';
+        const list = items.map(item => {
+          const day = item._date.getDate();
+          const moAbbr = item._date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+          const relCls = `rel-${esc(item.relevance || 'low')}`;
+          return `
+            <div class="date-row ${relCls}">
+              <div class="date-cell">
+                <div class="day">${day}</div>
+                <div class="mo">${moAbbr}</div>
+              </div>
+              <div>
+                <div class="title-row">${esc(item.title)}<span class="type-tag type-${esc(item.type)}">${esc(item.type)}</span></div>
+                <div class="angle">${esc(item.angle)}</div>
+              </div>
+              <div class="rel-tag ${esc(item.relevance || 'low')}">${esc(item.relevance || 'low')} relevance</div>
+            </div>`;
+        }).join('');
+        block.innerHTML = `
+          <div class="dates-month-header">
+            <div class="name">${esc(m.name)}</div>
+            <div class="count">${items.length} key moment${items.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="dates-list">${list}</div>
+        `;
+        datesEl.appendChild(block);
+      });
+
+      // ---- Pillars ----
+      const pillarsEl = document.getElementById('pillars-grid');
+      (p.pillars || []).forEach(pl => {
+        const d = document.createElement('div');
+        d.className = 'pillar-card';
+        d.style.borderTopColor = pl.color;
+        d.innerHTML = `
+          <div class="pillar-name">${esc(pl.name)}</div>
+          <div class="pillar-weight" style="color: ${esc(pl.color)}">${esc(pl.weight)}%</div>
+          <div class="pillar-desc">${esc(pl.description)}</div>
+        `;
+        pillarsEl.appendChild(d);
+      });
+
+      // ---- Timeline ----
+      (p.quarter.months || []).forEach((m, i) => {
+        const el = document.getElementById('month-' + (i + 1));
+        if (el) el.textContent = m.name;
+      });
+
+      const tg = document.getElementById('timeline-grid');
+      const headerRow = document.createElement('div');
+      headerRow.className = 'timeline-header';
+      headerRow.innerHTML = '<div>CAMPAIGN</div>' +
+        Array.from({length: 12}, (_, i) => `<div>W${i + 1}</div>`).join('');
+      tg.appendChild(headerRow);
+
+      (p.campaigns || []).forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'timeline-row';
+        const label = document.createElement('div');
+        label.className = 'timeline-label';
+        label.innerHTML = esc(c.name) + '<br><span style="font-size:11px;font-weight:400;color:var(--dark-gray)">' + esc(c.pillar) + '</span>';
+        row.appendChild(label);
+        for (let w = 1; w <= 12; w++) {
+          const cell = document.createElement('div');
+          cell.className = 'timeline-cell';
+          if (w === c.startWeek) {
+            const span = c.endWeek - c.startWeek + 1;
+            const bar = document.createElement('div');
+            bar.className = 'timeline-bar';
+            bar.style.background = c.color;
+            bar.style.left = '4px';
+            bar.style.width = `calc(${span * 100}% + ${(span - 1) * 4}px - 8px)`;
+            bar.textContent = c.name;
+            cell.appendChild(bar);
+          }
+          row.appendChild(cell);
+        }
+        tg.appendChild(row);
+      });
+
+      // ---- Monthly focus ----
+      const focusEl = document.getElementById('focus-grid');
+      (p.monthlyFocus || []).forEach(g => {
+        const d = document.createElement('div');
+        d.className = 'focus-card';
+        const priorities = (g.priorities || []).map(x => `<li>${esc(x)}</li>`).join('');
+        const moments = (g.keyMoments || []).map(x => `<li>${esc(x)}</li>`).join('');
+        d.innerHTML = `
+          <div class="month-name">${esc(g.month)}</div>
+          <div class="theme">${esc(g.theme)}</div>
+          <div class="intent">${esc(g.intent)}</div>
+          <div class="mini-label">Priorities</div>
+          <ul>${priorities}</ul>
+          <div class="mini-label">Key moments</div>
+          <ul>${moments}</ul>
+          <div class="watch-block"><strong>What to watch</strong>${esc(g.watch)}</div>
+        `;
+        focusEl.appendChild(d);
+      });
+    })();
+  </script>
+</body>
+</html>
