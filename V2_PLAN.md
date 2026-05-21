@@ -373,14 +373,14 @@ Order = top-to-bottom on the new `client.html`. All in one scrollable page with 
 - Viktor skill spec at `deploy/viktor-skills/weekly-summary.md`: scheduled Monday 09:00 local. Reads performance + goals + prior learnings, generates wins / losses / next test with literal numbers, writes into `performance.weeklySummary`, posts the digest to the client's Telegram contact, optionally seeds a low-confidence hypothesis into `learnings.json` for the upcoming experiment.
 - Both skills are spec-only; not yet installed on the Hermes container. Install once the Postiz API shape + scheduler choice are confirmed.
 
-### Phase 4 — Polish + multi-client + go public (week 4)
-- Client picker landing page (`src/routes/index.tsx` lists all `clients/*/`).
-- Move Caddy off the Tailscale-only bind onto a public hostname (`marketing.gf-innovative.com`?) with TLS — see `deploy/README.md` "Going public" section.
-- Per-client gate (Caddy basic auth in front of `/data/<slug>/*`, OR a simple per-client token in URL — decide based on actual confidentiality of each client's plan).
-- Motion polish pass: page transitions, scroll-triggered fades, KPI count-ups, hover states.
-- Dark mode via shadcn theme toggle (free, low effort).
-- Mobile responsive QA.
-- First real client onboarded (GF Internal? Sebastian?).
+### Phase 4 — Polish + multi-client + go public ✅ MOSTLY DONE 2026-05-21
+- **Client picker** landing page at `/` lists every client from `clients/index.json` with logo initials, industry, headline, quarter, and a status badge. Cards lift on hover and the "Open cockpit" arrow extends — visible affordance for clickability.
+- **Code-split** all 9 client views + the picker with `React.lazy` + `Suspense`. Initial JS dropped from 286 KB → 76 KB gzipped. Recharts (97 KB gzipped) only loads when Goals/Performance is opened. No more 500 KB chunk-size warnings.
+- **Mobile layout**: hamburger → `Sheet` nav on screens < `lg`. Header collapses gracefully — agency name + quarter badge hide on narrow widths but client name + Viktor badge stay visible. Workflow strip uses smaller padding/text and hides scrollbars below `sm`.
+- **Motion polish**: shared `layoutId="nav-active"` on the sidebar active pill (smooth slide between sections), header logo `whileHover` scale, route fade-in on each Outlet change, staggered fade-in on KPI card grids + asset gallery, hover lift on every clickable card. Loading state is now a Skeleton, not a spinner.
+- **Public hostname draft** at `deploy/Caddyfile.public.example`: TLS via Caddy auto-Let's Encrypt, per-client basic auth block template, redirects from Tailscale IP + public IP to the canonical hostname. Steps to switch are inline. **Not yet applied** — needs a domain + DNS pointed at the box first.
+- **Onboarding playbook** at `deploy/ONBOARDING.md`: 7-step walkthrough from intake answers → file tree → index.json registration → CI deploy → spinning up the per-client Viktor container → handoff. Includes a troubleshooting table for the 6 most common breakages.
+- **Deferred to a later phase**: dark mode (touches every chart + color in the app — large for a "polish" item, defer until brand permits); first real-client onboarding (needs Martin to pick GF Internal vs Sebastian and supply the 11 intake answers).
 
 ### Phase 5+ — Future (Pilar's "Viktor 2.0" wishlist)
 - Canva integration (asset generation links + library).

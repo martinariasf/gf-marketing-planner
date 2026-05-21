@@ -1,0 +1,80 @@
+# Public Caddyfile - drop-in replacement for the Tailscale-only Caddyfile
+# once you're ready to expose the dashboard to a real domain with TLS.
+#
+# Steps to switch:
+#   1. Pick a hostname, e.g. marketing.gf-innovative.com.
+#      Point its DNS A/AAAA records at the box's public IPv4/IPv6:
+#        A    marketing.gf-innovative.com  -> 46.224.224.113
+#        AAAA marketing.gf-innovative.com  -> 2a01:4f8:1c19:6ba7::1
+#   2. Edit /opt/marketing-planner/docker-compose.yml:
+#        ports:
+#          - "0.0.0.0:80:80"
+#          - "0.0.0.0:443:443"
+#      (Replace the current "100.92.24.75:80:80" line.)
+#   3. Replace /opt/marketing-planner/Caddyfile with this file (rename it).
+#      Substitute YOUR_HOSTNAME and per-client basic-auth hashes below.
+#   4. `docker compose up -d` to apply.
+#
+# Caddy will fetch a Let's Encrypt cert on the first request and auto-renew.
+
+YOUR_HOSTNAME {
+    encode zstd gzip
+
+    # Per-client data: gated by basic auth.
+    # Generate a hash with:
+    #   docker exec marketing-planner-caddy caddy hash-password --plaintext 'thePassword'
+    # Then add a `basicauth` block per client below.
+    handle /data/fitvibe-demo/* {
+        basicauth {
+            # Example - REPLACE the hash with a real one before deploying.
+            fitvibe JDJhJDE0JFJlcGxhY2VUaGlzSGFzaFdpdGhBUmVhbE9uZQ==
+        }
+        root * /srv/data
+        uri strip_prefix /data
+        file_server {
+            hide .git
+        }
+        header Cache-Control "no-store"
+    }
+
+    # Add one block per client:
+    # handle /data/acme/* {
+    #     basicauth {
+    #         acme JDJhJDE0JC4uLg==
+    #     }
+    #     root * /srv/data
+    #     uri strip_prefix /data
+    #     file_server
+    #     header Cache-Control "no-store"
+    # }
+
+    # Public client index can stay open (just lists slugs + names, no plan data).
+    handle /data/index.json {
+        root * /srv/data
+        uri strip_prefix /data
+        file_server
+        header Cache-Control "no-store"
+        header Access-Control-Allow-Origin "*"
+    }
+
+    # React SPA. Single-page fallback. Hashed assets get aggressive caching.
+    handle {
+        root * /srv/app
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "public, max-age=300, must-revalidate"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    log {
+        output file /var/log/caddy/marketing-planner.log
+        format json
+    }
+}
+
+# Redirect Tailscale + bare-IP requests to the canonical hostname,
+# so old bookmarks keep working but the cert chain stays clean.
+http://100.92.24.75, http://46.224.224.113 {
+    redir https://YOUR_HOSTNAME{uri} permanent
+}

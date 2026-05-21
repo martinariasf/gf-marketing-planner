@@ -7,6 +7,7 @@ import type {
   Learnings,
   ApprovalLogEntry,
   AssetsManifest,
+  ClientIndex,
 } from '@/types'
 import { parseApprovalLog } from '@/types'
 
@@ -87,6 +88,14 @@ export async function loadApprovalsLog(slug: string): Promise<ApprovalLogEntry[]
     return parseApprovalLog(await res.text())
   } catch {
     return []
+  }
+}
+
+export async function loadClientIndex(): Promise<ClientIndex> {
+  try {
+    return await fetchJson<ClientIndex>(`${DATA_ROOT}/index.json`)
+  } catch {
+    return { clients: [] }
   }
 }
 

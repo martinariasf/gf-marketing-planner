@@ -18,8 +18,8 @@ interface Props {
 export function WorkflowStrip({ current = 'plan' }: Props) {
   return (
     <div className="border-b border-border-subtle bg-paper">
-      <div className="mx-auto max-w-7xl px-6 py-3">
-        <div className="flex items-center gap-2 overflow-x-auto">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-2.5 sm:py-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
           {PHASES.map((p, i) => {
             const active = p.key === current
             return (
@@ -32,7 +32,7 @@ export function WorkflowStrip({ current = 'plan' }: Props) {
                   }}
                   transition={{ duration: 0.25 }}
                   className={cn(
-                    'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium',
+                    'flex items-center gap-1.5 sm:gap-2 rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium',
                     !active && 'border border-border-subtle',
                   )}
                   title={p.hint}

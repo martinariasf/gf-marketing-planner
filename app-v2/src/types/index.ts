@@ -26,3 +26,8 @@ export type {
   AssetKind,
   AssetSource,
 } from './asset'
+export type {
+  ClientIndex,
+  ClientIndexEntry,
+  ClientStatus,
+} from './client-index'

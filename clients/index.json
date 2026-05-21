@@ -1,0 +1,13 @@
+{
+  "clients": [
+    {
+      "slug": "fitvibe-demo",
+      "name": "FitVibe Studios",
+      "industry": "Boutique fitness & wellness",
+      "logoInitials": "FV",
+      "quarter": "Q3 2026",
+      "headline": "Summer Strength: turn the July dip into our biggest brand moment of the year",
+      "status": "demo"
+    }
+  ]
+}
