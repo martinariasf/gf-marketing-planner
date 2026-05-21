@@ -18,7 +18,15 @@ import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
 import { useClient } from '@/hooks/use-client'
 import { cn } from '@/lib/utils'
 
-const NAV = [
+interface NavItem {
+  to: string
+  label: string
+  icon: typeof Building2
+  phase: WorkflowPhase
+  disabled?: boolean
+}
+
+const NAV: NavItem[] = [
   { to: 'context',     label: 'Company Context',  icon: Building2,     phase: 'plan'    as WorkflowPhase },
   { to: 'goals',       label: 'Goals vs Actuals', icon: Target,        phase: 'plan'    as WorkflowPhase },
   { to: 'strategy',    label: 'Strategy',         icon: Compass,       phase: 'plan'    as WorkflowPhase },
@@ -26,8 +34,8 @@ const NAV = [
   { to: 'pipeline',    label: 'Pipeline',         icon: KanbanSquare,  phase: 'refine'  as WorkflowPhase },
   { to: 'approvals',   label: 'Approvals',        icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
   { to: 'assets',      label: 'Assets',           icon: Images,        phase: 'prepare' as WorkflowPhase },
-  { to: 'performance', label: 'Performance',      icon: TrendingUp,    phase: 'learn'   as WorkflowPhase, disabled: true },
-  { to: 'learnings',   label: 'Learnings',        icon: Lightbulb,     phase: 'learn'   as WorkflowPhase, disabled: true },
+  { to: 'performance', label: 'Performance',      icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
+  { to: 'learnings',   label: 'Learnings',        icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
 ]
 
 export default function ClientLayout() {

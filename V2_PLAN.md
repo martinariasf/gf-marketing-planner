@@ -366,12 +366,12 @@ Order = top-to-bottom on the new `client.html`. All in one scrollable page with 
 - **Assets** gallery driven by `clients/<slug>/assets/manifest.json`. Thumbnail grid with tabs (All / Approved / Draft / AI / Stock), source badges (Nano Banana / Canva / Stock / Internal), click to open a detail dialog with the design brief and the posts that reference the asset.
 - Viktor's approval-skill spec written at `deploy/viktor-skills/approvals.md`. Not yet deployed to the Hermes container — spec only, ready for review and install.
 
-### Phase 3 — Performance + Learnings + automation (week 3)
-- **Performance** view (per-post metrics, weekly summary, what worked / failed / next test).
-- **Learnings** view.
-- Viktor skill: pull Postiz analytics ? write `performance.json`.
-- Viktor skill: compare actuals vs goals ? generate weekly summary, post to Telegram + dashboard.
-- Hermes scheduler (or fallback cron on the host) runs weekly summary every Monday 09:00.
+### Phase 3 — Performance + Learnings + automation ✅ DONE 2026-05-21
+- **Performance** view: top-performers panel (best by saves / DMs / reach), area chart of weekly reach over the quarter with the quarterly total + follower delta, per-post metrics table with click-to-sort by reach / saves / DMs / clicks (column highlighted, rest dimmed), and a week-N retrospective with wins / losses / next test pulled from `performance.weeklySummary`.
+- **Learnings** view: confidence-tabbed list (All / High / Medium / Low). Each card shows the hypothesis, what happened, the lesson, and a brand-blue-bordered call-out for the recommended behavior change. Links to related post + campaign + platform.
+- Viktor skill spec at `deploy/viktor-skills/sync-postiz-analytics.md`: scheduled daily 06:00 UTC + on-demand via Telegram. Reads every post's `publishing.postizJobId`, calls Postiz analytics endpoint, recomputes aggregates + `vsGoals` pace math, atomic-writes `performance.json`. Closes the publish loop by flipping any newly-published post to `status: "published"` with its `publicUrl`.
+- Viktor skill spec at `deploy/viktor-skills/weekly-summary.md`: scheduled Monday 09:00 local. Reads performance + goals + prior learnings, generates wins / losses / next test with literal numbers, writes into `performance.weeklySummary`, posts the digest to the client's Telegram contact, optionally seeds a low-confidence hypothesis into `learnings.json` for the upcoming experiment.
+- Both skills are spec-only; not yet installed on the Hermes container. Install once the Postiz API shape + scheduler choice are confirmed.
 
 ### Phase 4 — Polish + multi-client + go public (week 4)
 - Client picker landing page (`src/routes/index.tsx` lists all `clients/*/`).
