@@ -23,9 +23,9 @@ const NAV = [
   { to: 'goals',       label: 'Goals vs Actuals', icon: Target,        phase: 'plan'    as WorkflowPhase },
   { to: 'strategy',    label: 'Strategy',         icon: Compass,       phase: 'plan'    as WorkflowPhase },
   { to: 'calendar',    label: 'Content Calendar', icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
-  { to: 'pipeline',    label: 'Pipeline',         icon: KanbanSquare,  phase: 'refine'  as WorkflowPhase, disabled: true },
-  { to: 'approvals',   label: 'Approvals',        icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase, disabled: true },
-  { to: 'assets',      label: 'Assets',           icon: Images,        phase: 'prepare' as WorkflowPhase, disabled: true },
+  { to: 'pipeline',    label: 'Pipeline',         icon: KanbanSquare,  phase: 'refine'  as WorkflowPhase },
+  { to: 'approvals',   label: 'Approvals',        icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
+  { to: 'assets',      label: 'Assets',           icon: Images,        phase: 'prepare' as WorkflowPhase },
   { to: 'performance', label: 'Performance',      icon: TrendingUp,    phase: 'learn'   as WorkflowPhase, disabled: true },
   { to: 'learnings',   label: 'Learnings',        icon: Lightbulb,     phase: 'learn'   as WorkflowPhase, disabled: true },
 ]

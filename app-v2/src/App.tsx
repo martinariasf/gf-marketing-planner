@@ -4,6 +4,9 @@ import ContextView from '@/routes/client/context'
 import GoalsView from '@/routes/client/goals'
 import StrategyView from '@/routes/client/strategy'
 import CalendarView from '@/routes/client/calendar'
+import PipelineView from '@/routes/client/pipeline'
+import ApprovalsView from '@/routes/client/approvals'
+import AssetsView from '@/routes/client/assets'
 
 export default function App() {
   return (
@@ -16,6 +19,9 @@ export default function App() {
           <Route path="goals"     element={<GoalsView />} />
           <Route path="strategy"  element={<StrategyView />} />
           <Route path="calendar"  element={<CalendarView />} />
+          <Route path="pipeline"  element={<PipelineView />} />
+          <Route path="approvals" element={<ApprovalsView />} />
+          <Route path="assets"    element={<AssetsView />} />
           <Route path="*"         element={<Navigate to="context" replace />} />
         </Route>
       </Routes>

@@ -18,3 +18,11 @@ export type {
 } from './performance'
 export type { Post, PostStatus, Channel } from './post'
 export type { Learning, Learnings } from './learning'
+export type { ApprovalLogEntry, ApprovalAction } from './approval'
+export { parseApprovalLog } from './approval'
+export type {
+  AssetItem,
+  AssetsManifest,
+  AssetKind,
+  AssetSource,
+} from './asset'

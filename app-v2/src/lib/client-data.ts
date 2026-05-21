@@ -5,7 +5,10 @@ import type {
   Performance,
   Post,
   Learnings,
+  ApprovalLogEntry,
+  AssetsManifest,
 } from '@/types'
+import { parseApprovalLog } from '@/types'
 
 const DATA_ROOT = '/data'
 
@@ -25,6 +28,8 @@ export interface ClientBundle {
   performance: Performance | null
   posts: Post[]
   learnings: Learnings | null
+  approvalsLog: ApprovalLogEntry[]
+  assets: AssetsManifest | null
 }
 
 function clientPath(slug: string, file: string) {
@@ -75,14 +80,45 @@ export async function loadPosts(slug: string): Promise<Post[]> {
   }
 }
 
+export async function loadApprovalsLog(slug: string): Promise<ApprovalLogEntry[]> {
+  try {
+    const res = await fetch(clientPath(slug, 'approvals.log'), { cache: 'no-store' })
+    if (!res.ok) return []
+    return parseApprovalLog(await res.text())
+  } catch {
+    return []
+  }
+}
+
+export async function loadAssetsManifest(slug: string): Promise<AssetsManifest | null> {
+  try {
+    return await fetchJson<AssetsManifest>(clientPath(slug, 'assets/manifest.json'))
+  } catch {
+    return null
+  }
+}
+
 export async function loadClient(slug: string): Promise<ClientBundle> {
-  const [brief, plan, goals, performance, posts, learnings] = await Promise.all([
-    loadBrief(slug),
-    loadPlan(slug),
-    loadGoals(slug),
-    loadPerformance(slug),
-    loadPosts(slug),
-    loadLearnings(slug),
-  ])
-  return { slug, brief, plan, goals, performance, posts, learnings }
+  const [brief, plan, goals, performance, posts, learnings, approvalsLog, assets] =
+    await Promise.all([
+      loadBrief(slug),
+      loadPlan(slug),
+      loadGoals(slug),
+      loadPerformance(slug),
+      loadPosts(slug),
+      loadLearnings(slug),
+      loadApprovalsLog(slug),
+      loadAssetsManifest(slug),
+    ])
+  return {
+    slug,
+    brief,
+    plan,
+    goals,
+    performance,
+    posts,
+    learnings,
+    approvalsLog,
+    assets,
+  }
 }

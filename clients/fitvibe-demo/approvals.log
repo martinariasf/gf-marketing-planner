@@ -1,0 +1,6 @@
+2026-07-02T19:14:00Z  approve  p001  Lena    via=telegram
+2026-07-08T17:30:00Z  approve  p002  Lena    via=telegram
+2026-07-19T20:11:00Z  approve  p003  Lena    via=telegram  note="v3 after copy revision"
+2026-07-31T18:00:00Z  approve  p004  Martin  via=telegram  note="challenge launch - all-hands approval"
+2026-08-25T16:00:00Z  approve  p005  Lena    via=telegram
+2026-08-26T11:42:00Z  block    p006  Lena    reason="waiting on Maya consent + final image"

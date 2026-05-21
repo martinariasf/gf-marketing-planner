@@ -360,11 +360,11 @@ Order = top-to-bottom on the new `client.html`. All in one scrollable page with 
 - Build views: **Company Context**, **Goals vs Actuals** (with Recharts + count-up KPI cards), **Strategy** (port v1 trimester logic), **Content Calendar** (port v1 monthly logic + channel mockups).
 - Update `SKILL.md` for Viktor: new file layout, one-post-per-file write workflow, `commit.sh` wrapper usage.
 
-### Phase 2 — Pipeline + Approvals + Assets (week 2)
-- **Pipeline** kanban view with Framer Motion drag-and-drop (visual only — moving a card sends a Telegram message to Viktor, doesn't write directly).
-- **Approvals** read-only queue.
-- **Assets** gallery (real thumbnails served from `/data/<slug>/assets/`).
-- Wire Viktor's approval skill: parse `approve <id>` on Telegram, flip status, append to `approvals.log`, push approved posts to Postiz.
+### Phase 2 — Pipeline + Approvals + Assets ✅ DONE 2026-05-21
+- **Pipeline** 8-column kanban (Idea → Drafting → In Review → Needs Revision → Approved → Scheduled → Published → Rejected). Per-card dropdown reveals the literal Telegram command to move it (copies to clipboard + toast); no direct writes from the browser, matching the approval-via-agent contract.
+- **Approvals** read-only queue. Lists all `in_review` / `drafting` / `needs_revision` posts with blocker reasons. Big Telegram banner with a one-click "copy batch approve" button. Recent-activity feed reads `approvals.log` line-by-line.
+- **Assets** gallery driven by `clients/<slug>/assets/manifest.json`. Thumbnail grid with tabs (All / Approved / Draft / AI / Stock), source badges (Nano Banana / Canva / Stock / Internal), click to open a detail dialog with the design brief and the posts that reference the asset.
+- Viktor's approval-skill spec written at `deploy/viktor-skills/approvals.md`. Not yet deployed to the Hermes container — spec only, ready for review and install.
 
 ### Phase 3 — Performance + Learnings + automation (week 3)
 - **Performance** view (per-post metrics, weekly summary, what worked / failed / next test).
