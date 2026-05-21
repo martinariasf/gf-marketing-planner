@@ -1,0 +1,33 @@
+# Caddyfile for the marketing-planner-caddy container.
+# Port 80 inside the container; the host binds 100.92.24.75:80 -> 80.
+
+:80 {
+    encode zstd gzip
+
+    # Per-client data served straight off disk. Viktor edits these
+    # files; the dashboard reads them on every request.
+    handle /data/* {
+        root * /srv/data
+        uri strip_prefix /data
+        file_server {
+            hide .git
+        }
+        header Cache-Control "no-store"
+        header Access-Control-Allow-Origin "*"
+    }
+
+    # React SPA. Unknown paths fall through to index.html.
+    handle {
+        root * /srv/app
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "public, max-age=300, must-revalidate"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

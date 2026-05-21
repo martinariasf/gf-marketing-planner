@@ -1,0 +1,26 @@
+{
+  "id": "p005",
+  "date": "2026-08-26",
+  "channel": "linkedin",
+  "format": "Image post",
+  "pillar": "Brand & Lifestyle",
+  "campaign": "Coach Spotlight Series",
+  "title": "Why corporate wellness programs fail",
+  "image": "https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=1200&q=80",
+  "copy": "Most corporate wellness programs are gym memberships with extra steps.\n\nWe just wrapped week 4 of our Summer Strength Challenge - and 87% of corporate-sponsored participants are still showing up.\n\nThe difference? Three things:\n\n1. Coach accountability, not just access\n2. Peer cohort, not anonymous gym floor\n3. A finite goal (30 days), not vague 'wellness'\n\nIf you're an HR lead looking to actually move the needle, DM us.",
+  "hashtags": ["#corporatewellness", "#HR", "#employeeengagement"],
+  "cta": "DM for corporate package",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Lena",
+    "approvedAt": "2026-08-25T16:00:00Z",
+    "version": 2,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_p005_aug26",
+    "publishedAt": "2026-08-26T08:30:00Z",
+    "publicUrl": "https://linkedin.com/posts/example005"
+  }
+}

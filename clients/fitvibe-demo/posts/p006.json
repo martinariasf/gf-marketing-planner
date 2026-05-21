@@ -1,0 +1,26 @@
+{
+  "id": "p006",
+  "date": "2026-09-08",
+  "channel": "instagram",
+  "format": "Reel",
+  "pillar": "Community",
+  "campaign": "Member Transformations",
+  "title": "Maya's 30 days",
+  "image": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80",
+  "copy": "30 days ago, Maya couldn't do a single push-up.\n\nThis week, she hit 12. Clean. Unbroken.\n\nBut the part she's most proud of? She slept through the night for the first time in two years.\n\nStrength isn't always the number on the bar. Sometimes it's the quiet stuff.\n\nMaya - we're so proud of you.",
+  "hashtags": ["#transformationtuesday", "#strengthstory", "#fitvibefamily", "#wellnessjourney"],
+  "cta": "Tag someone whose transformation inspired you",
+  "status": "in_review",
+  "approval": {
+    "status": "in_review",
+    "approvedBy": null,
+    "approvedAt": null,
+    "version": 1,
+    "blockerReason": "Waiting on Maya's written consent + final image selection"
+  },
+  "publishing": {
+    "postizJobId": null,
+    "publishedAt": null,
+    "publicUrl": null
+  }
+}

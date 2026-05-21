@@ -1,0 +1,57 @@
+{
+  "quarterly": [
+    { "id": "g_reach",         "label": "Total reach",            "target": 1200000, "unit": "people" },
+    { "id": "g_followers",     "label": "Follower growth",        "target": 10,      "unit": "%" },
+    { "id": "g_signups",       "label": "Challenge sign-ups",     "target": 150,     "unit": "members" },
+    { "id": "g_qualified_dms", "label": "Qualified DMs",          "target": 96,      "unit": "DMs" },
+    { "id": "g_b2b_convos",    "label": "Corporate conversations","target": 6,       "unit": "leads" },
+    { "id": "g_save_rate",     "label": "Avg save rate",          "target": 4.5,     "unit": "%" }
+  ],
+  "monthly": [
+    {
+      "month": "July",
+      "goals": [
+        { "ref": "g_reach",         "target": 320000 },
+        { "ref": "g_followers",     "target": 2.5 },
+        { "ref": "g_qualified_dms", "target": 24 },
+        { "ref": "g_save_rate",     "target": 4.0 }
+      ]
+    },
+    {
+      "month": "August",
+      "goals": [
+        { "ref": "g_reach",         "target": 520000 },
+        { "ref": "g_followers",     "target": 4.5 },
+        { "ref": "g_signups",       "target": 120 },
+        { "ref": "g_qualified_dms", "target": 40 },
+        { "ref": "g_b2b_convos",    "target": 2 },
+        { "ref": "g_save_rate",     "target": 4.5 }
+      ]
+    },
+    {
+      "month": "September",
+      "goals": [
+        { "ref": "g_reach",         "target": 360000 },
+        { "ref": "g_followers",     "target": 3.0 },
+        { "ref": "g_signups",       "target": 30 },
+        { "ref": "g_qualified_dms", "target": 32 },
+        { "ref": "g_b2b_convos",    "target": 4 },
+        { "ref": "g_save_rate",     "target": 5.0 }
+      ]
+    }
+  ],
+  "weekly": [
+    { "week": 1,  "focus": "Establish baseline save rate on educational Reels",     "kpi": "saves per Reel" },
+    { "week": 2,  "focus": "Coach Spotlight series kickoff - drive profile visits", "kpi": "profile visits" },
+    { "week": 3,  "focus": "Mid-month heat slump empathetic content",               "kpi": "saves" },
+    { "week": 4,  "focus": "Tease Summer Strength Challenge - build waitlist",      "kpi": "DM intent" },
+    { "week": 5,  "focus": "Challenge launch day - coordinated all-channel push",   "kpi": "sign-ups day 1" },
+    { "week": 6,  "focus": "Hard-sell window + daily Stories",                       "kpi": "sign-ups" },
+    { "week": 7,  "focus": "Soft-sell + early UGC from cohort",                      "kpi": "saves + sign-ups" },
+    { "week": 8,  "focus": "Women's Equality Day founder LinkedIn moment",           "kpi": "LI impressions HR titles" },
+    { "week": 9,  "focus": "Cohort wrap + transformation storytelling",              "kpi": "share rate" },
+    { "week": 10, "focus": "Back-to-routine educational push",                       "kpi": "saves" },
+    { "week": 11, "focus": "Corporate wellness LinkedIn ramp",                       "kpi": "HR DMs" },
+    { "week": 12, "focus": "Q4 tease + membership window close",                     "kpi": "annual conversions" }
+  ]
+}

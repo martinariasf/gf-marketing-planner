@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "id": "l001",
+      "title": "Empathy framing beats motivational framing in mid-summer",
+      "platform": "instagram",
+      "relatedPostId": "p003",
+      "relatedCampaign": "Hydration & Heat",
+      "whatHappened": "p003 ('You're not lazy. You're hot.') outperformed the planned tip carousel by 4x on saves. The hook acknowledged the audience's struggle instead of prescribing behavior.",
+      "lesson": "When the audience is already demoralized, leading with empathy + naming the feeling outperforms leading with the solution.",
+      "recommendedBehaviorChange": "For any seasonal slump moment (winter dark months, post-holiday, summer heat), draft 2 versions: empathy-led and tactic-led. Default to empathy-led if engagement is the goal.",
+      "confidence": "high",
+      "createdAt": "2026-07-23T10:14:00Z"
+    },
+    {
+      "id": "l002",
+      "title": "Coach Spotlight format works on LinkedIn but not as a Reel",
+      "platform": "linkedin",
+      "relatedPostId": "p002",
+      "relatedCampaign": "Coach Spotlight Series",
+      "whatHappened": "Lena's burnout-to-barbell story landed on LinkedIn (640 likes, 19 comments from HR titles). The same story re-cut as a 60-second Reel underperformed our IG baseline.",
+      "lesson": "LinkedIn rewards long-form vulnerability. IG audiences want the result, not the journey, unless it's a member (not coach) doing the narrating.",
+      "recommendedBehaviorChange": "Reserve coach origin stories for LinkedIn long-form. Use members (not coaches) as the protagonist in any IG narrative content.",
+      "confidence": "medium",
+      "createdAt": "2026-07-30T16:42:00Z"
+    },
+    {
+      "id": "l003",
+      "title": "Hard-sell urgency copy fatigues this audience fast",
+      "platform": "instagram",
+      "relatedCampaign": "Summer Strength Challenge",
+      "whatHappened": "Week-6 'last chance' copy on challenge sign-up posts dropped engagement 38% vs week-5 launch copy. Sign-ups in that week missed target by 15%.",
+      "lesson": "Our audience reads 'last chance' as marketing language and disengages. They respond to limits framed as logistics (cohort size, coach capacity) not as scarcity tactics.",
+      "recommendedBehaviorChange": "Replace 'last chance' / 'don't miss out' with capacity-based framing: 'cohort closes at N members' or 'we coach max 8 per group.' Test in week 11 closing window.",
+      "confidence": "medium",
+      "createdAt": "2026-08-09T11:20:00Z"
+    }
+  ]
+}

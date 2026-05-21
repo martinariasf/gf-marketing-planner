@@ -1,0 +1,50 @@
+{
+  "lastSyncedAt": "2026-08-12T08:00:00Z",
+  "source": "postiz",
+  "posts": {
+    "p001": { "reach": 12400, "impressions": 18900, "saves": 412, "shares": 88,  "comments": 31, "likes": 1100, "profileVisits": 156, "clicks": 47,  "dms": 8 },
+    "p002": { "reach": 9800,  "impressions": 14200, "saves": 178, "shares": 42,  "comments": 19, "likes": 640,  "profileVisits": 89,  "clicks": 64,  "dms": 3 },
+    "p003": { "reach": 18700, "impressions": 26500, "saves": 940, "shares": 156, "comments": 58, "likes": 1820, "profileVisits": 312, "clicks": 71,  "dms": 12 },
+    "p004": { "reach": 31200, "impressions": 47100, "saves": 502, "shares": 244, "comments": 87, "likes": 2680, "profileVisits": 612, "clicks": 388, "dms": 41 },
+    "p005": { "reach": 14600, "impressions": 21000, "saves": 95,  "shares": 78,  "comments": 24, "likes": 410,  "profileVisits": 134, "clicks": 56,  "dms": 7 }
+  },
+  "aggregates": {
+    "quarterly": { "reach": 487000, "followerDelta": 6.2 },
+    "monthly": {
+      "July":   { "reach": 198000, "followerDelta": 2.8 },
+      "August": { "reach": 289000, "followerDelta": 3.4 },
+      "September": { "reach": 0, "followerDelta": 0 }
+    },
+    "weekly": {
+      "1":  { "reach": 42000,  "topPost": "p001" },
+      "2":  { "reach": 38000,  "topPost": "p002" },
+      "3":  { "reach": 65000,  "topPost": "p003" },
+      "4":  { "reach": 53000,  "topPost": "p003" },
+      "5":  { "reach": 92000,  "topPost": "p004" },
+      "6":  { "reach": 78000,  "topPost": "p004" },
+      "7":  { "reach": 61000,  "topPost": "p005" },
+      "8":  { "reach": 58000,  "topPost": "p005" }
+    }
+  },
+  "vsGoals": {
+    "g_reach":         { "target": 1200000, "current": 487000, "pace": "on-track", "deltaPct": -1 },
+    "g_followers":     { "target": 10,      "current": 6.2,    "pace": "on-track", "deltaPct": 3 },
+    "g_signups":       { "target": 150,     "current": 78,     "pace": "behind",   "deltaPct": -15 },
+    "g_qualified_dms": { "target": 96,      "current": 51,     "pace": "ahead",    "deltaPct": 12 },
+    "g_b2b_convos":    { "target": 6,       "current": 1,      "pace": "behind",   "deltaPct": -50 },
+    "g_save_rate":     { "target": 4.5,     "current": 4.8,    "pace": "ahead",    "deltaPct": 7 }
+  },
+  "weeklySummary": {
+    "week": 8,
+    "wins": [
+      "Save rate on educational Reels is 4.8% - above target. p003 hydration carousel cleared 900 saves.",
+      "Challenge launch (p004) drove 41 qualified DMs in 48h, our highest single-post intent ever.",
+      "Coach Spotlight LinkedIn (p005) surfaced to 3 HR titles - first signal the B2B angle is reaching the right inbox."
+    ],
+    "losses": [
+      "Sign-ups pacing 15% behind. Hard-sell window (week 6) underperformed - the urgency copy felt forced.",
+      "TikTok experiment flat - watch time below 8s on all 3 posts. Need a different hook structure."
+    ],
+    "nextTest": "Week 9: shift to founder-narrated transformation Reels (member-first POV) instead of coach-led. Measure save + share lift vs week 5-8 baseline."
+  }
+}

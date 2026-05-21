@@ -1,0 +1,32 @@
+# Viktor Marketing Operating Dashboard - Caddy container
+#
+# Deploys to the Hetzner box at /opt/marketing-planner/. Bound to the
+# Tailscale interface only (100.92.24.75) so it stays off the public
+# internet until a real domain + TLS are configured.
+#
+# Volumes (read-only into the container):
+#   ./app-dist  - the React build, overwritten by CI via rsync
+#   ./clients   - per-client JSON data, edited live by Viktor
+#
+# Neither volume requires a container restart when contents change -
+# Caddy serves files from disk on every request.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: marketing-planner-caddy
+    restart: unless-stopped
+    ports:
+      # Bind to Tailscale IP only. Change to "0.0.0.0:80:80" + add TLS
+      # once a public hostname is decided.
+      - "100.92.24.75:80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./app-dist:/srv/app:ro
+      - ./clients:/srv/data:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

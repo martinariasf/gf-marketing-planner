@@ -1,0 +1,26 @@
+{
+  "id": "p002",
+  "date": "2026-07-09",
+  "channel": "linkedin",
+  "format": "Article post",
+  "pillar": "Brand & Lifestyle",
+  "campaign": "Coach Spotlight Series",
+  "title": "Meet Coach Lena: From burnout to barbell",
+  "image": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=80",
+  "copy": "When Lena joined FitVibe three years ago, she was a corporate lawyer running on espresso and four hours of sleep.\n\nToday she coaches our most-booked strength class - and helps members rebuild the same way she rebuilt herself.\n\nWe asked her what she'd tell her burned-out self. Her answer surprised us.\n\nRead her story in the comments.",
+  "hashtags": ["#leadership", "#wellbeing", "#fitnessindustry", "#coaching"],
+  "cta": "Read full story in comments",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Lena",
+    "approvedAt": "2026-07-08T17:30:00Z",
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_p002_jul09",
+    "publishedAt": "2026-07-09T09:00:00Z",
+    "publicUrl": "https://linkedin.com/posts/example002"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "p004",
+  "date": "2026-08-01",
+  "channel": "instagram",
+  "format": "Reel",
+  "pillar": "Promotional",
+  "campaign": "Summer Strength Challenge",
+  "title": "Summer Strength is LIVE",
+  "image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80",
+  "copy": "30 days. 3 workouts a week. One stronger you.\n\nThe Summer Strength Challenge is officially open. Here's what's included:\n\n- Coach-led program (in studio + at home)\n- Weekly nutrition drops\n- Private community chat\n- Finisher event on September 5\n\nFirst 100 spots get 30% off membership. Link in bio.",
+  "hashtags": ["#summerstrength", "#fitnesschallenge", "#fitvibe", "#joinus"],
+  "cta": "Sign up - link in bio",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Martin",
+    "approvedAt": "2026-07-31T18:00:00Z",
+    "version": 4,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_p004_aug01",
+    "publishedAt": "2026-08-01T09:00:00Z",
+    "publicUrl": "https://instagram.com/p/example004"
+  }
+}

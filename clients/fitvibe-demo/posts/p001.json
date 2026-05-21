@@ -1,0 +1,26 @@
+{
+  "id": "p001",
+  "date": "2026-07-03",
+  "channel": "instagram",
+  "format": "Reel",
+  "pillar": "Education",
+  "campaign": "Hydration & Heat",
+  "title": "The 3-Bottle Rule",
+  "image": "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&q=80",
+  "copy": "Most people think they're hydrated. Most people are wrong.\n\nHere's the 3-bottle rule our coaches swear by:\n\n1. One bottle before your morning coffee\n2. One bottle during training\n3. One bottle with dinner\n\nSave this post. Your performance will thank you in two weeks.",
+  "hashtags": ["#hydration", "#fitnesstips", "#wellnessjourney", "#fitvibe", "#summerstrength"],
+  "cta": "Save & share with a gym buddy",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Lena",
+    "approvedAt": "2026-07-02T19:14:00Z",
+    "version": 2,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_p001_jul03",
+    "publishedAt": "2026-07-03T13:00:00Z",
+    "publicUrl": "https://instagram.com/p/example001"
+  }
+}

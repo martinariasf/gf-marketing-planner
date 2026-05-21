@@ -1,0 +1,132 @@
+{
+  "agency": {
+    "name": "GF Innovative Solutions",
+    "tagline": "AI-led marketing operations for ambitious brands"
+  },
+  "client": {
+    "name": "FitVibe Studios",
+    "industry": "Boutique fitness & wellness",
+    "handle": "@fitvibestudios",
+    "logoInitials": "FV",
+    "primaryChannels": ["instagram", "linkedin", "tiktok"]
+  },
+  "quarter": {
+    "label": "Q3 2026",
+    "year": 2026,
+    "theme": "Summer Strength: Build, Burn, Belong",
+    "months": [
+      { "key": "jul", "name": "July",      "weeks": [1, 2, 3, 4] },
+      { "key": "aug", "name": "August",    "weeks": [5, 6, 7, 8] },
+      { "key": "sep", "name": "September", "weeks": [9, 10, 11, 12] }
+    ]
+  },
+  "headline": "Summer Strength: turn the July dip into our biggest brand moment of the year",
+  "positioningStatement": "Q3 is about turning summer's motivational dip into our biggest brand moment of the year - anchored by the Summer Strength Challenge in August.",
+  "strategy": "Warm July with authority-building education, sell the Summer Strength Challenge through August, then convert challenge graduates into annual members in September while quietly opening the corporate-wellness LinkedIn pipeline.",
+  "strategicPriorities": [
+    { "label": "Authority",     "description": "Establish FitVibe as the credible voice on strength + recovery - not another wellness influencer." },
+    { "label": "Launch",        "description": "Make the Summer Strength Challenge the centerpiece. Build to it in July, sell it in August." },
+    { "label": "Community",     "description": "Surface member stories - let users see themselves in the brand. UGC > studio shots." },
+    { "label": "B2B pipeline",  "description": "Open the corporate wellness channel on LinkedIn. Quiet first, ramp in September." }
+  ],
+  "kpis": [
+    { "label": "Total reach",       "value": "1.2M" },
+    { "label": "Qualified DMs/wk",  "value": "8" },
+    { "label": "Challenge sign-ups","value": "150" },
+    { "label": "Corp conversations","value": "6" }
+  ],
+  "pillars": [
+    { "name": "Education",         "weight": 35, "color": "#211D58", "description": "Workout science, nutrition myth-busting, recovery tips. Builds authority and earns saves." },
+    { "name": "Community",         "weight": 25, "color": "#8BC07C", "description": "Member spotlights, transformation stories, UGC reposts. Drives shares and trust." },
+    { "name": "Promotional",       "weight": 20, "color": "#d62976", "description": "Class launches, membership offers, challenge sign-ups. Conversion-focused - used sparingly to avoid fatigue." },
+    { "name": "Brand & Lifestyle", "weight": 20, "color": "#fa7e1e", "description": "Coach culture, studio aesthetic, behind-the-scenes. Builds emotional connection and brand recall." }
+  ],
+  "campaigns": [
+    { "name": "Hydration & Heat",          "pillar": "Education",         "startWeek": 1,  "endWeek": 3,  "color": "#211D58" },
+    { "name": "Coach Spotlight Series",    "pillar": "Brand & Lifestyle", "startWeek": 2,  "endWeek": 5,  "color": "#fa7e1e" },
+    { "name": "Summer Strength Challenge", "pillar": "Promotional",       "startWeek": 5,  "endWeek": 9,  "color": "#d62976" },
+    { "name": "Member Transformations",    "pillar": "Community",         "startWeek": 8,  "endWeek": 12, "color": "#8BC07C" },
+    { "name": "Back-to-Routine Edu",       "pillar": "Education",         "startWeek": 10, "endWeek": 12, "color": "#211D58" },
+    { "name": "Corporate Wellness (B2B)",  "pillar": "Promotional",       "startWeek": 6,  "endWeek": 12, "color": "#0a66c2" }
+  ],
+  "monthlyFocus": [
+    {
+      "month": "July",
+      "theme": "Warm up the audience",
+      "intent": "Establish authority before the August push. Front-load education and coach intros. Quiet on promotion.",
+      "priorities": ["Educational Reels & carousels", "Coach Spotlight series kickoff", "Tease the Summer Strength Challenge in final week"],
+      "keyMoments": ["Mid-July heat slump", "IDEA conference (Lena)", "Independence Day soft tie-in"],
+      "watch": "Save rate on educational Reels - this becomes our baseline for the year."
+    },
+    {
+      "month": "August",
+      "theme": "Sell the challenge",
+      "intent": "All channels coordinate around the Summer Strength Challenge. Launch Aug 1, hard-sell window Aug 1-14, soft-sell + UGC Aug 15-31.",
+      "priorities": ["Challenge launch day push (all channels)", "Daily Stories during challenge", "Founder LinkedIn on corporate wellness angle"],
+      "keyMoments": ["Aug 1 launch", "Women's Equality Day (coach story)", "Cohort half-way milestone"],
+      "watch": "Challenge sign-ups, but more importantly: which channel sourced them. This decides Q4 budget split."
+    },
+    {
+      "month": "September",
+      "theme": "Convert community into retention",
+      "intent": "Challenge graduates -> annual members. September is historically our top sign-up month - capitalize.",
+      "priorities": ["Transformation storytelling (cohort wraps)", "Back-to-routine educational push", "Corporate Wellness LinkedIn ramp"],
+      "keyMoments": ["Labor Day", "Back-to-school momentum (mid-Sept)", "Cohort graduation event"],
+      "watch": "Member retention 30 days post-challenge. Inbound HR DMs on LinkedIn (B2B pipeline indicator)."
+    }
+  ],
+  "keyDates": [
+    { "date": "2026-07-04", "title": "Independence Day (US)",                "type": "holiday",    "relevance": "medium", "angle": "'Freedom' framing - break from the chair, get outside. Bodyweight outdoor circuit Reel." },
+    { "date": "2026-07-15", "title": "IDEA World Fitness Convention",        "type": "industry",   "relevance": "medium", "angle": "Coach Lena attending - BTS Stories + LinkedIn post on what's actually new in the industry." },
+    { "date": "2026-07-20", "title": "Mid-summer motivation slump",          "type": "seasonal",   "relevance": "high",   "angle": "Strongest content moment of July. 'You're not lazy, you're hot' - empathetic educational post on training in heat." },
+    { "date": "2026-08-01", "title": "Summer Strength Challenge launch",     "type": "brand",      "relevance": "high",   "angle": "Owned moment. Coordinated push across IG + LinkedIn + TikTok same day. Founder LinkedIn post + IG Reel + TikTok teaser." },
+    { "date": "2026-08-08", "title": "International Day of Friendship",      "type": "observance", "relevance": "low",    "angle": "Soft tie-in to cohort/community pillar - 'bring a friend' challenge promo. Skip if calendar gets crowded." },
+    { "date": "2026-08-26", "title": "Women's Equality Day (US)",            "type": "observance", "relevance": "high",   "angle": "Our primary audience is 60% women. Coach Lena's story angle - strength training as reclamation. LinkedIn long-form." },
+    { "date": "2026-09-07", "title": "Labor Day (US)",                       "type": "holiday",    "relevance": "medium", "angle": "End-of-summer hinge. 'Back to routine' framing - perfect lead-in for September challenge graduation content." },
+    { "date": "2026-09-10", "title": "World Suicide Prevention Day",         "type": "observance", "relevance": "medium", "angle": "Handle with care. Movement-and-mental-health angle only - partner with a licensed therapist for a co-post. No flippant takes." },
+    { "date": "2026-09-15", "title": "Back-to-routine season",               "type": "seasonal",   "relevance": "high",   "angle": "September is our highest sign-up month historically. Membership campaign window opens. Educational 'how to actually stick to it this time' carousel." },
+    { "date": "2026-09-23", "title": "First day of autumn",                  "type": "seasonal",   "relevance": "medium", "angle": "Bridge into Q4 strength-block planning. Tease October programming." }
+  ],
+  "platforms": [
+    {
+      "name": "Instagram",
+      "channelKey": "instagram",
+      "role": "Primary - discovery, community, conversion",
+      "rationale": "Highest overlap with our 30-45 return-to-fitness target. Save-driven educational content performs. Reels surface to lookalikes; Carousels drive saves and shares.",
+      "cadence": "5x/week + daily Stories",
+      "formatMix": [
+        { "label": "Reels",     "weight": "60%" },
+        { "label": "Carousels", "weight": "25%" },
+        { "label": "Static",    "weight": "15%" },
+        { "label": "Stories",   "weight": "daily" }
+      ],
+      "watch": ["Save rate", "Profile visits", "DM inbound", "Reel completion %"]
+    },
+    {
+      "name": "LinkedIn",
+      "channelKey": "linkedin",
+      "role": "Secondary - B2B corporate wellness pipeline + founder voice",
+      "rationale": "HR and People Ops decision-makers live here during work hours. Founder thought leadership opens cold-outbound doors. Lower volume, higher contract value.",
+      "cadence": "2x/week",
+      "formatMix": [
+        { "label": "Long-form text",  "weight": "60%" },
+        { "label": "Image posts",     "weight": "30%" },
+        { "label": "Document posts",  "weight": "10%" }
+      ],
+      "watch": ["Inbound DMs from HR titles", "Impressions among target job titles", "Profile visits from corporate domains"]
+    },
+    {
+      "name": "TikTok",
+      "channelKey": "tiktok",
+      "role": "Experimental - younger demo, format-market fit test",
+      "rationale": "Cheap reach into the 22-30 cohort. We treat Q3 as a learning quarter: if creator-style content lands, scale in Q4. If not, redeploy budget to IG.",
+      "cadence": "3x/week",
+      "formatMix": [
+        { "label": "Coach tips (15-30s)", "weight": "50%" },
+        { "label": "Behind-the-scenes",   "weight": "30%" },
+        { "label": "Trend repurposes",    "weight": "20%" }
+      ],
+      "watch": ["Avg watch time", "Follow rate per view", "Comment sentiment", "Cross-platform attribution to IG"]
+    }
+  ]
+}

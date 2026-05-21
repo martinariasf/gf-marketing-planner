@@ -1,0 +1,123 @@
+{
+  "company": {
+    "name": "FitVibe Studios",
+    "industry": "Boutique fitness & wellness",
+    "country": "AR",
+    "website": "https://fitvibestudios.example",
+    "contact": { "name": "Coach Lena", "telegram": "@lena_fitvibe" }
+  },
+  "business": {
+    "model": "B2C subscription + corporate wellness B2B",
+    "customerType": "Return-to-fitness adults 30-45, urban professionals",
+    "mainOffer": "Coach-led, cohort-based strength training in 4-week blocks",
+    "bestSeller": "Summer Strength Challenge (30-day cohort)",
+    "differentiators": [
+      "Coach-led, not self-serve",
+      "Cohort-based, not anonymous",
+      "Finite goals (4-week blocks), not vague \"wellness\"",
+      "Strength-first, not chasing trends"
+    ]
+  },
+  "audience": {
+    "segments": [
+      {
+        "name": "Primary - Return-to-fitness adults",
+        "demo": "30-45, urban, white-collar, 60% women",
+        "psycho": "Tried Peloton/CrossFit/solo gym and bounced. Cares about strength + longevity, not aesthetics. Time-poor.",
+        "where": "Instagram (primary), LinkedIn (work-time browsing)"
+      },
+      {
+        "name": "Secondary - Corporate wellness leads",
+        "demo": "HR / People Ops, 35-55, mid-market companies",
+        "psycho": "Looking for wellness benefits that employees actually use. Burned by gym-discount partnerships.",
+        "where": "LinkedIn"
+      },
+      {
+        "name": "Tertiary - Young urban explorers",
+        "demo": "22-30, fitness-curious",
+        "psycho": "Discovering boutique fitness for the first time. Influenced by short-form video.",
+        "where": "TikTok, Instagram Reels"
+      }
+    ],
+    "painPoints": [
+      "Tried solo gym and quit",
+      "No time to figure out programming",
+      "Burnout from hustle-culture fitness",
+      "Plateau after 6 months solo"
+    ],
+    "desires": [
+      "Visible strength gains in 90 days",
+      "Coach accountability without judgment",
+      "Community without bro culture",
+      "Sleep + energy back"
+    ],
+    "competitors": ["F45", "Barry's", "local CrossFit", "Peloton"],
+    "referenceBrands": ["Tracksmith", "Whoop", "Bandit Running"]
+  },
+  "voice": {
+    "tone": ["Warm", "Direct", "Grounded", "Coach, not salesperson"],
+    "wordsToUse": ["Strength", "Cohort", "Reset", "Consistency", "Coach", "Block"],
+    "wordsToAvoid": ["Beast mode", "Snatched", "Grindset", "Hustle", "Fitspo"],
+    "do": [
+      "Speak like a coach giving advice over coffee",
+      "Use 'we' and 'you' - never 'our valued members'",
+      "Cite research when making a claim",
+      "Celebrate small wins (a first push-up, a full night's sleep)"
+    ],
+    "dont": [
+      "Use weight-loss-before-after framing",
+      "Make medical claims",
+      "Use #fitspo / #grindset / hustle-culture language",
+      "Promise transformations in less than 4 weeks"
+    ]
+  },
+  "channels": {
+    "primary": ["instagram", "linkedin", "tiktok"],
+    "cadence": "5/week IG + 2/week LinkedIn + 3/week TikTok",
+    "language": "en"
+  },
+  "boundaries": {
+    "viktorCanDoWithoutAsking": [
+      "draft posts",
+      "generate images (Nano Banana)",
+      "research trends",
+      "summarize Postiz analytics"
+    ],
+    "viktorNeedsApprovalFor": [
+      "any public post",
+      "any reply to a DM",
+      "any mention of pricing",
+      "any post tagging a member"
+    ],
+    "sensitiveTopics": [
+      "weight loss numbers",
+      "body composition photos of members",
+      "mental health (only with licensed therapist co-sign)"
+    ],
+    "communityRules": {
+      "who_handles_dms": "human",
+      "escalation_owner": "Coach Lena"
+    }
+  },
+  "metricsThatMatter": [
+    "Save rate on educational Reels",
+    "Profile visits from IG",
+    "Qualified DMs (challenge or membership intent)",
+    "Inbound HR DMs on LinkedIn",
+    "Challenge sign-ups by source channel"
+  ],
+  "tools": {
+    "design": "Canva + Nano Banana",
+    "scheduler": "Postiz",
+    "analytics": "Postiz + Meta native + LinkedIn Insights"
+  },
+  "references": {
+    "drive_folder_url": null,
+    "examples": [
+      "Tracksmith's coach-led storytelling",
+      "Whoop's research-backed authority",
+      "Bandit Running's community-first tone"
+    ]
+  },
+  "expectations": "Within 90 days, FitVibe's Instagram should generate at least 8 qualified DMs per week, and LinkedIn should source 2 corporate wellness conversations per month, with zero manual posting effort from Lena."
+}
