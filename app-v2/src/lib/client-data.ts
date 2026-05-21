@@ -8,6 +8,7 @@ import type {
   ApprovalLogEntry,
   AssetsManifest,
   ClientIndex,
+  Suggestions,
 } from '@/types'
 import { parseApprovalLog } from '@/types'
 
@@ -31,6 +32,7 @@ export interface ClientBundle {
   learnings: Learnings | null
   approvalsLog: ApprovalLogEntry[]
   assets: AssetsManifest | null
+  suggestions: Suggestions | null
 }
 
 function clientPath(slug: string, file: string) {
@@ -107,18 +109,36 @@ export async function loadAssetsManifest(slug: string): Promise<AssetsManifest |
   }
 }
 
+export async function loadSuggestions(slug: string): Promise<Suggestions | null> {
+  try {
+    return await fetchJson<Suggestions>(clientPath(slug, 'suggestions.json'))
+  } catch {
+    return null
+  }
+}
+
 export async function loadClient(slug: string): Promise<ClientBundle> {
-  const [brief, plan, goals, performance, posts, learnings, approvalsLog, assets] =
-    await Promise.all([
-      loadBrief(slug),
-      loadPlan(slug),
-      loadGoals(slug),
-      loadPerformance(slug),
-      loadPosts(slug),
-      loadLearnings(slug),
-      loadApprovalsLog(slug),
-      loadAssetsManifest(slug),
-    ])
+  const [
+    brief,
+    plan,
+    goals,
+    performance,
+    posts,
+    learnings,
+    approvalsLog,
+    assets,
+    suggestions,
+  ] = await Promise.all([
+    loadBrief(slug),
+    loadPlan(slug),
+    loadGoals(slug),
+    loadPerformance(slug),
+    loadPosts(slug),
+    loadLearnings(slug),
+    loadApprovalsLog(slug),
+    loadAssetsManifest(slug),
+    loadSuggestions(slug),
+  ])
   return {
     slug,
     brief,
@@ -129,5 +149,6 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     learnings,
     approvalsLog,
     assets,
+    suggestions,
   }
 }

@@ -31,3 +31,10 @@ export type {
   ClientIndexEntry,
   ClientStatus,
 } from './client-index'
+export type {
+  Suggestion,
+  Suggestions,
+  SuggestionKind,
+  SuggestionStatus,
+  Confidence,
+} from './suggestion'

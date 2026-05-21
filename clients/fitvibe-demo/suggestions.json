@@ -1,0 +1,104 @@
+{
+  "items": [
+    {
+      "id": "s001",
+      "kind": "follow_up",
+      "title": "Run a second empathy-framed Reel before the August dip",
+      "rationale": "p003 ('You're not lazy. You're hot.') hit 940 saves - 4x the educational baseline. Learning l001 said empathy framing beats tactic-led during seasonal slumps. Mid-August is the next natural slump moment.",
+      "suggestedAction": "draft hydration-2 instagram Reel pillar=Education campaign=\"Hydration & Heat\" hook=\"You're not slacking. You're under-recovered.\"",
+      "relatedPostId": "p003",
+      "relatedCampaign": "Hydration & Heat",
+      "relatedPillar": "Education",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z"
+    },
+    {
+      "id": "s002",
+      "kind": "hook_rewrite",
+      "title": "Replace 'last chance' urgency copy on the closing window",
+      "rationale": "Learning l003 flagged that 'last chance' urgency dropped engagement 38% in week 6. The September membership window opens week 11 and currently reuses the same copy template.",
+      "suggestedAction": "draft p011 instagram Reel pillar=Promotional campaign=\"Back-to-Routine Edu\" hook=\"We coach 8 per cohort. Three spots left for September.\"",
+      "relatedCampaign": "Back-to-Routine Edu",
+      "relatedPillar": "Promotional",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z"
+    },
+    {
+      "id": "s003",
+      "kind": "pivot",
+      "title": "Kill the TikTok experiment or change format",
+      "rationale": "TikTok watch time has stayed below 8s on every post for 4 weeks. Plan said Q3 was a learning quarter - we have the learning. Continuing to post here is overhead, not signal.",
+      "suggestedAction": "pause platform=tiktok reason=\"watch time below 8s across 4 weeks - no format-market fit\" carry=\"funds to instagram reels\"",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z",
+      "expiresAt": "2026-09-01T00:00:00Z"
+    },
+    {
+      "id": "s004",
+      "kind": "next_action",
+      "title": "Founder LinkedIn moment on Women's Equality Day (Aug 26) is the highest-leverage day this month",
+      "rationale": "Audience is 60% women per brief. p005 (corporate-wellness LinkedIn) already surfaced to 3 HR titles. Stacking the founder-narrated Women's Equality Day post on the same channel within 14 days compounds the HR-DM signal.",
+      "suggestedAction": "draft p010 linkedin \"Article post\" pillar=\"Brand & Lifestyle\" campaign=\"Coach Spotlight Series\" date=2026-08-26 hook=\"I almost left strength training in 2022. Here's what kept me.\"",
+      "relatedPillar": "Brand & Lifestyle",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z",
+      "expiresAt": "2026-08-26T00:00:00Z"
+    },
+    {
+      "id": "s005",
+      "kind": "pillar_balance",
+      "title": "Community pillar is under-used relative to its 25% weight",
+      "rationale": "Of 6 published posts, only 1 sits in Community (p006, still in_review). Plan target is 25% Community. We're at 0% delivered, 17% planned. The Maya transformation post is blocked on consent - propose 1 alternative member story while that unblocks.",
+      "suggestedAction": "draft p012 instagram Reel pillar=Community campaign=\"Member Transformations\" hook=\"Three weeks. Twelve sessions. One push-up streak.\" image=request-from-coach-lena",
+      "relatedPostId": "p006",
+      "relatedCampaign": "Member Transformations",
+      "relatedPillar": "Community",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z"
+    },
+    {
+      "id": "s006",
+      "kind": "cta_alternative",
+      "title": "Swap CTA on p004 reruns from 'Sign up - link in bio' to capacity framing",
+      "rationale": "The challenge launch (p004) drove 41 DMs in 48h - intent is there, urgency tactics aren't needed. Capacity-based CTA matches learning l003 and the brand voice.",
+      "suggestedAction": "revise p004 cta=\"Cohort caps at 100. 3 weeks of coaching included.\"",
+      "relatedPostId": "p004",
+      "relatedCampaign": "Summer Strength Challenge",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z"
+    },
+    {
+      "id": "s007",
+      "kind": "post_idea",
+      "title": "Coach Spotlight #2 on LinkedIn before the founder Aug 26 moment",
+      "rationale": "Coach Spotlight series has 1 published entry (p002, Lena). Adding a second coach 1-2 weeks before the founder moment warms the LinkedIn audience and gives the algorithm signal on the format.",
+      "suggestedAction": "draft p009 linkedin \"Article post\" pillar=\"Brand & Lifestyle\" campaign=\"Coach Spotlight Series\" date=2026-08-19 hook=\"Coach Diego doesn't talk about discipline. He talks about Tuesday.\"",
+      "relatedCampaign": "Coach Spotlight Series",
+      "relatedPillar": "Brand & Lifestyle",
+      "confidence": "low",
+      "status": "open",
+      "createdAt": "2026-08-12T08:14:00Z"
+    },
+    {
+      "id": "s000",
+      "kind": "follow_up",
+      "title": "Re-run the bottle rule carousel format with a sleep angle",
+      "rationale": "p001 ('The 3-Bottle Rule') hit 412 saves - solid baseline for prescriptive list-of-3 carousels. Sleep is in the audience's desires per brief.",
+      "suggestedAction": "draft p008 instagram Carousel pillar=Education hook=\"The 3-tab rule: cut these by 9pm and your training day starts the night before.\"",
+      "relatedPostId": "p001",
+      "relatedPillar": "Education",
+      "confidence": "medium",
+      "status": "accepted",
+      "createdAt": "2026-08-05T08:14:00Z",
+      "decidedAt": "2026-08-06T17:00:00Z",
+      "decidedBy": "Lena",
+      "decisionNote": "Love it. Draft for week 9."
+    }
+  ]
+}

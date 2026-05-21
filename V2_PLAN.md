@@ -383,11 +383,12 @@ Order = top-to-bottom on the new `client.html`. All in one scrollable page with 
 - **Deferred to a later phase**: dark mode (touches every chart + color in the app — large for a "polish" item, defer until brand permits); first real-client onboarding (needs Martin to pick GF Internal vs Sebastian and supply the 11 intake answers).
 
 ### Phase 5+ — Future (Pilar's "Viktor 2.0" wishlist)
+- ✅ **AI suggestions inside the dashboard.** Done 2026-05-21. New `/:slug/suggestions` view + sidebar entry (with open-count badge), `clients/<slug>/suggestions.json` schema, and Viktor skill spec at `deploy/viktor-skills/ai-suggestions.md`. Seven kinds: post_idea, hook_rewrite, cta_alternative, pillar_balance, next_action, follow_up, pivot. Each suggestion ships a literal Telegram command the human pastes to accept; dismiss is also a Telegram command. Spec also defines budget caps (8 open / 3 new per run) and safety invariants tied to `brief.boundaries`.
 - Canva integration (asset generation links + library).
-- AI suggestions inside the dashboard.
 - Industry templates (services, retail, SaaS, personal brands).
 - CRM/contact integration.
 - Direct publishing (still approval-gated).
+- **`AGENT.md` at the repo root** documents how Viktor is created end-to-end — the runtime, the skill files, file contracts, per-client deployment recipe, safety invariants, and the recipe for adding new skills. Read this before spinning up the first real Viktor.
 
 ---
 

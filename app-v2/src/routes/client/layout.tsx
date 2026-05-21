@@ -18,6 +18,7 @@ import {
   Images,
   TrendingUp,
   Lightbulb,
+  Sparkles,
   Loader2,
   Menu,
   ChevronLeft,
@@ -48,6 +49,7 @@ const NAV: NavItem[] = [
   { to: 'context',     label: 'Company Context',  icon: Building2,     phase: 'plan'    as WorkflowPhase },
   { to: 'goals',       label: 'Goals vs Actuals', icon: Target,        phase: 'plan'    as WorkflowPhase },
   { to: 'strategy',    label: 'Strategy',         icon: Compass,       phase: 'plan'    as WorkflowPhase },
+  { to: 'suggestions', label: 'AI Suggestions',   icon: Sparkles,      phase: 'plan'    as WorkflowPhase },
   { to: 'calendar',    label: 'Content Calendar', icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
   { to: 'pipeline',    label: 'Pipeline',         icon: KanbanSquare,  phase: 'refine'  as WorkflowPhase },
   { to: 'approvals',   label: 'Approvals',        icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
@@ -99,7 +101,16 @@ export default function ClientLayout() {
     )
   }
 
-  const navContent = <NavContent currentSegment={currentSegment} />
+  const openSuggestions = (data.suggestions?.items ?? []).filter(
+    (s) => s.status === 'open',
+  ).length
+
+  const navContent = (
+    <NavContent
+      currentSegment={currentSegment}
+      openSuggestions={openSuggestions}
+    />
+  )
 
   return (
     <div className="min-h-screen bg-paper-muted">
@@ -197,11 +208,21 @@ export default function ClientLayout() {
   )
 }
 
-function NavContent({ currentSegment }: { currentSegment: string }) {
+function NavContent({
+  currentSegment,
+  openSuggestions,
+}: {
+  currentSegment: string
+  openSuggestions: number
+}) {
   return (
     <nav className="space-y-0.5">
       {NAV.map((n) => {
         const isActive = currentSegment === n.to
+        const badge =
+          n.to === 'suggestions' && openSuggestions > 0
+            ? openSuggestions
+            : null
         return (
           <NavLink
             key={n.to}
@@ -226,6 +247,18 @@ function NavContent({ currentSegment }: { currentSegment: string }) {
             <span className="relative flex items-center gap-2.5 flex-1">
               <n.icon className="h-4 w-4 shrink-0" />
               <span className="flex-1 truncate">{n.label}</span>
+              {badge !== null && (
+                <span
+                  className={cn(
+                    'flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                    isActive
+                      ? 'bg-white/25 text-white'
+                      : 'bg-brand-green-100 text-brand-green-600',
+                  )}
+                >
+                  {badge}
+                </span>
+              )}
               {n.disabled && (
                 <span className="text-[10px] uppercase tracking-wider opacity-70">
                   soon

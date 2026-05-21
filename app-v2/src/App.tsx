@@ -13,6 +13,7 @@ const ApprovalsView = lazy(() => import('@/routes/client/approvals'))
 const AssetsView    = lazy(() => import('@/routes/client/assets'))
 const PerformanceView = lazy(() => import('@/routes/client/performance'))
 const LearningsView   = lazy(() => import('@/routes/client/learnings'))
+const SuggestionsView = lazy(() => import('@/routes/client/suggestions'))
 
 function RouteFallback() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="assets"      element={<AssetsView />} />
             <Route path="performance" element={<PerformanceView />} />
             <Route path="learnings"   element={<LearningsView />} />
+            <Route path="suggestions" element={<SuggestionsView />} />
             <Route path="*"           element={<Navigate to="context" replace />} />
           </Route>
         </Routes>
