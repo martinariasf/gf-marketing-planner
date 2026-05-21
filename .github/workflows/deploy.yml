@@ -38,7 +38,10 @@ jobs:
           cache-dependency-path: app-v2/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # --ignore-scripts: don't run postinstall hooks. We have one transitive
+        # dep (msw) whose postinstall pnpm refuses to silently skip; we don't
+        # need any postinstall to run for a static SPA build.
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
         run: pnpm build
