@@ -206,7 +206,7 @@ A new skill is a few hundred lines of Markdown plus the test loop on Telegram. T
 ## Open questions before the first real deploy
 
 - [ ] Confirm Hermes' actual API: does it accept `.md` skill files as-is, or does the YAML frontmatter need to map to a different format?
-- [ ] Hermes scheduler exists? If yes, all our `schedule:` triggers map directly. If no, fall back to host-level `systemd-timer`s that hit a Viktor HTTP endpoint.
-- [ ] Postiz API shape (queue + analytics) — verify against a real Postiz instance before installing `approvals` + `sync-postiz-analytics`.
-- [ ] Per-client cost cap on Anthropic API usage — anchor in environment vars (`ANTHROPIC_DAILY_BUDGET_USD`?) and have Hermes reject calls beyond the cap with a Telegram alert rather than silently bill.
-- [ ] Decide which client gets Viktor first. Most informative pick: a client whose plan is already in the dashboard (FitVibe demo doesn't count — it's stock data). Likely Sebastian or GF Internal.
+- [x] **Hermes scheduler — confirmed exists.** All `schedule:` triggers in the skill specs map directly to Hermes' native scheduler. No systemd-timer fallback needed.
+- [ ] Postiz API shape (queue + analytics) — verify against a real Postiz instance before installing `approvals` + `sync-postiz-analytics`. Martin will supply the Postiz creds when we're ready.
+- [ ] Per-client cost cap on Anthropic API usage — env var `ANTHROPIC_DAILY_BUDGET_USD` (default `5` per [VIKTOR.md](./clients/gf-internal/VIKTOR.md)). Have Hermes reject calls beyond the cap with a Telegram alert rather than silently bill.
+- [x] **First client picked: GF Internal.** Data is onboarded ([clients/gf-internal/](./clients/gf-internal/)). The per-instance spec lives at [clients/gf-internal/VIKTOR.md](./clients/gf-internal/VIKTOR.md).

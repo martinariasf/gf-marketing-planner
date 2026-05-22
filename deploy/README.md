@@ -7,13 +7,19 @@ The Hetzner box at `100.92.24.75` (Tailscale: `clawdbot-otto`, Hostname: `ubuntu
 | What | Where |
 |---|---|
 | Container | `marketing-planner-caddy` (image `caddy:2-alpine`) |
-| Bind address | `100.92.24.75:80` — Tailscale interface only, NOT public |
+| Bind address | `0.0.0.0:80` + `0.0.0.0:443` — public, behind TLS + per-client basicauth |
 | App build | `/opt/marketing-planner/app-dist/` mounted RO at `/srv/app` |
 | Client data | `/opt/marketing-planner/clients/` mounted RO at `/srv/data` |
 | Compose file | `/opt/marketing-planner/docker-compose.yml` |
 | Caddy config | `/opt/marketing-planner/Caddyfile` |
 
-Access: `http://100.92.24.75/` (any device on the GF Tailnet).
+Access: **https://marketing.gfinnov.com/** (public).
+
+Credentials are per-client basicauth on `/data/<slug>/*`. Hashes live in the Caddyfile; plaintext lives only in your password manager. Generate new ones with:
+```bash
+docker exec marketing-planner-caddy caddy hash-password --plaintext '<newpw>'
+```
+…then paste the bcrypt hash into the relevant `basicauth` block in `deploy/Caddyfile`.
 
 ## Layout
 

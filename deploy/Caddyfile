@@ -1,22 +1,48 @@
-# Caddyfile for the marketing-planner-caddy container.
-# Port 80 inside the container; the host binds 100.92.24.75:80 -> 80.
+# Production Caddyfile - public hostname with TLS + per-client basic auth.
+# Caddy fetches a Let's Encrypt cert on first request and auto-renews.
 
-:80 {
+marketing.gfinnov.com {
     encode zstd gzip
 
-    # Per-client data served straight off disk. Viktor edits these
-    # files; the dashboard reads them on every request.
-    handle /data/* {
+    # Per-client gated data.
+    # Each client has their own basicauth realm and their own credential.
+    # Rotate by regenerating the bcrypt hash via:
+    #   docker exec marketing-planner-caddy caddy hash-password --plaintext '<newpw>'
+
+    handle /data/gf-internal/* {
+        basicauth /* {
+            gf-internal $2a$14$LY9oPBvTV62bjzWT.oOYGOvCr3YOPm/tQZvrI8hAJQO4MavB/rFQa
+        }
         root * /srv/data
         uri strip_prefix /data
         file_server {
             hide .git
         }
         header Cache-Control "no-store"
+    }
+
+    handle /data/fitvibe-demo/* {
+        basicauth /* {
+            fitvibe-demo $2a$14$j7Ol7GgnomYyuQnArtOpWOTIPYCpb6enuZYMHzUjkTmB7coSA8MXK
+        }
+        root * /srv/data
+        uri strip_prefix /data
+        file_server {
+            hide .git
+        }
+        header Cache-Control "no-store"
+    }
+
+    # Public client index (just slugs + names + status, no plan data).
+    handle /data/index.json {
+        root * /srv/data
+        uri strip_prefix /data
+        file_server
+        header Cache-Control "no-store"
         header Access-Control-Allow-Origin "*"
     }
 
-    # React SPA. Unknown paths fall through to index.html.
+    # React SPA. Single-page fallback. Hashed assets get aggressive caching.
     handle {
         root * /srv/app
         try_files {path} /index.html
@@ -30,4 +56,9 @@
         output stdout
         format console
     }
+}
+
+# Old Tailscale / bare-IP URLs redirect to the canonical hostname.
+http://100.92.24.75, http://46.224.224.113 {
+    redir https://marketing.gfinnov.com{uri} permanent
 }

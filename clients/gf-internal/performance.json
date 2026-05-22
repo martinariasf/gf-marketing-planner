@@ -1,0 +1,49 @@
+{
+  "lastSyncedAt": "2026-05-20T08:00:00Z",
+  "source": "manual",
+  "posts": {
+    "p001": { "reach": 8400,  "impressions": 12100, "saves": 312, "shares": 64,  "comments": 41, "likes": 480, "profileVisits": 142, "clicks": 88,  "dms": 6 },
+    "p002": { "reach": 6200,  "impressions": 9000,  "saves": 88,  "shares": 22,  "comments": 28, "likes": 312, "profileVisits": 71,  "clicks": 14,  "dms": 2 },
+    "p003": { "reach": 14800, "impressions": 22400, "saves": 612, "shares": 188, "comments": 64, "likes": 740, "profileVisits": 244, "clicks": 41,  "dms": 9 }
+  },
+  "aggregates": {
+    "quarterly": { "reach": 29400, "followerDelta": 3.4 },
+    "monthly": {
+      "April": { "reach": 18000, "followerDelta": 2.1 },
+      "May":   { "reach": 11400, "followerDelta": 1.3 },
+      "June":  { "reach": 0,     "followerDelta": 0 }
+    },
+    "weekly": {
+      "1":  { "reach": 3400,  "topPost": "p001" },
+      "2":  { "reach": 5200,  "topPost": "p001" },
+      "3":  { "reach": 9400,  "topPost": "p003" },
+      "4":  { "reach": 0,     "topPost": "p003" },
+      "5":  { "reach": 4800,  "topPost": "p003" },
+      "6":  { "reach": 6600,  "topPost": "p003" },
+      "7":  { "reach": 0,     "topPost": "p003" },
+      "8":  { "reach": 0,     "topPost": "p003" }
+    }
+  },
+  "vsGoals": {
+    "g_workshop_signups": { "target": 30,     "current": 28,    "pace": "on-track", "deltaPct": -7 },
+    "g_qualified_dms":    { "target": 24,     "current": 17,    "pace": "ahead",    "deltaPct": 6 },
+    "g_impressions":      { "target": 180000, "current": 43500, "pace": "behind",   "deltaPct": -12 },
+    "g_newsletter":       { "target": 200,    "current": 0,     "pace": "behind",   "deltaPct": -50 },
+    "g_save_rate":        { "target": 3.0,    "current": 3.7,   "pace": "ahead",    "deltaPct": 23 },
+    "g_followers":        { "target": 8,      "current": 3.4,   "pace": "on-track", "deltaPct": 0 }
+  },
+  "weeklySummary": {
+    "week": 8,
+    "wins": [
+      "Workshop hit 28 sign-ups vs target 30 - 93% of plan, 1 week before the event.",
+      "p003 (workshop teaser) cleared 600 saves. Engineer-grade tactical content over-indexes on saves as predicted.",
+      "Save rate at 3.7% is well above the 3.0% target. The 'no jargon, show the workflow' rule is working."
+    ],
+    "losses": [
+      "May post cadence has been thin (only 1 post since the workshop recap). Need to ship the agent ecosystem campaign.",
+      "Newsletter still hasn't launched - blocking the 60-subscriber May target.",
+      "Impressions pacing 12% behind quarterly. Need more posts, not better posts."
+    ],
+    "nextTest": "Week 9: ship Otto agent showcase as planned + a tool comparison post (Claude Code vs OpenClaw). Measure whether 'compare two tools by name' content drives more saves than single-tool posts."
+  }
+}

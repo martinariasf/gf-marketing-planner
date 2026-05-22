@@ -1,0 +1,26 @@
+{
+  "id": "p001",
+  "date": "2026-04-02",
+  "channel": "linkedin",
+  "format": "Long-form text",
+  "pillar": "Education",
+  "campaign": "April 14 Workshop launch",
+  "title": "5 tools we use to ship AI in 30 days",
+  "image": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&q=80",
+  "copy": "5 tools we actually use to ship AI agents in 30 days. Not what we 'recommend'. What we used this week.\n\n1. Claude Code - the IDE\n2. N8N - workflow glue\n3. OpenClaw - for the harder agent runs\n4. Postiz - social scheduler we sell through\n5. Telegram - the universal chat interface\n\nIf you're an innovation lead at an SME and your team is stuck at 'we built a chatbot pilot, then nothing' - these five plus 30 days is the unlock.\n\nWe're running a workshop on April 14 walking through how this stack ships an agent end-to-end. Comment 'workshop' for the link.",
+  "hashtags": ["#AI", "#ClaudeCode", "#N8N", "#AgentDev", "#Mittelstand"],
+  "cta": "Comment 'workshop' for the April 14 sign-up link",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Martin",
+    "approvedAt": "2026-04-01T16:30:00Z",
+    "version": 2,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_gf001_apr02",
+    "publishedAt": "2026-04-02T08:30:00Z",
+    "publicUrl": "https://www.linkedin.com/posts/gf-innovative-example-001"
+  }
+}

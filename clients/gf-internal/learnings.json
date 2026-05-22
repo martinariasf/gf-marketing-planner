@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "l001",
+      "title": "Numbered lists + named tools beat abstract takes",
+      "platform": "linkedin",
+      "relatedPostId": "p001",
+      "relatedCampaign": "April 14 Workshop launch",
+      "whatHappened": "p001 ('5 tools we use to ship AI in 30 days') outperformed our generic 'AI is changing everything' baseline by 3x on saves.",
+      "lesson": "German SME engineers save lists of named tools. They scroll past abstract framing.",
+      "recommendedBehaviorChange": "Every educational post leads with a numbered list or a named tool comparison. No abstract 'AI is changing X' openers.",
+      "confidence": "high",
+      "createdAt": "2026-04-09T15:00:00Z"
+    },
+    {
+      "id": "l002",
+      "title": "Founder-voice posts under 100 words underperform",
+      "platform": "linkedin",
+      "relatedPostId": "p002",
+      "relatedCampaign": "Founder weekly notes",
+      "whatHappened": "p002 (short founder POV, 80 words) got 22% of p003's engagement. Comments asked 'and then what?' - the post stopped at the setup.",
+      "lesson": "Founder POV needs to land the resolution. Setup + insight, never just setup.",
+      "recommendedBehaviorChange": "Founder weekly notes are 180-280 words. Setup, what we tried, what happened, and the actual takeaway. Cut the cliffhangers.",
+      "confidence": "medium",
+      "createdAt": "2026-04-12T11:00:00Z"
+    }
+  ]
+}

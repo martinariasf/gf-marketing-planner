@@ -1,6 +1,15 @@
 {
   "clients": [
     {
+      "slug": "gf-internal",
+      "name": "GF Innovative Solutions",
+      "industry": "AI / VR-AR / Digital Twins consultancy",
+      "logoInitials": "GF",
+      "quarter": "Q2 2026",
+      "headline": "Q2 is about turning the April 14 workshop into a repeatable inbound channel.",
+      "status": "active"
+    },
+    {
       "slug": "fitvibe-demo",
       "name": "FitVibe Studios",
       "industry": "Boutique fitness & wellness",

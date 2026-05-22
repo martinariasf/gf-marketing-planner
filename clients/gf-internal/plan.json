@@ -1,0 +1,115 @@
+{
+  "agency": {
+    "name": "GF Innovative Solutions",
+    "tagline": "AI-led marketing operations for ambitious brands"
+  },
+  "client": {
+    "name": "GF Innovative Solutions",
+    "industry": "AI / VR-AR / Digital Twins consultancy",
+    "handle": "@gf-innovative",
+    "logoInitials": "GF",
+    "primaryChannels": ["linkedin", "youtube"]
+  },
+  "quarter": {
+    "label": "Q2 2026",
+    "year": 2026,
+    "theme": "From AI demos to AI in production",
+    "months": [
+      { "key": "apr", "name": "April", "weeks": [1, 2, 3, 4] },
+      { "key": "may", "name": "May",   "weeks": [5, 6, 7, 8] },
+      { "key": "jun", "name": "June",  "weeks": [9, 10, 11, 12] }
+    ]
+  },
+  "headline": "Q2 is about turning the April 14 workshop into a repeatable inbound channel.",
+  "positioningStatement": "Every post this quarter should make a reader think: 'these people have actually shipped something - not just demoed it.'",
+  "strategy": "Use the April 14 workshop as the catalyst. Pre-workshop content drives sign-ups; post-workshop content turns attendees + observers into inbound conversations. May = case studies + agent demos. June = warm into Q3 with a second workshop announcement.",
+  "strategicPriorities": [
+    { "label": "Workshop pipeline",     "description": "April 14 workshop fills, gets recorded, and becomes the centerpiece artifact for Q2 LinkedIn." },
+    { "label": "Founder thought leadership", "description": "Martin posts 2-3x/week in first person about what he actually shipped this week. No abstract takes." },
+    { "label": "Agent ecosystem reveal", "description": "Otto / Molly / Carlos / Camila / Viktor / Brain get individual showcase posts - each one a real workflow, not vaporware." },
+    { "label": "Inbound qualified DMs",  "description": "Goal: 2+ qualified inbound DMs/week by end of June. This is the only KPI that converts." }
+  ],
+  "kpis": [
+    { "label": "Workshop sign-ups",        "value": "30" },
+    { "label": "Inbound DMs from SMEs",    "value": "24" },
+    { "label": "LinkedIn impressions",     "value": "180K" },
+    { "label": "Newsletter subscribers",   "value": "+200" }
+  ],
+  "pillars": [
+    { "name": "Education",         "weight": 40, "color": "#211D58", "description": "Tactical posts on AI tooling, agent design, integration patterns. The reason people follow." },
+    { "name": "Case studies",      "weight": 25, "color": "#8BC07C", "description": "Real workflows we shipped - with screenshots. Builds the 'they actually do it' signal." },
+    { "name": "Tools & demos",     "weight": 20, "color": "#fa7e1e", "description": "Live demos of Otto, Molly, Carlos, Camila, Viktor, Brain. Each agent gets its own showcase." },
+    { "name": "Founder POV",       "weight": 15, "color": "#d62976", "description": "Martin in first person - what he tried this week, what worked, what didn't." }
+  ],
+  "campaigns": [
+    { "name": "April 14 Workshop launch",         "pillar": "Education",     "startWeek": 1,  "endWeek": 3,  "color": "#211D58" },
+    { "name": "Workshop recap + clips",           "pillar": "Case studies",  "startWeek": 3,  "endWeek": 6,  "color": "#8BC07C" },
+    { "name": "Agent ecosystem showcase",         "pillar": "Tools & demos", "startWeek": 5,  "endWeek": 10, "color": "#fa7e1e" },
+    { "name": "Founder weekly notes",             "pillar": "Founder POV",   "startWeek": 1,  "endWeek": 12, "color": "#d62976" },
+    { "name": "Q3 workshop announcement",         "pillar": "Education",     "startWeek": 10, "endWeek": 12, "color": "#211D58" }
+  ],
+  "monthlyFocus": [
+    {
+      "month": "April",
+      "theme": "Fill the workshop",
+      "intent": "Use Martin's existing LinkedIn network + a 3-week ramp to fill the April 14 workshop. Every post in weeks 1-3 has the workshop in the CTA.",
+      "priorities": ["Workshop teaser content", "Founder weekly notes", "Direct CTA on every post for sign-up"],
+      "keyMoments": ["April 14 workshop", "Pre-workshop founder live (April 10)", "Post-workshop recap (April 18)"],
+      "watch": "Workshop sign-ups. Only metric that matters in April."
+    },
+    {
+      "month": "May",
+      "theme": "Turn workshop into compounding artifacts",
+      "intent": "Clip the workshop into 6-8 short posts. Drop one agent-ecosystem showcase per week. Open the Q3 inbound conversations.",
+      "priorities": ["Workshop clips on LinkedIn", "Agent showcase: Otto then Molly then Carlos", "Case study: Otto's webinar workflow"],
+      "keyMoments": ["Workshop clips campaign starts (May 5)", "First agent showcase (Otto, May 8)"],
+      "watch": "DM intent + save rate on the agent showcase posts. Posts with engineer-grade detail should over-index on saves."
+    },
+    {
+      "month": "June",
+      "theme": "Warm into Q3 with a second workshop date",
+      "intent": "Announce the Q3 workshop (target: late September). Use the May-clipped audience to fill it. Stop chasing reach; chase qualified inbound.",
+      "priorities": ["Q3 workshop announcement (June 9)", "2-3 case study posts (real shipped projects)", "Newsletter launch"],
+      "keyMoments": ["Q3 workshop early-bird opens (June 9)", "Newsletter inaugural issue (June 15)"],
+      "watch": "Q3 workshop sign-ups in first 7 days + newsletter subscriber growth."
+    }
+  ],
+  "keyDates": [
+    { "date": "2026-04-14", "title": "AI Agents Workshop (live)",        "type": "brand",      "relevance": "high",   "angle": "Centerpiece of Q2. Pre-, during-, and post-content all anchor here." },
+    { "date": "2026-04-18", "title": "Workshop recap publishing",        "type": "brand",      "relevance": "high",   "angle": "First long-form post-workshop. Founder POV, what attendees took away." },
+    { "date": "2026-05-08", "title": "Agent showcase #1 (Otto)",         "type": "brand",      "relevance": "high",   "angle": "Real workflow: Telegram -> N8N -> webinar link. Screenshots, not diagrams." },
+    { "date": "2026-05-15", "title": "Agent showcase #2 (Molly)",        "type": "brand",      "relevance": "medium", "angle": "Email -> sevDesk invoice automation. Concrete time savings claim only if backed by data." },
+    { "date": "2026-05-22", "title": "Agent showcase #3 (Carlos)",       "type": "brand",      "relevance": "medium", "angle": "Internet research -> Notion weekly reports." },
+    { "date": "2026-06-09", "title": "Q3 workshop early-bird opens",     "type": "brand",      "relevance": "high",   "angle": "First public mention of Q3 date. Drive newsletter sign-ups for full announcement." },
+    { "date": "2026-06-15", "title": "Newsletter inaugural issue",       "type": "brand",      "relevance": "medium", "angle": "First issue. Recap of April workshop + Q3 announcement + one tactical tool comparison." }
+  ],
+  "platforms": [
+    {
+      "name": "LinkedIn",
+      "channelKey": "linkedin",
+      "role": "Primary - founder voice + qualified inbound DMs",
+      "rationale": "German SME decision-makers are here during work hours. Founder thought leadership compounds. Cold outbound is a noisy alternative; we play the long game with content.",
+      "cadence": "3-4x/week",
+      "formatMix": [
+        { "label": "Long-form text",     "weight": "60%" },
+        { "label": "Image posts (screenshots)", "weight": "25%" },
+        { "label": "Document posts",     "weight": "10%" },
+        { "label": "Video clips",        "weight": "5%" }
+      ],
+      "watch": ["Inbound DMs from CTO/Innovation/HR titles at SMEs", "Profile visits from target companies", "Post saves (signal of tactical value)"]
+    },
+    {
+      "name": "YouTube",
+      "channelKey": "youtube",
+      "role": "Secondary - workshop recordings + long-form tool comparisons",
+      "rationale": "Workshops get recorded and live here. Search-driven traffic from people Googling 'N8N vs Claude Code'. Lower volume, higher intent.",
+      "cadence": "1-2/month",
+      "formatMix": [
+        { "label": "Workshop recordings",      "weight": "50%" },
+        { "label": "Tool comparison videos",   "weight": "30%" },
+        { "label": "Agent demo screencasts",   "weight": "20%" }
+      ],
+      "watch": ["Watch time", "Subscribers from search vs LinkedIn referrals", "Comments asking for workshop info"]
+    }
+  ]
+}

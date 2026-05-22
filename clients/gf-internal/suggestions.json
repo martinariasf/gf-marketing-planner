@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "id": "s001",
+      "kind": "post_idea",
+      "title": "Otto agent showcase - this is the highest-leverage post left in May",
+      "rationale": "Plan called for Otto showcase by May 8; today is week 8 (May 20) and it hasn't shipped. p003 proved engineer-grade content with named tools drives saves (612). Otto's workflow (Telegram -> N8N -> webinar link) is the same shape.",
+      "suggestedAction": "draft p004 linkedin \"Document post\" pillar=\"Tools & demos\" campaign=\"Agent ecosystem showcase\" date=2026-05-22 hook=\"We replaced the webinar-creation Slack channel with a Telegram bot. Here's the actual workflow.\"",
+      "relatedCampaign": "Agent ecosystem showcase",
+      "relatedPillar": "Tools & demos",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-05-20T08:14:00Z"
+    },
+    {
+      "id": "s002",
+      "kind": "next_action",
+      "title": "Launch the newsletter this week or lose the June target",
+      "rationale": "Newsletter target for May was 60 subs; current is 0 because the inaugural issue hasn't shipped. June target is 140 - unhittable without 6+ weeks of compounding. Every week of delay halves the achievable Q2 number.",
+      "suggestedAction": "draft newsletter \"inaugural\" date=2026-05-26 hook=\"What I shipped this month + 3 tools I stopped using\"",
+      "relatedPillar": "Founder POV",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-05-20T08:14:00Z",
+      "expiresAt": "2026-05-28T00:00:00Z"
+    },
+    {
+      "id": "s003",
+      "kind": "follow_up",
+      "title": "Run a Claude Code vs OpenClaw post in the p001 format",
+      "rationale": "p001 (named-tools format) cleared 312 saves vs the 80-save baseline. Learning l001 says German engineers save lists of named tools. Tool-comparison is the next natural beat.",
+      "suggestedAction": "draft p005 linkedin \"Long-form text\" pillar=Education campaign=\"Workshop recap + clips\" hook=\"Claude Code vs OpenClaw - I ran the same 3-hour project on both. Here's what broke.\"",
+      "relatedPostId": "p001",
+      "relatedPillar": "Education",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-05-20T08:14:00Z"
+    },
+    {
+      "id": "s004",
+      "kind": "pillar_balance",
+      "title": "Case studies pillar is at 0% delivered vs 25% target",
+      "rationale": "We're 7 weeks past the workshop. Plan target is 25% Case studies (real shipped projects). Delivered: 0. Otto's webinar workflow + Camila's Drive automation are both ready - we just haven't written them up.",
+      "suggestedAction": "draft p006 linkedin \"Document post\" pillar=\"Case studies\" hook=\"Case: how we automated a client's monthly invoice ritual in 4 days. (No, it's not a CRM.)\"",
+      "relatedPillar": "Case studies",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-05-20T08:14:00Z"
+    },
+    {
+      "id": "s005",
+      "kind": "next_action",
+      "title": "Recycle workshop clips - we have 4 hours of recording and 0 clipped posts",
+      "rationale": "May theme is 'turn workshop into compounding artifacts'. Five weeks in, no clip has been published. The recording exists; the bottleneck is editing, not content.",
+      "suggestedAction": "draft p007 linkedin \"Video clips\" pillar=\"Case studies\" campaign=\"Workshop recap + clips\" hook=\"From the workshop: the 90-second explanation of why N8N and Claude Code aren't competitors.\"",
+      "relatedCampaign": "Workshop recap + clips",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-05-20T08:14:00Z"
+    }
+  ]
+}

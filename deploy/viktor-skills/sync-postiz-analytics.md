@@ -120,5 +120,5 @@ This closes the loop: scheduled → (Postiz publishes) → next sync flips the p
 ## Open questions for installation
 
 - [ ] Confirm the Postiz analytics endpoint URL + auth shape.
-- [ ] Confirm Hermes scheduler exists; if not, use `systemd-timer` on the host or `cron` to call a Viktor HTTP endpoint.
+- [x] **Hermes scheduler confirmed.** Maps directly to the `schedule:` trigger above.
 - [ ] Decide the "behind by more than X%" alert threshold per client (start with 20%, tune from there).

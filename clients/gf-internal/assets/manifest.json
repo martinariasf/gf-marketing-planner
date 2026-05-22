@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "a001",
+      "filename": "5-tools-stack-graphic.jpg",
+      "url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&q=80",
+      "kind": "image",
+      "source": "unsplash",
+      "designBrief": "Tool-logo collage feel. Used as cover image for p001 'named tools' post.",
+      "usedInPosts": ["p001"],
+      "owner": "Martin",
+      "finalApproved": true,
+      "createdAt": "2026-04-01T15:00:00Z"
+    },
+    {
+      "id": "a002",
+      "filename": "workshop-agenda-cover.jpg",
+      "url": "https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&q=80",
+      "kind": "image",
+      "source": "unsplash",
+      "designBrief": "Pre-workshop agenda cover. Clean, conference-like.",
+      "usedInPosts": ["p003"],
+      "owner": "Martin",
+      "finalApproved": true,
+      "createdAt": "2026-04-11T18:00:00Z"
+    }
+  ]
+}

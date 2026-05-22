@@ -1,0 +1,53 @@
+{
+  "quarterly": [
+    { "id": "g_workshop_signups", "label": "Workshop sign-ups (Apr 14)",  "target": 30,      "unit": "attendees" },
+    { "id": "g_qualified_dms",    "label": "Qualified inbound DMs",       "target": 24,      "unit": "DMs" },
+    { "id": "g_impressions",      "label": "LinkedIn impressions",        "target": 180000,  "unit": "people" },
+    { "id": "g_newsletter",       "label": "Newsletter subscribers",      "target": 200,     "unit": "subs" },
+    { "id": "g_save_rate",        "label": "Avg post save rate",          "target": 3.0,     "unit": "%" },
+    { "id": "g_followers",        "label": "LinkedIn follower growth",    "target": 8,       "unit": "%" }
+  ],
+  "monthly": [
+    {
+      "month": "April",
+      "goals": [
+        { "ref": "g_workshop_signups", "target": 30 },
+        { "ref": "g_qualified_dms",    "target": 4 },
+        { "ref": "g_impressions",      "target": 45000 },
+        { "ref": "g_save_rate",        "target": 3.0 }
+      ]
+    },
+    {
+      "month": "May",
+      "goals": [
+        { "ref": "g_qualified_dms",    "target": 10 },
+        { "ref": "g_impressions",      "target": 75000 },
+        { "ref": "g_save_rate",        "target": 3.5 },
+        { "ref": "g_newsletter",       "target": 60 }
+      ]
+    },
+    {
+      "month": "June",
+      "goals": [
+        { "ref": "g_qualified_dms",    "target": 10 },
+        { "ref": "g_impressions",      "target": 60000 },
+        { "ref": "g_newsletter",       "target": 140 },
+        { "ref": "g_followers",        "target": 8 }
+      ]
+    }
+  ],
+  "weekly": [
+    { "week": 1,  "focus": "Workshop teaser #1 + founder POV",          "kpi": "workshop sign-ups" },
+    { "week": 2,  "focus": "Tactical AI tooling post (workshop CTA)",   "kpi": "workshop sign-ups" },
+    { "week": 3,  "focus": "Workshop day - LinkedIn live + Stories",    "kpi": "workshop sign-ups (final)" },
+    { "week": 4,  "focus": "Workshop recap long-form (Apr 18)",         "kpi": "saves + profile visits" },
+    { "week": 5,  "focus": "First workshop clip + agent ecosystem tease","kpi": "saves" },
+    { "week": 6,  "focus": "Agent showcase #1 - Otto",                  "kpi": "DMs + saves" },
+    { "week": 7,  "focus": "Agent showcase #2 - Molly",                 "kpi": "DMs + saves" },
+    { "week": 8,  "focus": "Agent showcase #3 - Carlos",                "kpi": "DMs + saves" },
+    { "week": 9,  "focus": "Case study: Otto's webinar workflow",       "kpi": "qualified DMs" },
+    { "week": 10, "focus": "Q3 workshop early-bird teaser",             "kpi": "newsletter sign-ups" },
+    { "week": 11, "focus": "Newsletter inaugural issue + LinkedIn push","kpi": "newsletter subscribers" },
+    { "week": 12, "focus": "Quarter wrap + Q3 strategic preview",       "kpi": "follower growth + retention" }
+  ]
+}

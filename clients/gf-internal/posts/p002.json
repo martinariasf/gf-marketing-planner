@@ -1,0 +1,26 @@
+{
+  "id": "p002",
+  "date": "2026-04-08",
+  "channel": "linkedin",
+  "format": "Long-form text",
+  "pillar": "Founder POV",
+  "campaign": "Founder weekly notes",
+  "title": "I deleted half a feature this week",
+  "image": null,
+  "copy": "I deleted half a feature this week.\n\nA client wanted an agent that did 4 things. We built it. It worked, technically. Nobody used it.\n\nTook three of those things out, left one, and now they use it daily.\n\nNot every AI project needs more.",
+  "hashtags": ["#FounderNotes", "#AgentDesign"],
+  "cta": null,
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Martin",
+    "approvedAt": "2026-04-08T09:00:00Z",
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_gf002_apr08",
+    "publishedAt": "2026-04-08T09:15:00Z",
+    "publicUrl": "https://www.linkedin.com/posts/gf-innovative-example-002"
+  }
+}

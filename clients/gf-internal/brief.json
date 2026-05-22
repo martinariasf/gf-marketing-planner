@@ -1,0 +1,149 @@
+{
+  "company": {
+    "name": "GF Innovative Solutions",
+    "industry": "AI / VR-AR / Digital Twins consultancy",
+    "country": "DE",
+    "website": "https://gfinnov.com",
+    "contact": { "name": "Martin Arias", "email": "martinariasfornara@gmail.com", "telegram": "@martinarias" }
+  },
+  "business": {
+    "model": "B2B services + workshops",
+    "customerType": "German SMEs in manufacturing, automotive, and engineering; HR / innovation leads; CTOs",
+    "mainOffer": "AI implementation consulting (agents, integrations, workshops)",
+    "bestSeller": "90-minute AI Agents workshop for non-technical teams",
+    "differentiators": [
+      "We ship working agents in production, not slide decks",
+      "German-speaking, EU-based, no language friction with mid-market buyers",
+      "Hands-on - every workshop has a live demo, every proposal has a working prototype",
+      "Founder-led delivery; the person you talk to is the person who builds it"
+    ]
+  },
+  "audience": {
+    "segments": [
+      {
+        "name": "Primary - Innovation managers at German SMEs",
+        "demo": "35-55, manufacturing / automotive / engineering, 50-500 employees, English business-fluent but German-native",
+        "psycho": "Has heard 'AI' in every board meeting for 2 years. Burned by big-consultancy demos that never shipped. Looking for someone who has actually built and deployed something.",
+        "where": "LinkedIn (90% of work-time browsing), industry conferences, founder podcasts"
+      },
+      {
+        "name": "Secondary - CTOs and dev leads",
+        "demo": "30-45, technical, evaluating AI tooling for internal use",
+        "psycho": "Wants concrete tool comparisons (N8N vs Claude Code vs OpenClaw), production deployment patterns, no marketing fluff.",
+        "where": "LinkedIn, GitHub, HN, technical YouTube"
+      },
+      {
+        "name": "Tertiary - HR and people-ops",
+        "demo": "35-55, HR / L&D, considering AI literacy training for their team",
+        "psycho": "Needs a credible partner for company-wide AI workshops. Risk-averse on vendor choice. Wants references.",
+        "where": "LinkedIn, HR industry newsletters"
+      }
+    ],
+    "painPoints": [
+      "Built a chatbot pilot, never reached production",
+      "Team can't tell N8N from Make from Zapier from Claude Code",
+      "Board pushing for an 'AI strategy' but no in-house expertise",
+      "Big consultancies quoted six figures for what should be a 4-week project"
+    ],
+    "desires": [
+      "One working AI agent shipped in 30 days",
+      "Team that understands the tools well enough to maintain",
+      "A credible AI story to tell their own customers",
+      "Stop seeing AI as magic; start treating it as engineering"
+    ],
+    "competitors": ["Large EU consultancies (Accenture, Capgemini)", "Solo AI freelancers on LinkedIn", "Internal IT teams trying to DIY"],
+    "referenceBrands": ["a16z editorial", "Anthropic's product copy", "Latent Space podcast", "Pieter Levels (solo-founder credibility)"]
+  },
+  "voice": {
+    "tone": ["Direct", "Engineer-to-engineer", "Show don't tell", "Allergic to AI buzzwords"],
+    "wordsToUse": [
+      "Ship",
+      "Agent",
+      "Production",
+      "Workflow",
+      "In 30 days",
+      "Working",
+      "Concrete",
+      "Tool",
+      "Skill"
+    ],
+    "wordsToAvoid": [
+      "Revolutionary",
+      "Cutting-edge",
+      "Disruptive",
+      "Synergies",
+      "Transform your business",
+      "AI-powered (alone, without specifics)",
+      "Game-changer",
+      "Leverage",
+      "Empower"
+    ],
+    "do": [
+      "Lead with what shipped, not what's possible",
+      "Show the workflow on screen - real screenshots, not abstract diagrams",
+      "Cite the tool by name (Claude Code, N8N, OpenClaw, Postiz)",
+      "Speak as the founder, in first person",
+      "Number your lists when there's a sequence"
+    ],
+    "dont": [
+      "Promise 'transformations' without naming the workflow",
+      "Use stock photos of robots or glowing brains",
+      "Hide pricing or scope (we lead with a fixed 30-day frame)",
+      "Apologize for being a small team - that's the offer",
+      "Use AI-generated stock-look images for thought-leadership posts (always real screenshots or photos)"
+    ]
+  },
+  "channels": {
+    "primary": ["linkedin"],
+    "cadence": "3-4/week LinkedIn + 1-2/month YouTube + 1/month newsletter",
+    "language": "en"
+  },
+  "boundaries": {
+    "viktorCanDoWithoutAsking": [
+      "Draft LinkedIn posts in Martin's voice (run them by him before any post)",
+      "Generate diagram concepts via Nano Banana (never AI-stock-photos)",
+      "Research industry trends + competitor moves",
+      "Summarize Postiz analytics",
+      "Propose post ideas grounded in shipped work"
+    ],
+    "viktorNeedsApprovalFor": [
+      "Any post that mentions a client by name",
+      "Any post that quotes a specific revenue number",
+      "Any post that references unreleased / unshipped work",
+      "Any reply to a DM (Martin handles inbound himself)",
+      "Any pricing claims",
+      "Any post under 'we are' positioning - founder voice only"
+    ],
+    "sensitiveTopics": [
+      "Client confidentiality - never name a project's client unless explicitly OK'd",
+      "Pricing - never publish a fee structure",
+      "Politics, religion, national-identity takes",
+      "Crypto / web3 endorsements (we don't do this)"
+    ],
+    "communityRules": {
+      "who_handles_dms": "human (Martin)",
+      "escalation_owner": "Martin"
+    }
+  },
+  "metricsThatMatter": [
+    "Inbound LinkedIn DMs from buyer titles (CTO, head of innovation, HR director at SMEs)",
+    "Workshop sign-ups",
+    "Newsletter subscribers",
+    "Post saves on tactical / technical content (signal that the right audience is using it)",
+    "Profile visits from target companies"
+  ],
+  "tools": {
+    "design": "Canva + Nano Banana (Google API)",
+    "scheduler": "Postiz",
+    "analytics": "Postiz + LinkedIn Insights"
+  },
+  "references": {
+    "drive_folder_url": null,
+    "examples": [
+      "Anthropic's product page copy - confident but specific",
+      "Latent Space podcast notes - engineer-grade detail",
+      "Pieter Levels's solo-founder updates - real screenshots, real numbers"
+    ]
+  },
+  "expectations": "Within 90 days, GF's LinkedIn should produce at least 2 qualified inbound conversations per week from buyer titles at German SMEs, with zero manual posting effort from Martin. Workshops should fill via inbound, not outbound."
+}

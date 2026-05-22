@@ -373,7 +373,10 @@ Order = top-to-bottom on the new `client.html`. All in one scrollable page with 
 - Viktor skill spec at `deploy/viktor-skills/weekly-summary.md`: scheduled Monday 09:00 local. Reads performance + goals + prior learnings, generates wins / losses / next test with literal numbers, writes into `performance.weeklySummary`, posts the digest to the client's Telegram contact, optionally seeds a low-confidence hypothesis into `learnings.json` for the upcoming experiment.
 - Both skills are spec-only; not yet installed on the Hermes container. Install once the Postiz API shape + scheduler choice are confirmed.
 
-### Phase 4 — Polish + multi-client + go public ✅ MOSTLY DONE 2026-05-21
+### Phase 4 — Polish + multi-client + go public ✅ DONE 2026-05-21 (went public)
+- **Public** at https://marketing.gfinnov.com with TLS (Let's Encrypt, auto-renew). Per-client basic auth on `/data/<slug>/*` realms; SPA + `index.json` open. Old Tailscale/bare-IP URLs 301 to the canonical hostname.
+- **First real client onboarded:** `gf-internal` ([clients/gf-internal/](./clients/gf-internal/)). Q2 2026 plan anchored on the April 14 workshop. Three published posts seeded from real GF content, two learnings, five open suggestions.
+- **Dark mode dropped** for v2. Brand is white + Corporate Blue + Innovation Green; revisit if a client demands a dark variant.
 - **Client picker** landing page at `/` lists every client from `clients/index.json` with logo initials, industry, headline, quarter, and a status badge. Cards lift on hover and the "Open cockpit" arrow extends — visible affordance for clickability.
 - **Code-split** all 9 client views + the picker with `React.lazy` + `Suspense`. Initial JS dropped from 286 KB → 76 KB gzipped. Recharts (97 KB gzipped) only loads when Goals/Performance is opened. No more 500 KB chunk-size warnings.
 - **Mobile layout**: hamburger → `Sheet` nav on screens < `lg`. Header collapses gracefully — agency name + quarter badge hide on narrow widths but client name + Viktor badge stay visible. Workflow strip uses smaller padding/text and hides scrollbars below `sm`.

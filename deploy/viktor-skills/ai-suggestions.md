@@ -146,6 +146,6 @@ Both sibling skills should append to a shared `suggestions.log` (same shape as `
 ## Open questions for installation
 
 - [ ] Decide the cap (8 open + 3 new/run is a guess — tune after running for 2-3 weeks).
-- [ ] Hermes scheduler vs cron for the Wednesday 10:00 trigger.
+- [x] **Hermes scheduler confirmed** for the Wednesday 10:00 trigger.
 - [ ] Should the `accept-suggestion` skill auto-execute the action, or just flip status and let the human re-paste? (Recommendation: auto-execute only if the action maps to an idempotent skill like `dismiss`; require re-paste for `draft` since the human may want to tweak the hook first.)
 - [ ] Per-client thresholds. Some clients may want more/fewer suggestions per week — store in `brief.json` under a new `viktor.suggestionsPerRun` field?

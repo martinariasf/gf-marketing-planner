@@ -1,0 +1,26 @@
+{
+  "id": "p003",
+  "date": "2026-04-12",
+  "channel": "linkedin",
+  "format": "Document post",
+  "pillar": "Education",
+  "campaign": "April 14 Workshop launch",
+  "title": "The workshop preview - what 90 minutes actually covers",
+  "image": "https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&q=80",
+  "copy": "Workshop is in 2 days. Here's the agenda - exactly what 90 minutes covers.\n\n1. Live demo: an agent built in front of you, real prompts, real errors.\n2. Chat vs Agents - why your chatbot pilot stalled.\n3. The agent loop (Observe → Think → Act) and the 4 components.\n4. Context engineering beats prompt engineering.\n5. Skills as SOPs for AI - the trick that makes agents reusable.\n6. The GF agent ecosystem - Otto, Molly, Carlos, Camila, Viktor, Brain. Real workflows, not slides.\n7. Tool comparison: N8N vs Claude Code vs OpenClaw. Readiness vs Power chart.\n8. Exercise: design your own agent in 7 minutes.\n9. Next steps.\n\nThis is the same agenda I use when a client asks 'where do we even start with AI'. If that's you, comment 'workshop' - I'll DM you the link.",
+  "hashtags": ["#AIWorkshop", "#ClaudeCode", "#N8N", "#OpenClaw", "#Mittelstand", "#AgentDev"],
+  "cta": "Comment 'workshop' for the link - the April 14 session has 28/30 spots filled",
+  "status": "published",
+  "approval": {
+    "status": "published",
+    "approvedBy": "Martin",
+    "approvedAt": "2026-04-12T07:30:00Z",
+    "version": 3,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": "pz_gf003_apr12",
+    "publishedAt": "2026-04-12T08:00:00Z",
+    "publicUrl": "https://www.linkedin.com/posts/gf-innovative-example-003"
+  }
+}

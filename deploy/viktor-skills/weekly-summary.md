@@ -131,6 +131,6 @@ When a human writes "weekly summary" / "recap last week" outside the scheduled r
 
 ## Open questions for installation
 
-- [ ] Hermes scheduler vs systemd timer for the Monday-09:00 cron.
+- [x] **Hermes scheduler confirmed.** Maps directly.
 - [ ] Per-client Telegram channel vs agency-wide channel (probably both, but the routing config needs to live somewhere — in `brief.json` is the proposal).
-- [ ] Local time vs UTC for the cron — defaults to Europe/Berlin since GF is in Germany; override per client if needed.
+- [x] **Timezone**: Europe/Berlin set via the `TZ` env var per VIKTOR.md.
