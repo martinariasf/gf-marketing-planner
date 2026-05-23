@@ -3,7 +3,8 @@ import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, Loader2, Users } from 'lucide-react'
+import { ArrowRight, ExternalLink, Loader2, Users } from 'lucide-react'
+import { GFLogo } from '@/components/gf-logo'
 import { loadClientIndex } from '@/lib/client-data'
 import { cn } from '@/lib/utils'
 import type { ClientIndex, ClientIndexEntry, ClientStatus } from '@/types'
@@ -31,23 +32,32 @@ export default function ClientPicker() {
   return (
     <div className="min-h-screen bg-paper-muted">
       <header className="border-b border-border-subtle bg-paper">
-        <div className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-brand-blue flex items-center justify-center text-white font-bold text-sm">
-              GF
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-ink-muted leading-tight">
-                GF Innovative Solutions
+        <div className="mx-auto max-w-5xl px-6 py-5 flex items-center justify-between gap-3 flex-wrap">
+          <Link to="/" className="flex items-center gap-3 group">
+            <GFLogo variant="lockup" size="lg" />
+            <div className="hidden sm:block border-l border-border-subtle pl-3 ml-1">
+              <p className="text-[10px] uppercase tracking-wider text-ink-muted leading-tight">
+                Viktor
               </p>
-              <h1 className="text-base font-semibold leading-tight">
-                Viktor Marketing Operating Dashboard
+              <h1 className="text-sm font-semibold leading-tight text-ink">
+                Marketing Operating Dashboard
               </h1>
             </div>
+          </Link>
+          <div className="flex items-center gap-2">
+            <a
+              href="https://gfinnov.com"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-brand-blue transition-colors"
+            >
+              gfinnov.com
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600">
+              v2
+            </Badge>
           </div>
-          <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600">
-            v2
-          </Badge>
         </div>
       </header>
 

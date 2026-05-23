@@ -22,7 +22,9 @@ import {
   Loader2,
   Menu,
   ChevronLeft,
+  HelpCircle,
 } from 'lucide-react'
+import { GFLogo } from '@/components/gf-logo'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -137,13 +139,22 @@ export default function ClientLayout() {
               <div className="flex-1 overflow-y-auto p-3">
                 {navContent}
               </div>
-              <div className="border-t border-border-subtle p-3">
+              <div className="border-t border-border-subtle p-3 space-y-1">
                 <Button asChild variant="ghost" size="sm" className="w-full justify-start">
                   <Link to="/">
                     <ChevronLeft className="h-3.5 w-3.5 mr-1.5" />
                     All clients
                   </Link>
                 </Button>
+                <Button asChild variant="ghost" size="sm" className="w-full justify-start">
+                  <a href="https://gfinnov.com" target="_blank" rel="noreferrer">
+                    <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
+                    Help &middot; gfinnov.com
+                  </a>
+                </Button>
+                <div className="pt-2 flex justify-center opacity-70">
+                  <GFLogo size="sm" />
+                </div>
               </div>
             </SheetContent>
           </Sheet>
@@ -173,13 +184,33 @@ export default function ClientLayout() {
             </h1>
           </Link>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Badge variant="secondary" className="bg-brand-blue-50 text-brand-blue hidden sm:inline-flex">
               {data.plan.quarter.label}
             </Badge>
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600 hidden md:inline-flex">
               Viktor v2
             </Badge>
+            <a
+              href="https://gfinnov.com"
+              target="_blank"
+              rel="noreferrer"
+              title="GF Innovative Solutions — help & support"
+              className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
+            >
+              <GFLogo size="sm" />
+              <HelpCircle className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href="https://gfinnov.com"
+              target="_blank"
+              rel="noreferrer"
+              title="Help"
+              aria-label="Help"
+              className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </a>
           </div>
         </div>
         <WorkflowStrip current={currentPhase} />

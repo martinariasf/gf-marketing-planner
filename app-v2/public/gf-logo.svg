@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 36" role="img" aria-label="GF Innovative Solutions">
+  <!-- Green accent column (visual nod to the logo's green wedge) -->
+  <rect x="24" y="0" width="7" height="36" rx="0.5" fill="#8BC07C"/>
+  <!-- "GF" letterforms in Corporate Blue, layered on top of the green -->
+  <text x="0" y="29"
+        font-family="Montserrat, system-ui, -apple-system, sans-serif"
+        font-size="36"
+        font-weight="800"
+        fill="#211D58"
+        letter-spacing="-1.5">GF</text>
+</svg>
