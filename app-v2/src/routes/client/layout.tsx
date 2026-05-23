@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   NavLink,
   Outlet,
@@ -23,6 +23,8 @@ import {
   Menu,
   ChevronLeft,
   HelpCircle,
+  Pencil,
+  Eye,
 } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -36,7 +38,10 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
+import { EditBar } from '@/components/edit-bar'
 import { useClient } from '@/hooks/use-client'
+import { useEdit, deepMerge } from '@/lib/edit-store'
+import type { ClientBundle } from '@/lib/client-data'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -65,6 +70,24 @@ export default function ClientLayout() {
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { data, loading, error } = useClient(slug ?? 'fitvibe-demo')
+  const { editMode, setEditMode, patches } = useEdit()
+
+  // Build a "merged" bundle: original data + any locally-edited patches.
+  // Pages consume this via useOutletContext, so wiring is transparent to them.
+  const mergedData = useMemo<ClientBundle | null>(() => {
+    if (!data || !slug) return data
+    const slugPatches = patches[slug]
+    if (!slugPatches) return data
+    return {
+      ...data,
+      brief: deepMerge(data.brief, slugPatches.brief),
+      plan: deepMerge(data.plan, slugPatches.plan),
+      goals: deepMerge(data.goals, slugPatches.goals),
+      learnings: data.learnings
+        ? deepMerge(data.learnings, slugPatches.learnings)
+        : data.learnings,
+    }
+  }, [data, slug, patches])
 
   // Close the mobile nav whenever the route changes
   useEffect(() => {
@@ -81,7 +104,7 @@ export default function ClientLayout() {
     return <LoadingState slug={slug} />
   }
 
-  if (error || !data) {
+  if (error || !data || !mergedData) {
     return (
       <div className="min-h-screen flex items-center justify-center p-8">
         <div className="max-w-md space-y-3 text-center">
@@ -103,7 +126,7 @@ export default function ClientLayout() {
     )
   }
 
-  const openSuggestions = (data.suggestions?.items ?? []).filter(
+  const openSuggestions = (mergedData.suggestions?.items ?? []).filter(
     (s) => s.status === 'open',
   ).length
 
@@ -133,7 +156,7 @@ export default function ClientLayout() {
             <SheetContent side="left" className="w-72 p-0 flex flex-col">
               <SheetHeader className="p-5 pb-3 border-b border-border-subtle">
                 <SheetTitle className="text-base">
-                  {data.brief.company.name}
+                  {mergedData.brief.company.name}
                 </SheetTitle>
               </SheetHeader>
               <div className="flex-1 overflow-y-auto p-3">
@@ -169,28 +192,63 @@ export default function ClientLayout() {
               transition={{ duration: 0.15 }}
               className="h-10 w-10 rounded-lg bg-brand-blue flex items-center justify-center text-white font-bold text-sm shrink-0"
             >
-              {data.plan.client.logoInitials}
+              {mergedData.plan.client.logoInitials}
             </motion.div>
             <div className="min-w-0 hidden sm:block">
               <p className="text-[11px] uppercase tracking-wider text-ink-muted leading-tight">
-                {data.plan.agency.name}
+                {mergedData.plan.agency.name}
               </p>
               <h1 className="text-base font-semibold leading-tight truncate group-hover:text-brand-blue transition-colors">
-                {data.brief.company.name}
+                {mergedData.brief.company.name}
               </h1>
             </div>
             <h1 className="sm:hidden text-base font-semibold leading-tight truncate">
-              {data.brief.company.name}
+              {mergedData.brief.company.name}
             </h1>
           </Link>
 
           <div className="flex items-center gap-2 shrink-0">
             <Badge variant="secondary" className="bg-brand-blue-50 text-brand-blue hidden sm:inline-flex">
-              {data.plan.quarter.label}
+              {mergedData.plan.quarter.label}
             </Badge>
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600 hidden md:inline-flex">
               Viktor v2
             </Badge>
+            <Button
+              variant={editMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setEditMode(!editMode)}
+              title={editMode ? 'Exit edit mode' : 'Edit setup data'}
+              className={cn(
+                'h-9 px-3 hidden sm:inline-flex',
+                editMode && 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500',
+              )}
+            >
+              {editMode ? (
+                <>
+                  <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
+                  <span className="hidden md:inline">Preview</span>
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-3.5 w-3.5 sm:mr-1.5" />
+                  <span className="hidden md:inline">Edit</span>
+                </>
+              )}
+            </Button>
+            <Button
+              variant={editMode ? 'default' : 'ghost'}
+              size="icon"
+              onClick={() => setEditMode(!editMode)}
+              title={editMode ? 'Exit edit mode' : 'Edit setup data'}
+              aria-label={editMode ? 'Exit edit mode' : 'Edit setup data'}
+              className={cn(
+                'h-9 w-9 sm:hidden',
+                editMode && 'bg-amber-500 hover:bg-amber-600 text-white',
+              )}
+            >
+              {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            </Button>
             <a
               href="https://gfinnov.com"
               target="_blank"
@@ -232,9 +290,13 @@ export default function ClientLayout() {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="min-w-0"
         >
-          <Outlet context={data} />
+          <Outlet context={mergedData} />
         </motion.main>
       </div>
+
+      {/* Floating edit toggle + dirty-files panel.
+          Passes the ORIGINAL bundle so downloads always include latest patches. */}
+      <EditBar slug={slug} bundle={data} />
     </div>
   )
 }

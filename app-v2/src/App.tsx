@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { Loader2 } from 'lucide-react'
+import { EditProvider } from '@/lib/edit-store'
 
 const ClientPicker  = lazy(() => import('@/routes/index'))
 const ClientLayout  = lazy(() => import('@/routes/client/layout'))
@@ -26,6 +27,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      <EditProvider>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<ClientPicker />} />
@@ -45,6 +47,7 @@ export default function App() {
           </Route>
         </Routes>
       </Suspense>
+      </EditProvider>
     </BrowserRouter>
   )
 }

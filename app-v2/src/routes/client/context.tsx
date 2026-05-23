@@ -1,4 +1,4 @@
-import { useOutletContext } from 'react-router'
+import { useParams, useOutletContext } from 'react-router'
 import {
   Card,
   CardContent,
@@ -6,10 +6,14 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Check, X } from 'lucide-react'
 import type { ClientBundle } from '@/lib/client-data'
+import { useEdit } from '@/lib/edit-store'
+import { EditableText } from '@/components/editable/editable-text'
+import { EditableTextarea } from '@/components/editable/editable-textarea'
+import { EditablePills } from '@/components/editable/editable-pills'
+import { EditableList } from '@/components/editable/editable-list'
 
 function Section({
   title,
@@ -24,35 +28,22 @@ function Section({
     <section className="space-y-3">
       <div>
         <h2 className="text-lg font-semibold">{title}</h2>
-        {description && (
-          <p className="text-sm text-ink-muted">{description}</p>
-        )}
+        {description && <p className="text-sm text-ink-muted">{description}</p>}
       </div>
       {children}
     </section>
   )
 }
 
-function Pills({ items, tone = 'default' }: { items: string[]; tone?: 'default' | 'green' | 'blue' | 'red' }) {
-  const map = {
-    default: 'bg-paper-muted text-ink',
-    green:   'bg-brand-green-100 text-brand-green-600',
-    blue:    'bg-brand-blue-50 text-brand-blue',
-    red:     'bg-rose-50 text-rose-700',
-  } as const
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {items.map((x) => (
-        <Badge key={x} variant="secondary" className={map[tone]}>
-          {x}
-        </Badge>
-      ))}
-    </div>
-  )
-}
-
 export default function ContextView() {
   const { brief } = useOutletContext<ClientBundle>()
+  const { slug = '' } = useParams<{ slug: string }>()
+  const { setField } = useEdit()
+
+  // Tiny helper: bind a deep path on brief.json to (value, setValue).
+  // Kept inline so the JSX stays readable.
+  const set = (path: (string | number)[], value: unknown) =>
+    setField(slug, 'brief', path, value)
 
   return (
     <div className="space-y-8">
@@ -60,11 +51,36 @@ export default function ContextView() {
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
           Company context
         </p>
-        <h1 className="text-3xl font-bold text-brand-blue">{brief.company.name}</h1>
-        <p className="text-ink-muted mt-1">
-          {brief.company.industry} &middot; {brief.company.country}
-          {brief.company.contact.telegram && (
-            <> &middot; <span className="font-medium">{brief.company.contact.telegram}</span></>
+        <EditableText
+          as="h1"
+          size="lg"
+          value={brief.company.name}
+          onChange={(v) => set(['company', 'name'], v)}
+          placeholder="Company name"
+          className="text-3xl font-bold text-brand-blue block"
+        />
+        <p className="text-ink-muted mt-1 flex flex-wrap items-center gap-1.5">
+          <EditableText
+            value={brief.company.industry}
+            onChange={(v) => set(['company', 'industry'], v)}
+            placeholder="Industry"
+          />
+          <span>&middot;</span>
+          <EditableText
+            value={brief.company.country}
+            onChange={(v) => set(['company', 'country'], v)}
+            placeholder="Country"
+          />
+          {(brief.company.contact.telegram || brief.company.website) && (
+            <>
+              <span>&middot;</span>
+              <EditableText
+                value={brief.company.contact.telegram ?? ''}
+                onChange={(v) => set(['company', 'contact', 'telegram'], v)}
+                placeholder="@telegram"
+                className="font-medium"
+              />
+            </>
           )}
         </p>
       </div>
@@ -76,7 +92,13 @@ export default function ContextView() {
               <CardTitle className="text-sm">Model</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">{brief.business.model}</p>
+              <EditableTextarea
+                value={brief.business.model}
+                onChange={(v) => set(['business', 'model'], v)}
+                placeholder="e.g. B2B services, monthly retainer + workshops"
+                rows={2}
+                className="text-sm"
+              />
             </CardContent>
           </Card>
           <Card>
@@ -84,20 +106,35 @@ export default function ContextView() {
               <CardTitle className="text-sm">Customer type</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">{brief.business.customerType}</p>
+              <EditableTextarea
+                value={brief.business.customerType}
+                onChange={(v) => set(['business', 'customerType'], v)}
+                placeholder="Who buys"
+                rows={2}
+                className="text-sm"
+              />
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Main offer</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm">{brief.business.mainOffer}</p>
-              {brief.business.bestSeller && (
-                <p className="text-xs text-ink-muted mt-1">
-                  Best-seller: {brief.business.bestSeller}
-                </p>
-              )}
+            <CardContent className="space-y-1">
+              <EditableTextarea
+                value={brief.business.mainOffer}
+                onChange={(v) => set(['business', 'mainOffer'], v)}
+                placeholder="Headline offer"
+                rows={2}
+                className="text-sm"
+              />
+              <p className="text-xs text-ink-muted pt-1">
+                Best-seller:{' '}
+                <EditableText
+                  value={brief.business.bestSeller ?? ''}
+                  onChange={(v) => set(['business', 'bestSeller'], v)}
+                  placeholder="Best-seller"
+                />
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -105,11 +142,12 @@ export default function ContextView() {
               <CardTitle className="text-sm">Differentiators</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm space-y-1 list-disc list-inside">
-                {brief.business.differentiators.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
+              <EditableList
+                items={brief.business.differentiators}
+                onChange={(v) => set(['business', 'differentiators'], v)}
+                bullet="•"
+                bulletClassName="text-brand-blue"
+              />
             </CardContent>
           </Card>
         </div>
@@ -119,15 +157,48 @@ export default function ContextView() {
 
       <Section title="Audience" description="Who we're talking to and what they care about.">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {brief.audience.segments.map((s) => (
-            <Card key={s.name}>
+          {brief.audience.segments.map((s, i) => (
+            <Card key={`${s.name}-${i}`}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{s.name}</CardTitle>
-                <CardDescription className="text-xs">{s.demo}</CardDescription>
+                <CardTitle className="text-sm">
+                  <EditableText
+                    value={s.name}
+                    onChange={(v) =>
+                      set(['audience', 'segments', i, 'name'], v)
+                    }
+                    placeholder="Segment name"
+                  />
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  <EditableText
+                    value={s.demo}
+                    onChange={(v) =>
+                      set(['audience', 'segments', i, 'demo'], v)
+                    }
+                    placeholder="Demographics"
+                  />
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                <p className="text-sm">{s.psycho}</p>
-                <p className="text-xs text-ink-muted">Found on: {s.where}</p>
+                <EditableTextarea
+                  value={s.psycho}
+                  onChange={(v) =>
+                    set(['audience', 'segments', i, 'psycho'], v)
+                  }
+                  placeholder="Psychographics"
+                  rows={3}
+                  className="text-sm"
+                />
+                <p className="text-xs text-ink-muted">
+                  Found on:{' '}
+                  <EditableText
+                    value={s.where}
+                    onChange={(v) =>
+                      set(['audience', 'segments', i, 'where'], v)
+                    }
+                    placeholder="Where to find them"
+                  />
+                </p>
               </CardContent>
             </Card>
           ))}
@@ -139,7 +210,12 @@ export default function ContextView() {
               <CardTitle className="text-sm">Pain points</CardTitle>
             </CardHeader>
             <CardContent>
-              <Pills items={brief.audience.painPoints} tone="red" />
+              <EditablePills
+                items={brief.audience.painPoints}
+                onChange={(v) => set(['audience', 'painPoints'], v)}
+                tone="red"
+                placeholder="Add a pain point"
+              />
             </CardContent>
           </Card>
           <Card>
@@ -147,7 +223,12 @@ export default function ContextView() {
               <CardTitle className="text-sm">Desires</CardTitle>
             </CardHeader>
             <CardContent>
-              <Pills items={brief.audience.desires} tone="green" />
+              <EditablePills
+                items={brief.audience.desires}
+                onChange={(v) => set(['audience', 'desires'], v)}
+                tone="green"
+                placeholder="Add a desire"
+              />
             </CardContent>
           </Card>
         </div>
@@ -162,7 +243,12 @@ export default function ContextView() {
               <CardTitle className="text-sm">Tone</CardTitle>
             </CardHeader>
             <CardContent>
-              <Pills items={brief.voice.tone} tone="blue" />
+              <EditablePills
+                items={brief.voice.tone}
+                onChange={(v) => set(['voice', 'tone'], v)}
+                tone="blue"
+                placeholder="Add a tone trait"
+              />
             </CardContent>
           </Card>
           <Card>
@@ -172,11 +258,21 @@ export default function ContextView() {
             <CardContent className="space-y-2">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Use</p>
-                <Pills items={brief.voice.wordsToUse} tone="green" />
+                <EditablePills
+                  items={brief.voice.wordsToUse}
+                  onChange={(v) => set(['voice', 'wordsToUse'], v)}
+                  tone="green"
+                  placeholder="Word to use"
+                />
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Avoid</p>
-                <Pills items={brief.voice.wordsToAvoid} tone="red" />
+                <EditablePills
+                  items={brief.voice.wordsToAvoid}
+                  onChange={(v) => set(['voice', 'wordsToAvoid'], v)}
+                  tone="red"
+                  placeholder="Word to avoid"
+                />
               </div>
             </CardContent>
           </Card>
@@ -187,14 +283,12 @@ export default function ContextView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm space-y-1">
-                {brief.voice.do.map((x) => (
-                  <li key={x} className="flex gap-2">
-                    <span className="text-brand-green-500">&middot;</span>
-                    <span>{x}</span>
-                  </li>
-                ))}
-              </ul>
+              <EditableList
+                items={brief.voice.do}
+                onChange={(v) => set(['voice', 'do'], v)}
+                bullet="·"
+                bulletClassName="text-brand-green-500"
+              />
             </CardContent>
           </Card>
           <Card>
@@ -204,14 +298,12 @@ export default function ContextView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm space-y-1">
-                {brief.voice.dont.map((x) => (
-                  <li key={x} className="flex gap-2">
-                    <span className="text-rose-500">&middot;</span>
-                    <span>{x}</span>
-                  </li>
-                ))}
-              </ul>
+              <EditableList
+                items={brief.voice.dont}
+                onChange={(v) => set(['voice', 'dont'], v)}
+                bullet="·"
+                bulletClassName="text-rose-500"
+              />
             </CardContent>
           </Card>
         </div>
@@ -231,11 +323,14 @@ export default function ContextView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm space-y-1">
-                {brief.boundaries.viktorCanDoWithoutAsking.map((x) => (
-                  <li key={x}>&middot; {x}</li>
-                ))}
-              </ul>
+              <EditableList
+                items={brief.boundaries.viktorCanDoWithoutAsking}
+                onChange={(v) =>
+                  set(['boundaries', 'viktorCanDoWithoutAsking'], v)
+                }
+                bullet="·"
+                bulletClassName="text-brand-green-600"
+              />
             </CardContent>
           </Card>
           <Card className="border-amber-200/60 bg-amber-50/30">
@@ -245,25 +340,33 @@ export default function ContextView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm space-y-1">
-                {brief.boundaries.viktorNeedsApprovalFor.map((x) => (
-                  <li key={x}>&middot; {x}</li>
-                ))}
-              </ul>
+              <EditableList
+                items={brief.boundaries.viktorNeedsApprovalFor}
+                onChange={(v) =>
+                  set(['boundaries', 'viktorNeedsApprovalFor'], v)
+                }
+                bullet="·"
+                bulletClassName="text-amber-700"
+              />
             </CardContent>
           </Card>
         </div>
 
-        {brief.boundaries.sensitiveTopics.length > 0 && (
-          <Card className="mt-4 border-rose-200/60">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-rose-700">Sensitive topics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Pills items={brief.boundaries.sensitiveTopics} tone="red" />
-            </CardContent>
-          </Card>
-        )}
+        <Card className="mt-4 border-rose-200/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-rose-700">
+              Sensitive topics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EditablePills
+              items={brief.boundaries.sensitiveTopics}
+              onChange={(v) => set(['boundaries', 'sensitiveTopics'], v)}
+              tone="red"
+              placeholder="Add a sensitive topic"
+            />
+          </CardContent>
+        </Card>
       </Section>
 
       <Separator />
@@ -271,13 +374,24 @@ export default function ContextView() {
       <Section title="What success looks like">
         <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
           <CardContent className="p-5">
-            <p className="text-sm leading-relaxed">{brief.expectations}</p>
+            <EditableTextarea
+              value={brief.expectations}
+              onChange={(v) => set(['expectations'], v)}
+              placeholder="What does success look like for this client?"
+              rows={4}
+              className="text-sm leading-relaxed"
+            />
           </CardContent>
         </Card>
       </Section>
 
       <Section title="Metrics that matter">
-        <Pills items={brief.metricsThatMatter} tone="blue" />
+        <EditablePills
+          items={brief.metricsThatMatter}
+          onChange={(v) => set(['metricsThatMatter'], v)}
+          tone="blue"
+          placeholder="Add a metric"
+        />
       </Section>
     </div>
   )
