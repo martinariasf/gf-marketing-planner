@@ -1,22 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { loadClient, type ClientBundle } from '@/lib/client-data'
 
 export interface UseClientState {
   data: ClientBundle | null
   loading: boolean
   error: string | null
+  /** Re-fetch the current client. Useful after a PocketBase save. */
+  refetch: () => void
 }
 
 export function useClient(slug: string): UseClientState {
-  const [state, setState] = useState<UseClientState>({
+  const [state, setState] = useState<{
+    data: ClientBundle | null
+    loading: boolean
+    error: string | null
+  }>({
     data: null,
     loading: true,
     error: null,
   })
 
+  const [tick, setTick] = useState(0)
+
+  const refetch = useCallback(() => {
+    setTick((t) => t + 1)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
-    setState({ data: null, loading: true, error: null })
+    setState((s) => ({ ...s, loading: true, error: null }))
     loadClient(slug)
       .then((data) => {
         if (!cancelled) setState({ data, loading: false, error: null })
@@ -30,7 +42,7 @@ export function useClient(slug: string): UseClientState {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, tick])
 
-  return state
+  return { ...state, refetch }
 }

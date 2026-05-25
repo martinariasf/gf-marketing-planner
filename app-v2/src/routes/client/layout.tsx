@@ -69,7 +69,7 @@ export default function ClientLayout() {
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const { data, loading, error } = useClient(slug ?? 'fitvibe-demo')
+  const { data, loading, error, refetch } = useClient(slug ?? 'fitvibe-demo')
   const { editMode, setEditMode, patches } = useEdit()
 
   // Build a "merged" bundle: original data + any locally-edited patches.
@@ -296,7 +296,7 @@ export default function ClientLayout() {
 
       {/* Floating edit toggle + dirty-files panel.
           Passes the ORIGINAL bundle so downloads always include latest patches. */}
-      <EditBar slug={slug} bundle={data} />
+      <EditBar slug={slug} bundle={data} onSaved={refetch} />
     </div>
   )
 }

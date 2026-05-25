@@ -1,0 +1,52 @@
+# Staging Caddyfile — staging.marketing.gfinnov.com
+#
+# Basicauth protects the whole site so it's not crawlable.
+# PocketBase API is proxied at /api/* and /_/ (admin UI).
+# Viktor-owned static JSON stays at /data/<slug>/<file> with no additional auth
+# (the site-wide basicauth already covers it).
+
+staging.marketing.gfinnov.com {
+    encode zstd gzip
+
+    # Site-wide basicauth (staging password — set via env or replace hash)
+    basicauth /* {
+        staging {$STAGING_BCRYPT_HASH}
+    }
+
+    # PocketBase API — proxied from the companion container.
+    handle /api/* {
+        reverse_proxy pocketbase:8090
+    }
+
+    # PocketBase admin UI.
+    handle /_/* {
+        reverse_proxy pocketbase:8090
+    }
+
+    # Viktor-owned static data (posts, suggestions, performance, approvals.log,
+    # assets). These files are NOT in PocketBase — they stay on disk, same as
+    # production. This preserves the literal-approval contract.
+    handle /data/* {
+        root * /srv/data
+        uri strip_prefix /data
+        file_server {
+            hide .git
+        }
+        header Cache-Control "no-store"
+    }
+
+    # React SPA — single-page fallback.
+    handle {
+        root * /srv/app
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "public, max-age=60, must-revalidate"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

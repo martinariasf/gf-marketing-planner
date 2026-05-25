@@ -1,0 +1,49 @@
+# Staging stack: PocketBase (API + admin) + Caddy (reverse proxy + SPA + static data)
+#
+# PocketBase handles user-owned data (briefs, plans, goals, learnings, client index).
+# Viktor-owned data (posts, suggestions, performance, approvals.log, assets) stays
+# as static JSON served by Caddy — same as production. This preserves the
+# literal-approval contract.
+#
+# Usage:
+#   docker compose up -d
+#   # Seed data (first time only):
+#   node seed.mjs
+#
+# Ports:
+#   80/443  — Caddy (public, TLS via Let's Encrypt)
+#   8090    — PocketBase admin UI (internal only, Caddy proxies /api/* and /_/)
+
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: mp-staging-pb
+    restart: unless-stopped
+    volumes:
+      - pb_data:/pb/pb_data
+      - ./pb-migrations:/pb/pb_migrations
+    # Only exposed to the Docker network — Caddy fronts it.
+    expose:
+      - "8090"
+    command: serve --http=0.0.0.0:8090
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mp-staging-caddy
+    restart: unless-stopped
+    depends_on:
+      - pocketbase
+    ports:
+      - "0.0.0.0:8880:80"
+      - "0.0.0.0:8443:443"
+    volumes:
+      - ./Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - ./app-dist:/srv/app:ro
+      - ./clients:/srv/data:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pb_data:
+  caddy_data:
+  caddy_config:

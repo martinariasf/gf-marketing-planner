@@ -1,3 +1,18 @@
+/**
+ * Data loaders for the marketing-planner dashboard.
+ *
+ * Dual-mode:
+ *   - **File mode** (default / production today): fetches static JSON from
+ *     /data/<slug>/<file>.json served by Caddy. No backend needed.
+ *   - **PocketBase mode** (when VITE_PB_URL is set): user-owned data
+ *     (brief, plan, goals, learnings, client index) is loaded from PocketBase.
+ *     Viktor-owned data (posts, suggestions, performance, approvals.log,
+ *     assets) is STILL fetched as static JSON — preserving literal-approval.
+ *
+ * The switch is at build time via the `VITE_PB_URL` env var. Pages don't
+ * need to know which mode is active — they just call `loadClient(slug)`.
+ */
+
 import type {
   Brief,
   Plan,
@@ -11,8 +26,18 @@ import type {
   Suggestions,
 } from '@/types'
 import { parseApprovalLog } from '@/types'
+import {
+  isPocketBaseEnabled,
+  pbLoadBrief,
+  pbLoadPlan,
+  pbLoadGoals,
+  pbLoadLearnings,
+  pbLoadClientIndex,
+} from '@/lib/pocketbase'
 
 const DATA_ROOT = '/data'
+
+// ── File-based helpers (unchanged from v1) ───────────────────────────────────
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: 'no-store' })
@@ -22,46 +47,43 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T
 }
 
-export interface ClientBundle {
-  slug: string
-  brief: Brief
-  plan: Plan
-  goals: Goals
-  performance: Performance | null
-  posts: Post[]
-  learnings: Learnings | null
-  approvalsLog: ApprovalLogEntry[]
-  assets: AssetsManifest | null
-  suggestions: Suggestions | null
-}
-
 function clientPath(slug: string, file: string) {
   return `${DATA_ROOT}/${slug}/${file}`
 }
 
-export function loadBrief(slug: string) {
+function fileBrief(slug: string) {
   return fetchJson<Brief>(clientPath(slug, 'brief.json'))
 }
 
-export function loadPlan(slug: string) {
+function filePlan(slug: string) {
   return fetchJson<Plan>(clientPath(slug, 'plan.json'))
 }
 
-export function loadGoals(slug: string) {
+function fileGoals(slug: string) {
   return fetchJson<Goals>(clientPath(slug, 'goals.json'))
 }
 
-export async function loadPerformance(slug: string): Promise<Performance | null> {
+async function fileLearnings(slug: string): Promise<Learnings | null> {
   try {
-    return await fetchJson<Performance>(clientPath(slug, 'performance.json'))
+    return await fetchJson<Learnings>(clientPath(slug, 'learnings.json'))
   } catch {
     return null
   }
 }
 
-export async function loadLearnings(slug: string): Promise<Learnings | null> {
+function fileClientIndex(): Promise<ClientIndex> {
+  return fetchJson<ClientIndex>(`${DATA_ROOT}/index.json`).catch(() => ({
+    clients: [],
+  }))
+}
+
+// ── Viktor-owned (always from files, both modes) ─────────────────────────────
+
+export async function loadPerformance(
+  slug: string,
+): Promise<Performance | null> {
   try {
-    return await fetchJson<Learnings>(clientPath(slug, 'learnings.json'))
+    return await fetchJson<Performance>(clientPath(slug, 'performance.json'))
   } catch {
     return null
   }
@@ -83,9 +105,13 @@ export async function loadPosts(slug: string): Promise<Post[]> {
   }
 }
 
-export async function loadApprovalsLog(slug: string): Promise<ApprovalLogEntry[]> {
+export async function loadApprovalsLog(
+  slug: string,
+): Promise<ApprovalLogEntry[]> {
   try {
-    const res = await fetch(clientPath(slug, 'approvals.log'), { cache: 'no-store' })
+    const res = await fetch(clientPath(slug, 'approvals.log'), {
+      cache: 'no-store',
+    })
     if (!res.ok) return []
     return parseApprovalLog(await res.text())
   } catch {
@@ -93,23 +119,21 @@ export async function loadApprovalsLog(slug: string): Promise<ApprovalLogEntry[]
   }
 }
 
-export async function loadClientIndex(): Promise<ClientIndex> {
+export async function loadAssetsManifest(
+  slug: string,
+): Promise<AssetsManifest | null> {
   try {
-    return await fetchJson<ClientIndex>(`${DATA_ROOT}/index.json`)
-  } catch {
-    return { clients: [] }
-  }
-}
-
-export async function loadAssetsManifest(slug: string): Promise<AssetsManifest | null> {
-  try {
-    return await fetchJson<AssetsManifest>(clientPath(slug, 'assets/manifest.json'))
+    return await fetchJson<AssetsManifest>(
+      clientPath(slug, 'assets/manifest.json'),
+    )
   } catch {
     return null
   }
 }
 
-export async function loadSuggestions(slug: string): Promise<Suggestions | null> {
+export async function loadSuggestions(
+  slug: string,
+): Promise<Suggestions | null> {
   try {
     return await fetchJson<Suggestions>(clientPath(slug, 'suggestions.json'))
   } catch {
@@ -117,6 +141,47 @@ export async function loadSuggestions(slug: string): Promise<Suggestions | null>
   }
 }
 
+// ── Public API (dual-mode) ───────────────────────────────────────────────────
+
+export interface ClientBundle {
+  slug: string
+  brief: Brief
+  plan: Plan
+  goals: Goals
+  performance: Performance | null
+  posts: Post[]
+  learnings: Learnings | null
+  approvalsLog: ApprovalLogEntry[]
+  assets: AssetsManifest | null
+  suggestions: Suggestions | null
+}
+
+/** Load brief — PocketBase if enabled, else static JSON. */
+export function loadBrief(slug: string): Promise<Brief> {
+  return isPocketBaseEnabled ? pbLoadBrief(slug) : fileBrief(slug)
+}
+
+/** Load plan — PocketBase if enabled, else static JSON. */
+export function loadPlan(slug: string): Promise<Plan> {
+  return isPocketBaseEnabled ? pbLoadPlan(slug) : filePlan(slug)
+}
+
+/** Load goals — PocketBase if enabled, else static JSON. */
+export function loadGoals(slug: string): Promise<Goals> {
+  return isPocketBaseEnabled ? pbLoadGoals(slug) : fileGoals(slug)
+}
+
+/** Load learnings — PocketBase if enabled, else static JSON. */
+export function loadLearnings(slug: string): Promise<Learnings | null> {
+  return isPocketBaseEnabled ? pbLoadLearnings(slug) : fileLearnings(slug)
+}
+
+/** Load client index — PocketBase if enabled, else static JSON. */
+export function loadClientIndex(): Promise<ClientIndex> {
+  return isPocketBaseEnabled ? pbLoadClientIndex() : fileClientIndex()
+}
+
+/** Load everything for one client. */
 export async function loadClient(slug: string): Promise<ClientBundle> {
   const [
     brief,
