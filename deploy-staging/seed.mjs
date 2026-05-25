@@ -30,27 +30,25 @@ if (!PB_PASSWORD) {
 let authToken = ''
 
 async function authenticate() {
-  const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity: PB_EMAIL, password: PB_PASSWORD }),
-  })
-  if (!res.ok) {
-    // PocketBase v0.23+ uses /api/superusers instead of /api/admins
-    const res2 = await fetch(`${PB_URL}/api/superusers/auth-with-password`, {
+  // Try auth endpoints in order: v0.38+ (_superusers collection), v0.23+ (/superusers), legacy (/admins)
+  const endpoints = [
+    `${PB_URL}/api/collections/_superusers/auth-with-password`,
+    `${PB_URL}/api/superusers/auth-with-password`,
+    `${PB_URL}/api/admins/auth-with-password`,
+  ]
+  for (const url of endpoints) {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identity: PB_EMAIL, password: PB_PASSWORD }),
     })
-    if (!res2.ok) {
-      throw new Error(`Auth failed: ${res2.status} ${await res2.text()}`)
+    if (res.ok) {
+      const data = await res.json()
+      authToken = data.token
+      return
     }
-    const data = await res2.json()
-    authToken = data.token
-    return
   }
-  const data = await res.json()
-  authToken = data.token
+  throw new Error('Auth failed on all endpoints')
 }
 
 async function pbFetch(path, opts = {}) {
