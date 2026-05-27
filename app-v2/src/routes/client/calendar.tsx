@@ -33,7 +33,7 @@ function monthKey(iso: string) {
 }
 
 export default function CalendarView() {
-  const { plan, posts } = useOutletContext<ClientBundle>()
+  const { plan, posts, brief } = useOutletContext<ClientBundle>()
 
   const pillarColor = useMemo(() => {
     const m: Record<string, string> = {}
@@ -272,6 +272,7 @@ export default function CalendarView() {
                           clientName={plan.client.name}
                           handle={plan.client.handle}
                           logoInitials={plan.client.logoInitials}
+                          subtitle={brief.company.industry}
                         />
                       </motion.div>
                     </AnimatePresence>

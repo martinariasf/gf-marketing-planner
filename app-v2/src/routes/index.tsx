@@ -135,10 +135,10 @@ function ClientCard({ client, delay }: { client: ClientIndexEntry; delay: number
                   {client.logoInitials}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-semibold leading-tight truncate">
+                  <h3 className="font-semibold leading-tight line-clamp-2">
                     {client.name}
                   </h3>
-                  <p className="text-xs text-ink-muted truncate">
+                  <p className="text-xs text-ink-muted line-clamp-2 mt-0.5">
                     {client.industry}
                   </p>
                 </div>

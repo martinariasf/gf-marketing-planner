@@ -37,6 +37,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
 import { EditBar } from '@/components/edit-bar'
 import { useClient } from '@/hooks/use-client'
@@ -69,6 +76,7 @@ export default function ClientLayout() {
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const { data, loading, error, refetch } = useClient(slug ?? 'fitvibe-demo')
   const { editMode, setEditMode, patches } = useEdit()
 
@@ -249,26 +257,25 @@ export default function ClientLayout() {
             >
               {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             </Button>
-            <a
-              href="https://gfinnov.com"
-              target="_blank"
-              rel="noreferrer"
-              title="GF Innovative Solutions — help & support"
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              title="Help & shortcuts"
+              aria-label="Help & shortcuts"
               className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
             >
               <GFLogo size="sm" />
               <HelpCircle className="h-3.5 w-3.5" />
-            </a>
-            <a
-              href="https://gfinnov.com"
-              target="_blank"
-              rel="noreferrer"
-              title="Help"
-              aria-label="Help"
+            </button>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              title="Help & shortcuts"
+              aria-label="Help & shortcuts"
               className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
             >
               <HelpCircle className="h-5 w-5" />
-            </a>
+            </button>
           </div>
         </div>
         <WorkflowStrip current={currentPhase} />
@@ -297,6 +304,49 @@ export default function ClientLayout() {
       {/* Floating edit toggle + dirty-files panel.
           Passes the ORIGINAL bundle so downloads always include latest patches. */}
       <EditBar slug={slug} bundle={data} onSaved={refetch} />
+
+      {/* Help dialog */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Help & shortcuts</DialogTitle>
+            <DialogDescription>
+              Viktor handles writes via Telegram. This dashboard is the human review surface.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="font-semibold mb-1">Navigation</p>
+              <ul className="text-ink-muted text-xs space-y-1">
+                <li>Use the sidebar (or the workflow strip across the top) to move between phases.</li>
+                <li>On the Content Calendar, press <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">←</kbd> / <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">→</kbd> to flip between posts.</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Editing</p>
+              <ul className="text-ink-muted text-xs space-y-1">
+                <li>Toggle <strong>Edit</strong> in the header, then click any field to change it.</li>
+                <li>Press <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">Ctrl/Cmd+Enter</kbd> to save a single field.</li>
+                <li>The bottom bar collects all unsaved files. Save persists; Discard wipes the patch.</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">Approvals</p>
+              <p className="text-ink-muted text-xs">Nothing publishes without you writing <code className="px-1 py-0.5 rounded bg-paper-muted text-[11px]">approve p###</code> to Viktor on Telegram.</p>
+            </div>
+            <div className="pt-2 border-t border-border-subtle">
+              <a
+                href="https://gfinnov.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-brand-blue hover:underline"
+              >
+                gfinnov.com ↗
+              </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

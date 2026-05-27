@@ -83,7 +83,8 @@ export default function PipelineView() {
           </p>
         </div>
         <Badge variant="secondary" className="bg-paper-muted">
-          {posts.length} posts in flight
+          {posts.filter((p) => p.status !== 'published' && p.status !== 'rejected').length}{' '}
+          posts in flight
         </Badge>
       </div>
 

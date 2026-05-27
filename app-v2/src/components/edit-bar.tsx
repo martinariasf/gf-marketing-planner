@@ -162,7 +162,9 @@ export function EditBar({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 z-40"
+            /* Header already has its own Edit/Preview button on sm+. Show this
+               floating pill only on small viewports where the header button is hidden. */
+            className="fixed bottom-4 right-4 z-40 sm:hidden"
           >
             <Button
               variant={editMode ? 'default' : 'outline'}

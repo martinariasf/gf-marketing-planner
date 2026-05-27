@@ -68,7 +68,8 @@ export default function GoalsView() {
         {performance?.lastSyncedAt && (
           <div className="flex items-center gap-1.5 text-xs text-ink-muted">
             <Clock className="h-3.5 w-3.5" />
-            Synced from {performance.source} · {fmtDate(performance.lastSyncedAt)}
+            Last sync: {fmtDate(performance.lastSyncedAt)}
+            <span className="ml-1 text-ink-muted/70">({performance.source})</span>
           </div>
         )}
       </div>
