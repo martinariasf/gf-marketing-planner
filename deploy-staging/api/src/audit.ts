@@ -30,7 +30,7 @@ export async function audit(principal: TokenPrincipal, entry: AuditEntry): Promi
         role: principal.role,
         action: entry.action,
         slug: entry.slug,
-        resourceId: entry.resourceId ?? '',
+        resource: entry.resourceId ?? '',
         before: entry.before ?? null,
         after: entry.after ?? null,
         note: entry.note ?? '',

@@ -27,7 +27,10 @@ services:
     image: mp-staging-api:latest
     container_name: mp-staging-api
     restart: unless-stopped
+    volumes:
+      - ./clients:/data/clients:ro
     environment:
+      DATA_ROOT: "/data"
       PORT: "8080"
       PB_URL: "http://mp-staging-pb:8090"
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"

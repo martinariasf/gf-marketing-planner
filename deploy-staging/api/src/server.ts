@@ -14,6 +14,10 @@ import { cors } from 'hono/cors'
 import { env } from './env.js'
 import { health } from './routes/health.js'
 import { clients } from './routes/clients.js'
+import { userOwned } from './routes/userOwned.js'
+import { viktorOwned } from './routes/viktorOwned.js'
+import { auditRoute } from './routes/audit.js'
+import { ensureCollections } from './ensureCollections.js'
 import { problem } from './problem.js'
 
 const app = new OpenAPIHono()
@@ -57,6 +61,9 @@ app.get(
 // Mount under /api/v1
 app.route('/api/v1', health)
 app.route('/api/v1', clients)
+app.route('/api/v1', userOwned)
+app.route('/api/v1', viktorOwned)
+app.route('/api/v1', auditRoute)
 
 // Friendly root.
 app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))
@@ -73,6 +80,12 @@ app.onError((err, c) => {
     detail: err instanceof Error ? err.message : 'unknown',
   })
 })
+
+// Best-effort PB collection bootstrap. Failures only log — the API still
+// boots so /health stays green while we investigate.
+if (env.pbAdminEmail && env.pbAdminPassword) {
+  ensureCollections().catch((err) => console.error('[ensureCollections] failed', err))
+}
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.log(`[mp-staging-api] listening on :${info.port} (release=${env.release})`)

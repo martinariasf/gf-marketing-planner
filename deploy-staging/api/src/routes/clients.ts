@@ -1,10 +1,9 @@
 // /v1/clients — list + bundle read.
-// Full implementation arrives in Phase 2; Phase 1 ships read-only stubs so the
-// OpenAPI surface is visible and the dashboard can smoke-test against it.
 
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { withPb } from '../pb.js'
-import { requireAuth, type AppEnv } from '../auth.js'
+import { requireAuth, requireScope, type AppEnv } from '../auth.js'
+import { disk } from '../diskData.js'
 
 const ClientSummarySchema = z
   .object({
@@ -39,19 +38,28 @@ const listRoute = createRoute({
 export const clients = new OpenAPIHono<AppEnv>()
 clients.use('*', requireAuth)
 
+type ClientRecord = {
+  slug: string
+  name: string
+  industry?: string
+  logoInitials?: string
+  quarter?: string
+  headline?: string
+  status?: 'active' | 'demo' | 'archived'
+}
+
+async function clientList(): Promise<ClientRecord[]> {
+  try {
+    return await withPb((pb) => pb.collection('clients').getFullList<ClientRecord>())
+  } catch {
+    const idx = await disk.clientIndex()
+    return (idx?.clients ?? []) as ClientRecord[]
+  }
+}
+
 clients.openapi(listRoute, async (c) => {
   const principal = c.get('principal')
-  const records = await withPb((pb) =>
-    pb.collection('clients').getFullList<{
-      slug: string
-      name: string
-      industry?: string
-      logoInitials?: string
-      quarter?: string
-      headline?: string
-      status?: 'active' | 'demo' | 'archived'
-    }>(),
-  )
+  const records = await clientList()
   const filtered =
     principal.slug === '*' ? records : records.filter((r) => r.slug === principal.slug)
   return c.json({
@@ -65,4 +73,22 @@ clients.openapi(listRoute, async (c) => {
       status: r.status,
     })),
   })
+})
+
+// GET /v1/clients/:slug — bundle: summary + all user-owned + viktor-owned docs.
+// The dashboard hydrates a whole client view with a single request.
+clients.get('/clients/:slug', requireScope(), async (c) => {
+  const slug = c.req.param('slug')
+  const all = await clientList()
+  const summary = all.find((r) => r.slug === slug) ?? null
+  const [brief, plan, goals, learnings, suggestions, performance, manifest] = await Promise.all([
+    disk.brief(slug),
+    disk.plan(slug),
+    disk.goals(slug),
+    disk.learnings(slug),
+    disk.suggestions(slug),
+    disk.performance(slug),
+    disk.assetsManifest(slug),
+  ])
+  return c.json({ summary, brief, plan, goals, learnings, suggestions, performance, manifest })
 })
