@@ -42,10 +42,8 @@
         }
     }
 
-    # Everything below is gated by site-wide basicauth.
-    basicauth /* {
-        staging {$STAGING_BCRYPT_HASH}
-    }
+    # The outer (production) Caddy already enforces site-wide basicauth for
+    # staging.marketing.gfinnov.com, so the inner caddy does not double-gate.
 
     # ── Legacy direct PocketBase (removed Phase 2) ───────────────────────
     handle /api/* {

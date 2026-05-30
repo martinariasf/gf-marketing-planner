@@ -13,10 +13,13 @@ export const env = {
   // Bind address
   port: Number(process.env.PORT ?? 8080),
 
-  // PocketBase
+  // PocketBase. Admin creds are optional in Phase 1 (only /health + /docs
+  // ship) so the container can boot without secrets. Phase 2 will tighten
+  // this — any route that calls withPb() will surface a clear 500 if creds
+  // are missing, instead of crashing the process at boot.
   pbUrl: process.env.PB_URL ?? 'http://pocketbase:8090',
-  pbAdminEmail: required('PB_ADMIN_EMAIL'),
-  pbAdminPassword: required('PB_ADMIN_PASSWORD'),
+  pbAdminEmail: process.env.PB_ADMIN_EMAIL ?? '',
+  pbAdminPassword: process.env.PB_ADMIN_PASSWORD ?? '',
 
   // Tokens
   // Comma-separated `<token>:<role>:<slug>` triples for bootstrap. Once the
