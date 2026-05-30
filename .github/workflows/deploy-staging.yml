@@ -75,5 +75,21 @@ jobs:
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
             deploy-staging/docker-compose.yml \
             deploy-staging/Caddyfile.staging \
-            deploy-staging/pb-migrations/ \
             "$USER@$HOST:/opt/marketing-planner-staging/"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/pb-migrations/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/pb-migrations/"
+          rsync -avz --delete \
+            --exclude node_modules --exclude dist --exclude .env \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/api/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/api/"
+
+      - name: Build + restart staging API container
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'cd /opt/marketing-planner-staging && docker compose up -d --build api && docker compose restart caddy'
