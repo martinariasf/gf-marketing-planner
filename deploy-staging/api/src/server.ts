@@ -23,11 +23,8 @@ const app = new OpenAPIHono()
 app.use('*', cors({ origin: ['http://localhost:5173', 'http://localhost:4173'], credentials: true }))
 app.use('*', logger())
 
-// Mount under /api/v1
-app.route('/api/v1', health)
-app.route('/api/v1', clients)
-
-// OpenAPI spec
+// OpenAPI spec + docs UI are registered BEFORE the auth-gated subapps so
+// the clients router's wildcard requireAuth middleware doesn't swallow them.
 app.doc('/api/v1/openapi.json', {
   openapi: '3.1.0',
   info: {
@@ -42,14 +39,12 @@ app.doc('/api/v1/openapi.json', {
   ],
 })
 
-// Bearer-token security scheme reference
 app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
   type: 'http',
   scheme: 'bearer',
   description: 'agent_* or dash_* token. See deploy-staging/api/README.md.',
 })
 
-// Interactive docs UI
 app.get(
   '/api/v1/docs',
   apiReference({
@@ -58,6 +53,10 @@ app.get(
     theme: 'purple',
   }),
 )
+
+// Mount under /api/v1
+app.route('/api/v1', health)
+app.route('/api/v1', clients)
 
 // Friendly root.
 app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))
