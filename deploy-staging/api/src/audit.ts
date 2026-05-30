@@ -34,6 +34,7 @@ export async function audit(principal: TokenPrincipal, entry: AuditEntry): Promi
         before: entry.before ?? null,
         after: entry.after ?? null,
         note: entry.note ?? '',
+        ts: new Date().toISOString(),
       }),
     )
   } catch (err) {

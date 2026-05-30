@@ -47,6 +47,7 @@ const collections: CollectionSpec[] = [
       { name: 'before', type: 'json', maxSize: 5_000_000 },
       { name: 'after', type: 'json', maxSize: 5_000_000 },
       { name: 'note', type: 'text', max: 500 },
+      { name: 'ts', type: 'text', max: 40 },
     ],
     indexes: ['CREATE INDEX `idx_audit_slug` ON `audit` (`slug`)'],
   },
