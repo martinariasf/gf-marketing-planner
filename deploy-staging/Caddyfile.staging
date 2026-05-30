@@ -30,8 +30,8 @@
     # ── New REST API (Hono) ──────────────────────────────────────────────
     # The Hono app mounts routes at /v1/*. Strip the public /api prefix
     # before forwarding so /api/v1/health -> /v1/health upstream.
-    handle_path /api/v1/* {
-        rewrite * /v1{uri}
+    handle /api/v1/* {
+        uri strip_prefix /api
         reverse_proxy mp-staging-api:8080
     }
 
