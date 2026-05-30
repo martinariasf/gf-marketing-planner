@@ -62,6 +62,54 @@ const collections: CollectionSpec[] = [
     ],
     indexes: ['CREATE INDEX `idx_chat_slug` ON `chat_messages` (`slug`)'],
   },
+  // Phase 4 overlays — Viktor-owned data still lives on disk; the dashboard's
+  // staging-only writes go into these collections and read endpoints merge
+  // disk + overlay before returning.
+  {
+    name: 'posts_patches',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postId', type: 'text', required: true, max: 100 },
+      { name: 'patch', type: 'json', maxSize: 1_000_000 },
+      { name: 'ts', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_posts_patches_slug_post` ON `posts_patches` (`slug`, `postId`)',
+    ],
+  },
+  {
+    name: 'suggestion_states',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'suggestionId', type: 'text', required: true, max: 100 },
+      { name: 'status', type: 'select', values: ['open', 'accepted', 'dismissed'] },
+      { name: 'priority', type: 'number' },
+      { name: 'reason', type: 'text', max: 500 },
+      { name: 'ts', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_suggestion_states_slug_id` ON `suggestion_states` (`slug`, `suggestionId`)',
+    ],
+  },
+  {
+    name: 'approvals_v2',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postId', type: 'text', required: true, max: 100 },
+      {
+        name: 'decision',
+        type: 'select',
+        required: true,
+        values: ['in_review', 'approved', 'scheduled', 'rejected'],
+      },
+      { name: 'note', type: 'text', max: 500 },
+      { name: 'actor', type: 'text', max: 100 },
+      { name: 'ts', type: 'text', max: 40 },
+    ],
+    indexes: ['CREATE INDEX `idx_approvals_v2_slug_post` ON `approvals_v2` (`slug`, `postId`)'],
+  },
 ]
 
 export async function ensureCollections(): Promise<void> {
