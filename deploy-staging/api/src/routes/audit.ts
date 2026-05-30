@@ -16,17 +16,13 @@ auditRoute.get('/clients/:slug/audit', requireScope(), async (c) => {
   const action = c.req.query('action')
   const limit = Math.min(Number(c.req.query('limit') ?? '100'), 500)
 
-  const filterParts = [`slug="${slug}"`]
-  if (since) filterParts.push(`created>="${since}"`)
-  if (action) filterParts.push(`action="${action}"`)
+  const filterParts = [`slug='${slug}'`]
+  if (since) filterParts.push(`created>='${since}'`)
+  if (action) filterParts.push(`action='${action}'`)
   const filter = filterParts.join(' && ')
 
-  try {
-    const records = await withPb((pb) =>
-      pb.collection('audit').getList(1, limit, { filter, sort: '-created' }),
-    )
-    return c.json({ items: records.items })
-  } catch {
-    return c.json({ items: [] })
-  }
+  const records = await withPb((pb) =>
+    pb.collection('audit').getList(1, limit, { filter, sort: '-created' }),
+  )
+  return c.json({ items: records.items })
 })
