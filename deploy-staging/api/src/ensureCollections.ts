@@ -48,10 +48,7 @@ const collections: CollectionSpec[] = [
       { name: 'after', type: 'json', maxSize: 5_000_000 },
       { name: 'note', type: 'text', max: 500 },
     ],
-    indexes: [
-      'CREATE INDEX `idx_audit_slug_created` ON `audit` (`slug`, `created`)',
-      'CREATE INDEX `idx_audit_action` ON `audit` (`action`)',
-    ],
+    indexes: ['CREATE INDEX `idx_audit_slug` ON `audit` (`slug`)'],
   },
   {
     name: 'chat_messages',
@@ -62,7 +59,7 @@ const collections: CollectionSpec[] = [
       { name: 'content', type: 'text', maxSize: 5_000_000 },
       { name: 'toolEvent', type: 'json', maxSize: 1_000_000 },
     ],
-    indexes: ['CREATE INDEX `idx_chat_slug_created` ON `chat_messages` (`slug`, `created`)'],
+    indexes: ['CREATE INDEX `idx_chat_slug` ON `chat_messages` (`slug`)'],
   },
 ]
 
@@ -72,18 +69,37 @@ export async function ensureCollections(): Promise<void> {
     const existingNames = new Set(existing.map((c) => c.name))
     for (const spec of collections) {
       if (existingNames.has(spec.name)) continue
-      await pb.collections.create({
-        name: spec.name,
-        type: 'base',
-        listRule: null,
-        viewRule: null,
-        createRule: null,
-        updateRule: null,
-        deleteRule: null,
-        fields: spec.fields,
-        indexes: spec.indexes ?? [],
-      })
-      console.log(`[ensureCollections] created ${spec.name}`)
+      try {
+        await pb.collections.create({
+          name: spec.name,
+          type: 'base',
+          listRule: null,
+          viewRule: null,
+          createRule: null,
+          updateRule: null,
+          deleteRule: null,
+          fields: spec.fields,
+          indexes: spec.indexes ?? [],
+        })
+        console.log(`[ensureCollections] created ${spec.name}`)
+      } catch (err) {
+        // Index syntax can vary across PB minors — retry without indexes so
+        // missing collections still get created. Indexes can be added by hand
+        // later via /_/.
+        console.warn(`[ensureCollections] retrying ${spec.name} without indexes`, err)
+        await pb.collections.create({
+          name: spec.name,
+          type: 'base',
+          listRule: null,
+          viewRule: null,
+          createRule: null,
+          updateRule: null,
+          deleteRule: null,
+          fields: spec.fields,
+          indexes: [],
+        })
+        console.log(`[ensureCollections] created ${spec.name} (no indexes)`)
+      }
     }
   })
 }
