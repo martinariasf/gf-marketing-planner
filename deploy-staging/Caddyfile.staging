@@ -28,7 +28,10 @@
     encode zstd gzip
 
     # ── New REST API (Hono) ──────────────────────────────────────────────
-    handle /api/v1/* {
+    # The Hono app mounts routes at /v1/*. Strip the public /api prefix
+    # before forwarding so /api/v1/health -> /v1/health upstream.
+    handle_path /api/v1/* {
+        rewrite * /v1{uri}
         reverse_proxy mp-staging-api:8080
     }
 
