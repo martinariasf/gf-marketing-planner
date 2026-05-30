@@ -18,6 +18,8 @@ import { fmtDateShort } from '@/lib/format'
 import { toast, Toaster } from 'sonner'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, PostStatus } from '@/types'
+import { isApiEnabled } from '@/lib/api-client'
+import { PostDrawer } from '@/components/post-drawer'
 
 const COLUMNS: Array<{ key: PostStatus; label: string; color: string }> = [
   { key: 'idea',           label: 'Idea',           color: 'bg-neutral-100 text-neutral-700' },
@@ -44,7 +46,10 @@ function telegramCommand(action: PostStatus, postId: string): string {
 }
 
 export default function PipelineView() {
-  const { posts, plan } = useOutletContext<ClientBundle>()
+  const { posts, plan, slug, refetch } = useOutletContext<
+    ClientBundle & { refetch: () => void }
+  >()
+  const [drawerPost, setDrawerPost] = useState<Post | null>(null)
 
   const pillarColor = useMemo(() => {
     const m: Record<string, string> = {}
@@ -96,10 +101,19 @@ export default function PipelineView() {
               col={col}
               posts={byStatus[col.key] ?? []}
               pillarColor={pillarColor}
+              onOpen={isApiEnabled ? setDrawerPost : undefined}
             />
           ))}
         </div>
       </div>
+
+      <PostDrawer
+        slug={slug}
+        post={drawerPost}
+        open={drawerPost !== null}
+        onOpenChange={(o) => !o && setDrawerPost(null)}
+        onSaved={refetch}
+      />
     </div>
   )
 }
@@ -108,10 +122,12 @@ function Column({
   col,
   posts,
   pillarColor,
+  onOpen,
 }: {
   col: (typeof COLUMNS)[number]
   posts: Post[]
   pillarColor: Record<string, string>
+  onOpen?: (post: Post) => void
 }) {
   return (
     <div className="w-[260px] shrink-0">
@@ -132,7 +148,11 @@ function Column({
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.18 }}
             >
-              <KanbanCard post={p} pillarColor={pillarColor[p.pillar]} />
+              <KanbanCard
+                post={p}
+                pillarColor={pillarColor[p.pillar]}
+                onOpen={onOpen}
+              />
             </motion.div>
           ))}
         </AnimatePresence>
@@ -144,7 +164,15 @@ function Column({
   )
 }
 
-function KanbanCard({ post, pillarColor }: { post: Post; pillarColor?: string }) {
+function KanbanCard({
+  post,
+  pillarColor,
+  onOpen,
+}: {
+  post: Post
+  pillarColor?: string
+  onOpen?: (post: Post) => void
+}) {
   const [copied, setCopied] = useState<string | null>(null)
 
   const sendCommand = (target: PostStatus) => {
@@ -161,14 +189,17 @@ function KanbanCard({ post, pillarColor }: { post: Post; pillarColor?: string })
   }
 
   return (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer group">
+    <Card
+      className="hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={() => onOpen?.(post)}
+    >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-1.5">
           <p className="text-[10px] uppercase tracking-wider text-ink-muted">
             {post.id} · {fmtDateShort(post.date)}
           </p>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="ghost"
                 size="icon"

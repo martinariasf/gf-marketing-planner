@@ -297,7 +297,7 @@ export default function ClientLayout() {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="min-w-0"
         >
-          <Outlet context={mergedData} />
+          <Outlet context={{ ...mergedData, refetch }} />
         </motion.main>
       </div>
 

@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Download,
@@ -141,6 +141,55 @@ export function EditBar({
     [saveOne, onSaved],
   )
 
+  // ── Phase 4: debounced autosave when API mode is on ─────────────────────
+  // After the user stops typing for 1.2s, all dirty files for this slug are
+  // pushed up via PUT and the local patches are cleared. Failures fall back
+  // to the existing manual Save button.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!isApiEnabled) return
+    if (dirtyFiles.length === 0) return
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(async () => {
+      setSaving(true)
+      setSaveError(null)
+      try {
+        await Promise.all(dirtyFiles.map(saveOne))
+        setLastSavedAt(Date.now())
+        onSaved?.()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'Autosave failed')
+      } finally {
+        setSaving(false)
+      }
+    }, 1200)
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slugPatches, slug])
+
+  // Rerender every 5s so "Saved Xs ago" stays fresh.
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (lastSavedAt === null) return
+    const t = setInterval(() => force((n) => n + 1), 5000)
+    return () => clearInterval(t)
+  }, [lastSavedAt])
+
+  function savedAgoLabel(): string {
+    if (saving) return 'Saving…'
+    if (saveError) return saveError
+    if (lastSavedAt === null) return ''
+    const s = Math.round((Date.now() - lastSavedAt) / 1000)
+    if (s < 5) return 'Saved just now'
+    if (s < 60) return `Saved ${s}s ago`
+    const m = Math.round(s / 60)
+    return `Saved ${m}m ago`
+  }
+
   const showEditToggle = editMode || dirtyFiles.length > 0
 
   // Choose action labels + icons based on mode.
@@ -214,7 +263,9 @@ export function EditBar({
                     {dirtyFiles.length === 1 ? '' : 's'} modified
                     {usePB ? '' : ' locally'}
                   </p>
-                  <p className="text-[11px] text-ink-muted">{subtitle}</p>
+                  <p className="text-[11px] text-ink-muted">
+                    {isApiEnabled && savedAgoLabel() ? savedAgoLabel() : subtitle}
+                  </p>
                 </div>
                 <Button
                   variant={editMode ? 'default' : 'outline'}

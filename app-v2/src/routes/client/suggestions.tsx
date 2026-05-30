@@ -26,6 +26,7 @@ import { toast, Toaster } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Suggestion, SuggestionKind, SuggestionStatus, Confidence } from '@/types'
+import { isApiEnabled, apiPatchSuggestion } from '@/lib/api-client'
 
 const KIND_META: Record<SuggestionKind, { Icon: typeof Sparkles; label: string; tone: string }> = {
   post_idea:       { Icon: Lightbulb, label: 'Post idea',       tone: 'bg-amber-50  text-amber-700' },
@@ -46,7 +47,9 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
 type Filter = 'open' | 'accepted' | 'dismissed' | 'all'
 
 export default function SuggestionsView() {
-  const { suggestions, plan } = useOutletContext<ClientBundle>()
+  const { suggestions, plan, slug, refetch } = useOutletContext<
+    ClientBundle & { refetch: () => void }
+  >()
   const [filter, setFilter] = useState<Filter>('open')
 
   const pillarColor = useMemo(() => {
@@ -133,7 +136,12 @@ export default function SuggestionsView() {
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.22, delay: i * 0.03 }}
             >
-              <SuggestionCard suggestion={s} pillarColor={pillarColor[s.relatedPillar ?? '']} />
+              <SuggestionCard
+                suggestion={s}
+                pillarColor={pillarColor[s.relatedPillar ?? '']}
+                slug={slug}
+                onChanged={refetch}
+              />
             </motion.div>
           ))}
         </div>
@@ -153,12 +161,31 @@ export default function SuggestionsView() {
 function SuggestionCard({
   suggestion,
   pillarColor,
+  slug,
+  onChanged,
 }: {
   suggestion: Suggestion
   pillarColor?: string
+  slug: string
+  onChanged: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [busy, setBusy] = useState(false)
   const { Icon, label, tone } = KIND_META[suggestion.kind]
+
+  async function setStatus(next: 'accepted' | 'dismissed') {
+    if (busy) return
+    setBusy(true)
+    try {
+      await apiPatchSuggestion(slug, suggestion.id, { status: next })
+      toast(`${suggestion.id} → ${next}`, { duration: 1800 })
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const copy = () => {
     navigator.clipboard.writeText(suggestion.suggestedAction).catch(() => {})
@@ -268,6 +295,28 @@ function SuggestionCard({
                 <X className="h-3.5 w-3.5 mr-1.5" />
                 Dismiss (copy)
               </Button>
+              {isApiEnabled && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => setStatus('accepted')}
+                    disabled={busy}
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1.5" /> Accept (staging)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                    onClick={() => setStatus('dismissed')}
+                    disabled={busy}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1.5" /> Dismiss (staging)
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>

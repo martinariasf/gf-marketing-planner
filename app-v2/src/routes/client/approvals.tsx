@@ -12,6 +12,8 @@ import { toast, Toaster } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, ApprovalLogEntry } from '@/types'
+import { isApiEnabled } from '@/lib/api-client'
+import { ApprovalKanban } from '@/components/approval-kanban'
 
 const ACTION_ICON = {
   approve: { Icon: ShieldCheck, color: 'text-emerald-600 bg-emerald-50' },
@@ -21,7 +23,9 @@ const ACTION_ICON = {
 } as const
 
 export default function ApprovalsView() {
-  const { posts, approvalsLog, plan } = useOutletContext<ClientBundle>()
+  const { posts, approvalsLog, plan, slug, refetch } = useOutletContext<
+    ClientBundle & { refetch: () => void }
+  >()
 
   const pillarColor = useMemo(() => {
     const m: Record<string, string> = {}
@@ -66,6 +70,27 @@ export default function ApprovalsView() {
       </div>
 
       <TelegramBanner batchCommand={batchCommand} waitingCount={waiting.length} />
+
+      {isApiEnabled && (
+        <>
+          <Separator />
+          <section className="space-y-3">
+            <div className="flex items-baseline justify-between flex-wrap gap-2">
+              <h2 className="text-lg font-semibold">Kanban (staging)</h2>
+              <span className="text-[11px] text-ink-muted">
+                Click → moves a post. Writes to <code>approvals_v2</code> +
+                appends to audit log.
+              </span>
+            </div>
+            <ApprovalKanban
+              slug={slug}
+              posts={posts}
+              pillarColor={pillarColor}
+              onChanged={refetch}
+            />
+          </section>
+        </>
+      )}
 
       <Separator />
 

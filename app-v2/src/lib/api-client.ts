@@ -145,3 +145,38 @@ export async function apiSave(slug: string, file: string, data: unknown): Promis
   if (!seg) throw new Error(`Cannot save Viktor-owned file "${file}" via API`)
   await apiSend('PUT', `/clients/${slug}/${seg}`, { data })
 }
+
+// ── Phase 4 mutations ────────────────────────────────────────────────────────
+
+export type ApprovalDecision = 'in_review' | 'approved' | 'scheduled' | 'rejected'
+
+export async function apiSetApproval(
+  slug: string,
+  postId: string,
+  decision: ApprovalDecision,
+  note?: string,
+): Promise<void> {
+  await apiSend('POST', `/clients/${slug}/approvals`, { postId, decision, note })
+}
+
+export type SuggestionPatch = {
+  status?: 'open' | 'accepted' | 'dismissed'
+  priority?: number
+  reason?: string
+}
+
+export async function apiPatchSuggestion(
+  slug: string,
+  suggestionId: string,
+  body: SuggestionPatch,
+): Promise<void> {
+  await apiSend('PATCH', `/clients/${slug}/suggestions/${suggestionId}`, body)
+}
+
+export async function apiPatchPost(
+  slug: string,
+  postId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
+}
