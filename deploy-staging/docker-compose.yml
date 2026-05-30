@@ -1,18 +1,20 @@
-# Staging stack: PocketBase (API + admin) + Caddy (reverse proxy + SPA + static data)
+# Staging stack: PocketBase (storage) + API (Hono) + Caddy (reverse proxy + SPA).
 #
-# PocketBase handles user-owned data (briefs, plans, goals, learnings, client index).
-# Viktor-owned data (posts, suggestions, performance, approvals.log, assets) stays
-# as static JSON served by Caddy — same as production. This preserves the
-# literal-approval contract.
+# Data ownership:
+#   - PocketBase holds user-owned + viktor-owned + chat + audit + token records
+#     (post-Phase-2). Only `mp-staging-api` talks to it.
+#   - Viktor-owned static JSON under /srv/data is kept for backward compat with
+#     the file-mode dashboard read path; the API is the new canonical source.
 #
 # Usage:
 #   docker compose up -d
-#   # Seed data (first time only):
-#   node seed.mjs
+#   # First-time seed (after PB is migrated):
+#   PB_URL=http://localhost:8090 PB_ADMIN_EMAIL=admin@gfinnov.com PB_ADMIN_PASSWORD=... node seed.mjs
 #
-# Ports:
-#   80/443  — Caddy (public, TLS via Let's Encrypt)
-#   8090    — PocketBase admin UI (internal only, Caddy proxies /api/* and /_/)
+# Public ports:
+#   8880 -> Caddy :80   8443 -> Caddy :443
+# Internal (Docker network only):
+#   pocketbase:8090, mp-staging-api:8080
 
 services:
   pocketbase:
@@ -22,10 +24,29 @@ services:
     volumes:
       - pb_data:/pb/pb_data
       - ./pb-migrations:/pb/pb_migrations
-    # Only exposed to the Docker network — Caddy fronts it.
     expose:
       - "8090"
     command: serve --http=0.0.0.0:8090
+
+  api:
+    build:
+      context: ./api
+    image: mp-staging-api:latest
+    container_name: mp-staging-api
+    restart: unless-stopped
+    depends_on:
+      - pocketbase
+    environment:
+      PORT: "8080"
+      PB_URL: "http://pocketbase:8090"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
+      BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
+      HERMES_CHAT_BASE: "http://hermes-marketing-staging:7000"
+      RELEASE: "${RELEASE:-dev}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    expose:
+      - "8080"
 
   caddy:
     image: caddy:2-alpine
@@ -33,6 +54,7 @@ services:
     restart: unless-stopped
     depends_on:
       - pocketbase
+      - api
     ports:
       - "0.0.0.0:8880:80"
       - "0.0.0.0:8443:443"

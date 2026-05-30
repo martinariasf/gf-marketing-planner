@@ -1,31 +1,50 @@
 # Staging Caddyfile — staging.marketing.gfinnov.com
 #
-# Basicauth protects the whole site so it's not crawlable.
-# PocketBase API is proxied at /api/* and /_/ (admin UI).
-# Viktor-owned static JSON stays at /data/<slug>/<file> with no additional auth
-# (the site-wide basicauth already covers it).
+# Routing precedence (most specific first via Caddy's `handle` ordering):
+#
+#   /api/v1/*  -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
+#   /api/*     -> mp-staging-pb   (legacy direct PocketBase access; removed in Phase 2)
+#   /_/*       -> mp-staging-pb   (PB admin UI)
+#   /chat/*    -> hermes-marketing-staging  (Phase 6 wires this up)
+#   /data/*    -> static Viktor-owned JSON  (legacy read path; removed Phase 3)
+#   /*         -> React SPA
+#
+# Site-wide basicauth still gates everything except /api/v1/* and /chat/*, which
+# do their own bearer-token auth — basicauth at the edge would prevent agents
+# from calling the API without scraping creds.
 
 staging.marketing.gfinnov.com {
     encode zstd gzip
 
-    # Site-wide basicauth (staging password — set via env or replace hash)
+    # ── New REST API (Hono) ──────────────────────────────────────────────
+    handle /api/v1/* {
+        reverse_proxy mp-staging-api:8080
+    }
+
+    # ── Hermes chat gateway (Phase 6) — SSE friendly ─────────────────────
+    handle /chat/* {
+        reverse_proxy hermes-marketing-staging:7000 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # Everything below is gated by site-wide basicauth.
     basicauth /* {
         staging {$STAGING_BCRYPT_HASH}
     }
 
-    # PocketBase API — proxied from the companion container.
+    # ── Legacy direct PocketBase (removed Phase 2) ───────────────────────
     handle /api/* {
-        reverse_proxy pocketbase:8090
+        reverse_proxy mp-staging-pb:8090
     }
-
-    # PocketBase admin UI.
     handle /_/* {
-        reverse_proxy pocketbase:8090
+        reverse_proxy mp-staging-pb:8090
     }
 
-    # Viktor-owned static data (posts, suggestions, performance, approvals.log,
-    # assets). These files are NOT in PocketBase — they stay on disk, same as
-    # production. This preserves the literal-approval contract.
+    # ── Legacy Viktor-owned static JSON (read path; removed Phase 3) ─────
     handle /data/* {
         root * /srv/data
         uri strip_prefix /data
@@ -35,7 +54,7 @@ staging.marketing.gfinnov.com {
         header Cache-Control "no-store"
     }
 
-    # React SPA — single-page fallback.
+    # ── React SPA ────────────────────────────────────────────────────────
     handle {
         root * /srv/app
         try_files {path} /index.html
