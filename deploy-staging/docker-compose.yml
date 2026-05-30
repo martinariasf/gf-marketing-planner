@@ -1,71 +1,70 @@
-# Staging stack: PocketBase (storage) + API (Hono) + Caddy (reverse proxy + SPA).
+# Staging stack — API (Hono) + edge Caddy.
 #
-# Data ownership:
-#   - PocketBase holds user-owned + viktor-owned + chat + audit + token records
-#     (post-Phase-2). Only `mp-staging-api` talks to it.
-#   - Viktor-owned static JSON under /srv/data is kept for backward compat with
-#     the file-mode dashboard read path; the API is the new canonical source.
+# Reality on Hetzner:
+#   - PocketBase already runs as a bare `docker run` container (`mp-staging-pb`)
+#     with bind mounts at /opt/marketing-planner-staging/pb-{data,migrations}.
+#     We deliberately do NOT manage it from compose to avoid disturbing its
+#     volume / admin account / data. Future migration may absorb it.
+#   - The production Caddy on :80/:443 (`marketing-planner-caddy`) terminates
+#     TLS for both marketing.gfinnov.com and staging.marketing.gfinnov.com. It
+#     will reverse_proxy the entire staging host to `mp-staging-caddy:80` over
+#     the shared `marketing-planner_default` network. The staging routing
+#     surface (/api/v1/*, /api/*, /_/* , /data/*, SPA) lives here in
+#     Caddyfile.staging, NOT in the production Caddyfile.
 #
-# Usage:
-#   docker compose up -d
-#   # First-time seed (after PB is migrated):
-#   PB_URL=http://localhost:8090 PB_ADMIN_EMAIL=admin@gfinnov.com PB_ADMIN_PASSWORD=... node seed.mjs
+# Network:
+#   `marketing-planner_default` is created and owned by the production
+#   compose project (/opt/marketing-planner/). We attach to it as `external`
+#   so prod caddy + mp-staging-pb (both already on it) can reach us by name.
 #
-# Public ports:
-#   8880 -> Caddy :80   8443 -> Caddy :443
-# Internal (Docker network only):
-#   pocketbase:8090, mp-staging-api:8080
+# Usage on Hetzner (one-time + each deploy):
+#   cd /opt/marketing-planner-staging && docker compose up -d --build
 
 services:
-  pocketbase:
-    image: ghcr.io/muchobien/pocketbase:latest
-    container_name: mp-staging-pb
-    restart: unless-stopped
-    volumes:
-      - pb_data:/pb/pb_data
-      - ./pb-migrations:/pb/pb_migrations
-    expose:
-      - "8090"
-    command: serve --http=0.0.0.0:8090
-
   api:
     build:
       context: ./api
     image: mp-staging-api:latest
     container_name: mp-staging-api
     restart: unless-stopped
-    depends_on:
-      - pocketbase
     environment:
       PORT: "8080"
-      PB_URL: "http://pocketbase:8090"
-      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL}"
-      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD}"
+      PB_URL: "http://mp-staging-pb:8090"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
       BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
       HERMES_CHAT_BASE: "http://hermes-marketing-staging:7000"
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:
       - "8080"
+    networks:
+      - shared
 
   caddy:
     image: caddy:2-alpine
     container_name: mp-staging-caddy
     restart: unless-stopped
     depends_on:
-      - pocketbase
       - api
-    ports:
-      - "0.0.0.0:8880:80"
-      - "0.0.0.0:8443:443"
+    # No published ports — production caddy terminates TLS and proxies in
+    # over the shared docker network.
+    expose:
+      - "80"
     volumes:
       - ./Caddyfile.staging:/etc/caddy/Caddyfile:ro
       - ./app-dist:/srv/app:ro
       - ./clients:/srv/data:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - shared
 
 volumes:
-  pb_data:
   caddy_data:
   caddy_config:
+
+networks:
+  shared:
+    name: marketing-planner_default
+    external: true

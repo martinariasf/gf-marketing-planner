@@ -1,5 +1,9 @@
 # Staging Caddyfile — staging.marketing.gfinnov.com
 #
+# This is the inner Caddy. TLS + the public hostname are handled by the
+# production Caddy on :80/:443, which reverse_proxies the whole staging host
+# to mp-staging-caddy:80 over the shared docker network.
+#
 # Routing precedence (most specific first via Caddy's `handle` ordering):
 #
 #   /api/v1/*  -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
@@ -13,7 +17,14 @@
 # do their own bearer-token auth — basicauth at the edge would prevent agents
 # from calling the API without scraping creds.
 
-staging.marketing.gfinnov.com {
+{
+    auto_https off
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+:80 {
     encode zstd gzip
 
     # ── New REST API (Hono) ──────────────────────────────────────────────

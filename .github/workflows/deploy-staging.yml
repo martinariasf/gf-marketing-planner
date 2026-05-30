@@ -86,10 +86,10 @@ jobs:
             deploy-staging/api/ \
             "$USER@$HOST:/opt/marketing-planner-staging/api/"
 
-      - name: Build + restart staging API container
+      - name: Build + start staging api & caddy
         env:
           HOST: ${{ secrets.HETZNER_HOST }}
           USER: ${{ secrets.HETZNER_USER }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
-            'cd /opt/marketing-planner-staging && docker compose up -d --build api && docker compose restart caddy'
+            'cd /opt/marketing-planner-staging && docker compose up -d --build api caddy'
