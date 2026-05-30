@@ -41,9 +41,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Build (staging — PocketBase enabled)
+      - name: Build (staging — REST API enabled)
         env:
-          VITE_PB_URL: https://staging.marketing.gfinnov.com
+          # Phase 3 cutover: the staging SPA talks to the new /api/v1/* surface.
+          # The bootstrap admin token below is gated by the edge basicauth on
+          # staging.marketing.gfinnov.com and can be rotated by editing
+          # BOOTSTRAP_TOKENS in /opt/marketing-planner-staging/.env on Hetzner.
+          VITE_API_BASE: https://staging.marketing.gfinnov.com/api/v1
+          VITE_API_TOKEN: dash_admin_staging_2026
         run: pnpm build
 
       - name: Setup SSH key

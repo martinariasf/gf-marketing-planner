@@ -46,22 +46,12 @@
     # The outer (production) Caddy already enforces site-wide basicauth for
     # staging.marketing.gfinnov.com, so the inner caddy does not double-gate.
 
-    # ── Legacy direct PocketBase (removed Phase 2) ───────────────────────
-    handle /api/* {
-        reverse_proxy mp-staging-pb:8090
-    }
+    # ── PocketBase admin UI ──────────────────────────────────────────────
+    # Kept so Martin can manage api_tokens / inspect audit via /_/.
+    # The direct PB REST API (/api/*) is intentionally removed in Phase 3 —
+    # the dashboard now goes through /api/v1/* exclusively.
     handle /_/* {
         reverse_proxy mp-staging-pb:8090
-    }
-
-    # ── Legacy Viktor-owned static JSON (read path; removed Phase 3) ─────
-    handle /data/* {
-        root * /srv/data
-        uri strip_prefix /data
-        file_server {
-            hide .git
-        }
-        header Cache-Control "no-store"
     }
 
     # ── React SPA ────────────────────────────────────────────────────────

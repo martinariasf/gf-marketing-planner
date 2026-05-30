@@ -22,6 +22,7 @@ import {
 import { useEdit, deepMerge, type EditableFile } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
 import { isPocketBaseEnabled, pbSave } from '@/lib/pocketbase'
+import { isApiEnabled, apiSave } from '@/lib/api-client'
 
 /**
  * Floating bar that appears whenever the current slug has unsaved patches.
@@ -98,7 +99,11 @@ export function EditBar({
   const saveOne = useCallback(
     async (file: EditableFile) => {
       const merged = mergedFor(file)
-      await pbSave(slug, file, merged)
+      if (isApiEnabled) {
+        await apiSave(slug, file, merged)
+      } else {
+        await pbSave(slug, file, merged)
+      }
       resetFile(slug, file)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,7 +144,7 @@ export function EditBar({
   const showEditToggle = editMode || dirtyFiles.length > 0
 
   // Choose action labels + icons based on mode.
-  const usePB = isPocketBaseEnabled
+  const usePB = isPocketBaseEnabled || isApiEnabled
   const ActionIcon = usePB ? Save : Download
   const actionLabel = usePB ? 'Save' : 'Download'
   const bulkLabel = usePB

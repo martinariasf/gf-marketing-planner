@@ -34,6 +34,19 @@ import {
   pbLoadLearnings,
   pbLoadClientIndex,
 } from '@/lib/pocketbase'
+import {
+  isApiEnabled,
+  apiLoadBrief,
+  apiLoadPlan,
+  apiLoadGoals,
+  apiLoadLearnings,
+  apiLoadClientIndex,
+  apiLoadPerformance,
+  apiLoadPosts,
+  apiLoadSuggestions,
+  apiLoadAssetsManifest,
+  apiLoadApprovals,
+} from '@/lib/api-client'
 
 const DATA_ROOT = '/data'
 
@@ -82,6 +95,7 @@ function fileClientIndex(): Promise<ClientIndex> {
 export async function loadPerformance(
   slug: string,
 ): Promise<Performance | null> {
+  if (isApiEnabled) return apiLoadPerformance(slug)
   try {
     return await fetchJson<Performance>(clientPath(slug, 'performance.json'))
   } catch {
@@ -90,6 +104,7 @@ export async function loadPerformance(
 }
 
 export async function loadPosts(slug: string): Promise<Post[]> {
+  if (isApiEnabled) return apiLoadPosts(slug)
   try {
     const index = await fetchJson<{ posts: string[] }>(
       clientPath(slug, 'posts/index.json'),
@@ -108,6 +123,7 @@ export async function loadPosts(slug: string): Promise<Post[]> {
 export async function loadApprovalsLog(
   slug: string,
 ): Promise<ApprovalLogEntry[]> {
+  if (isApiEnabled) return apiLoadApprovals(slug)
   try {
     const res = await fetch(clientPath(slug, 'approvals.log'), {
       cache: 'no-store',
@@ -122,6 +138,7 @@ export async function loadApprovalsLog(
 export async function loadAssetsManifest(
   slug: string,
 ): Promise<AssetsManifest | null> {
+  if (isApiEnabled) return apiLoadAssetsManifest(slug)
   try {
     return await fetchJson<AssetsManifest>(
       clientPath(slug, 'assets/manifest.json'),
@@ -134,6 +151,7 @@ export async function loadAssetsManifest(
 export async function loadSuggestions(
   slug: string,
 ): Promise<Suggestions | null> {
+  if (isApiEnabled) return apiLoadSuggestions(slug)
   try {
     return await fetchJson<Suggestions>(clientPath(slug, 'suggestions.json'))
   } catch {
@@ -156,29 +174,39 @@ export interface ClientBundle {
   suggestions: Suggestions | null
 }
 
-/** Load brief — PocketBase if enabled, else static JSON. */
+/**
+ * Mode precedence: REST API (Phase 3+) > PocketBase (transitional) > files.
+ * Production stays on file mode because no env vars are set on that build.
+ */
+
 export function loadBrief(slug: string): Promise<Brief> {
-  return isPocketBaseEnabled ? pbLoadBrief(slug) : fileBrief(slug)
+  if (isApiEnabled) return apiLoadBrief(slug)
+  if (isPocketBaseEnabled) return pbLoadBrief(slug)
+  return fileBrief(slug)
 }
 
-/** Load plan — PocketBase if enabled, else static JSON. */
 export function loadPlan(slug: string): Promise<Plan> {
-  return isPocketBaseEnabled ? pbLoadPlan(slug) : filePlan(slug)
+  if (isApiEnabled) return apiLoadPlan(slug)
+  if (isPocketBaseEnabled) return pbLoadPlan(slug)
+  return filePlan(slug)
 }
 
-/** Load goals — PocketBase if enabled, else static JSON. */
 export function loadGoals(slug: string): Promise<Goals> {
-  return isPocketBaseEnabled ? pbLoadGoals(slug) : fileGoals(slug)
+  if (isApiEnabled) return apiLoadGoals(slug)
+  if (isPocketBaseEnabled) return pbLoadGoals(slug)
+  return fileGoals(slug)
 }
 
-/** Load learnings — PocketBase if enabled, else static JSON. */
 export function loadLearnings(slug: string): Promise<Learnings | null> {
-  return isPocketBaseEnabled ? pbLoadLearnings(slug) : fileLearnings(slug)
+  if (isApiEnabled) return apiLoadLearnings(slug)
+  if (isPocketBaseEnabled) return pbLoadLearnings(slug)
+  return fileLearnings(slug)
 }
 
-/** Load client index — PocketBase if enabled, else static JSON. */
 export function loadClientIndex(): Promise<ClientIndex> {
-  return isPocketBaseEnabled ? pbLoadClientIndex() : fileClientIndex()
+  if (isApiEnabled) return apiLoadClientIndex()
+  if (isPocketBaseEnabled) return pbLoadClientIndex()
+  return fileClientIndex()
 }
 
 /** Load everything for one client. */
