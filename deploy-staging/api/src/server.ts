@@ -1,10 +1,10 @@
 // Marketing Planner staging REST API — entry point.
 //
 // Mount order:
-//   /v1/health        — unauth health probe
-//   /v1/clients       — auth + scope checks (full CRUD lands Phase 2)
-//   /v1/docs          — Scalar UI
-//   /v1/openapi.json  — machine-readable spec
+//   /api/v1/health        — unauth health probe
+//   /api/v1/clients       — auth + scope checks (full CRUD lands Phase 2)
+//   /api/v1/docs          — Scalar UI
+//   /api/v1/openapi.json  — machine-readable spec
 
 import { serve } from '@hono/node-server'
 import { OpenAPIHono } from '@hono/zod-openapi'
@@ -23,12 +23,12 @@ const app = new OpenAPIHono()
 app.use('*', cors({ origin: ['http://localhost:5173', 'http://localhost:4173'], credentials: true }))
 app.use('*', logger())
 
-// Mount under /v1
-app.route('/v1', health)
-app.route('/v1', clients)
+// Mount under /api/v1
+app.route('/api/v1', health)
+app.route('/api/v1', clients)
 
 // OpenAPI spec
-app.doc('/v1/openapi.json', {
+app.doc('/api/v1/openapi.json', {
   openapi: '3.1.0',
   info: {
     title: 'Marketing Planner API',
@@ -37,7 +37,7 @@ app.doc('/v1/openapi.json', {
       'Staging API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
   },
   servers: [
-    { url: 'https://staging.marketing.gfinnov.com/api', description: 'staging' },
+    { url: 'https://staging.marketing.gfinnov.com', description: 'staging' },
     { url: 'http://localhost:8080', description: 'local' },
   ],
 })
@@ -51,16 +51,16 @@ app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
 
 // Interactive docs UI
 app.get(
-  '/v1/docs',
+  '/api/v1/docs',
   apiReference({
-    spec: { url: '/v1/openapi.json' },
+    spec: { url: '/api/v1/openapi.json' },
     pageTitle: 'Marketing Planner API — staging',
     theme: 'purple',
   }),
 )
 
 // Friendly root.
-app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/v1/docs' }))
+app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))
 
 // 404 + error handlers in problem+json shape.
 app.notFound((c) =>
