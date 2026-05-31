@@ -66,25 +66,43 @@ function saveToken(token: string, expiresAt: string): void {
  * Trade the active basicauth session for a short-lived dash_* token.
  * Idempotent and cached — safe to call from app boot and on 401 retries.
  */
+export class ApiAuthError extends Error {
+  status: number
+  hint: string
+  constructor(status: number, hint: string) {
+    super(`Auth exchange failed: ${status} (${hint})`)
+    this.status = status
+    this.hint = hint
+  }
+}
+
 export async function ensureApiToken(): Promise<string | null> {
   if (!API_BASE) return null
   const cached = loadToken()
   if (cached) return cached
+  let res: Response
   try {
-    const res = await fetch(`${API_BASE}/auth/exchange`, {
+    res = await fetch(`${API_BASE}/auth/exchange`, {
       credentials: 'include',
       cache: 'no-store',
     })
-    if (!res.ok) {
-      // Fall back to build-time token (dev mode) — production has it empty.
-      return API_TOKEN_FALLBACK ?? null
-    }
-    const data = (await res.json()) as { token: string; expiresAt: string }
-    saveToken(data.token, data.expiresAt)
-    return data.token
-  } catch {
-    return API_TOKEN_FALLBACK ?? null
+  } catch (err) {
+    console.warn('[api] /auth/exchange network error', err)
+    if (API_TOKEN_FALLBACK) return API_TOKEN_FALLBACK
+    throw new ApiAuthError(0, 'network error reaching /auth/exchange')
   }
+  if (!res.ok) {
+    console.warn('[api] /auth/exchange returned', res.status, res.statusText)
+    if (API_TOKEN_FALLBACK) return API_TOKEN_FALLBACK
+    const hint =
+      res.status === 401
+        ? 'browser basicauth credentials were not auto-attached. Try a hard refresh (Ctrl+Shift+R), then re-enter the basicauth prompt.'
+        : `unexpected ${res.status} ${res.statusText}`
+    throw new ApiAuthError(res.status, hint)
+  }
+  const data = (await res.json()) as { token: string; expiresAt: string }
+  saveToken(data.token, data.expiresAt)
+  return data.token
 }
 
 function currentToken(): string | undefined {
@@ -148,12 +166,13 @@ export async function apiLoadLearnings(slug: string): Promise<Learnings | null> 
 }
 
 export async function apiLoadClientIndex(): Promise<ClientIndex> {
-  try {
-    const r = await apiGet<{ items: ClientIndexEntry[] }>(`/clients`)
-    return { clients: r.items.map((c) => ({ ...c, status: c.status || 'active' })) }
-  } catch {
-    return { clients: [] }
-  }
+  // Intentionally NOT swallowing: an empty list here used to render
+  // "No clients yet. Add one by creating clients/<slug>/brief.json…",
+  // which masked real auth failures (e.g. /auth/exchange returning 401
+  // because the basicauth creds weren't auto-attached). Let the caller
+  // see the error message — the home page already renders it.
+  const r = await apiGet<{ items: ClientIndexEntry[] }>(`/clients`)
+  return { clients: r.items.map((c) => ({ ...c, status: c.status || 'active' })) }
 }
 
 export async function apiLoadPerformance(slug: string): Promise<Performance | null> {
