@@ -332,6 +332,26 @@ export async function* apiChatStream(args: {
   }
 }
 
+export interface IntegrationInfo {
+  slug: string
+  apiBase: string
+  docsUrl: string
+  openapiUrl: string
+  agentToken: string | null
+  tokenHint: string | null
+  examples: {
+    curlReadBrief: string
+    curlPatchPost: string
+    curlSetApproval: string
+  }
+  assetsDir: string
+  assetsManifestPath: string
+}
+
+export async function apiLoadIntegration(slug: string): Promise<IntegrationInfo> {
+  return apiGet<IntegrationInfo>(`/clients/${slug}/integration`)
+}
+
 export async function apiLoadChatHistory(
   slug: string,
   thread = 'default',
