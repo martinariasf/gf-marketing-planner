@@ -62,6 +62,15 @@ function saveToken(token: string, expiresAt: string): void {
   }
 }
 
+function clearToken(): void {
+  runtimeToken = null
+  try {
+    sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Trade the active basicauth session for a short-lived dash_* token.
  * Idempotent and cached — safe to call from app boot and on 401 retries.
@@ -76,8 +85,9 @@ export class ApiAuthError extends Error {
   }
 }
 
-export async function ensureApiToken(): Promise<string | null> {
+export async function ensureApiToken(force = false): Promise<string | null> {
   if (!API_BASE) return null
+  if (force) clearToken()
   const cached = loadToken()
   if (cached) return cached
   let res: Response
@@ -116,23 +126,38 @@ function authHeaders(extra: Record<string, string> = {}): HeadersInit {
   return h
 }
 
+// Wraps a fetch so a 401 (the api forgot our ephemeral token across a
+// restart) triggers exactly one forced re-exchange + retry. Anything else
+// surfaces normally so callers can show the real error.
+async function authedFetch(
+  path: string,
+  init: RequestInit,
+  retried = false,
+): Promise<Response> {
+  await ensureApiToken(retried)
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined), ...authHeaders() },
+  })
+  if (res.status === 401 && !retried) {
+    console.warn('[api] 401, re-exchanging token and retrying', path)
+    return authedFetch(path, init, true)
+  }
+  return res
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
-  await ensureApiToken()
-  const res = await fetch(`${API_BASE}${path}`, {
-    cache: 'no-store',
-    headers: authHeaders(),
-  })
+  const res = await authedFetch(path, { cache: 'no-store' })
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
   return (await res.json()) as T
 }
 
 async function apiSend<T>(method: 'PUT' | 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
-  await ensureApiToken()
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await authedFetch(path, {
     method,
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status}`)
