@@ -305,10 +305,12 @@ chat.post(
 chat.get('/clients/:slug/chat/messages', requireScope(), requireRole('dash', 'admin'), async (c) => {
   const slug = c.req.param('slug')
   const thread = c.req.query('thread') ?? 'default'
+  // PB v0.38 base collections don't auto-create a `created` field; sort on
+  // id which is monotonic enough for chat order.
   const items = await withPb((pb) =>
     pb.collection('chat_messages').getList(1, 50, {
       filter: `slug="${slug}" && thread="${thread}"`,
-      sort: 'created',
+      sort: 'id',
     }),
   )
   return c.json({ items: items.items })
