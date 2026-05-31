@@ -23,18 +23,84 @@ import type {
 } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
-const API_TOKEN = import.meta.env.VITE_API_TOKEN as string | undefined
+// Build-time fallback for local dev / CI smoke tests. In production it's empty
+// and the SPA exchanges its basicauth session for a runtime token at boot.
+const API_TOKEN_FALLBACK = import.meta.env.VITE_API_TOKEN as string | undefined
 
 export const isApiEnabled = !!API_BASE
 
+// Phase 7: runtime token, populated by ensureApiToken() at app boot. Held in
+// sessionStorage so refresh keeps the same token (cheaper than re-exchanging
+// on every tab focus) but new tabs / new sessions get fresh ones.
+const STORAGE_KEY = 'mp.dashToken'
+let runtimeToken: string | null = null
+
+function loadToken(): string | null {
+  if (runtimeToken) return runtimeToken
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored) as { token: string; expiresAt: string }
+      if (Date.parse(parsed.expiresAt) > Date.now() + 60_000) {
+        runtimeToken = parsed.token
+        return runtimeToken
+      }
+      sessionStorage.removeItem(STORAGE_KEY)
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null
+}
+
+function saveToken(token: string, expiresAt: string): void {
+  runtimeToken = token
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token, expiresAt }))
+  } catch {
+    // sessionStorage may be unavailable (private mode); fall back to memory only
+  }
+}
+
+/**
+ * Trade the active basicauth session for a short-lived dash_* token.
+ * Idempotent and cached — safe to call from app boot and on 401 retries.
+ */
+export async function ensureApiToken(): Promise<string | null> {
+  if (!API_BASE) return null
+  const cached = loadToken()
+  if (cached) return cached
+  try {
+    const res = await fetch(`${API_BASE}/auth/exchange`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      // Fall back to build-time token (dev mode) — production has it empty.
+      return API_TOKEN_FALLBACK ?? null
+    }
+    const data = (await res.json()) as { token: string; expiresAt: string }
+    saveToken(data.token, data.expiresAt)
+    return data.token
+  } catch {
+    return API_TOKEN_FALLBACK ?? null
+  }
+}
+
+function currentToken(): string | undefined {
+  return loadToken() ?? API_TOKEN_FALLBACK ?? undefined
+}
+
 function authHeaders(extra: Record<string, string> = {}): HeadersInit {
   const h: Record<string, string> = { ...extra }
-  if (API_TOKEN) h.Authorization = `Bearer ${API_TOKEN}`
+  const t = currentToken()
+  if (t) h.Authorization = `Bearer ${t}`
   return h
 }
 
 async function apiGet<T>(path: string): Promise<T> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  await ensureApiToken()
   const res = await fetch(`${API_BASE}${path}`, {
     cache: 'no-store',
     headers: authHeaders(),
@@ -45,6 +111,7 @@ async function apiGet<T>(path: string): Promise<T> {
 
 async function apiSend<T>(method: 'PUT' | 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  await ensureApiToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -199,6 +266,7 @@ export async function* apiChatStream(args: {
   signal?: AbortSignal
 }): AsyncGenerator<ChatStreamEvent> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  await ensureApiToken()
   const res = await fetch(`${API_BASE}/clients/${args.slug}/chat/stream`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),

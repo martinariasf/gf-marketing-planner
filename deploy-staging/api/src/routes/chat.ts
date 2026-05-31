@@ -26,8 +26,12 @@ import {
 } from '../overlays.js'
 import { env } from '../env.js'
 import { problem } from '../problem.js'
+import { rateLimit } from '../rateLimit.js'
 
 export const chat = new OpenAPIHono<AppEnv>()
+// Strict per-token cap on the chat path — each turn calls OpenRouter, so this
+// is the real cost surface. 10/min absorbs a hot demo without bleeding budget.
+chat.use('/clients/:slug/chat/*', rateLimit({ windowMs: 60_000, max: 10 }, 'chat'))
 chat.use('*', requireAuth)
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

@@ -18,6 +18,8 @@ import { userOwned } from './routes/userOwned.js'
 import { viktorOwned } from './routes/viktorOwned.js'
 import { auditRoute } from './routes/audit.js'
 import { chat } from './routes/chat.js'
+import { authExchange } from './routes/authExchange.js'
+import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { problem } from './problem.js'
 
@@ -27,6 +29,9 @@ const app = new OpenAPIHono()
 // helpful for local dev where the SPA runs on 5173.
 app.use('*', cors({ origin: ['http://localhost:5173', 'http://localhost:4173'], credentials: true }))
 app.use('*', logger())
+// Phase 7: global rate limit (120 req/min per token+IP). Stricter caps on
+// /chat/stream live in routes/chat.ts.
+app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
 
 // OpenAPI spec + docs UI are registered BEFORE the auth-gated subapps so
 // the clients router's wildcard requireAuth middleware doesn't swallow them.
@@ -66,6 +71,7 @@ app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', chat)
+app.route('/api/v1', authExchange)
 
 // Friendly root.
 app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))

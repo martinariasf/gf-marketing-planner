@@ -51,7 +51,31 @@ const bootstrap: TokenPrincipal[] = env.bootstrapTokens
     return { token, role, slug, label: 'bootstrap' }
   })
 
+// Phase 7 ephemeral tokens (issued by /auth/exchange). In-memory because they
+// are short-lived (24h) and per-tab. Server restart invalidates them all —
+// Caddy still has the user's basicauth, so the SPA simply re-exchanges.
+const ephemeral = new Map<string, { principal: TokenPrincipal; expiresAt: number }>()
+
+export function registerEphemeralToken(principal: TokenPrincipal, expiresAt: number): void {
+  ephemeral.set(principal.token, { principal, expiresAt })
+}
+
+// Periodic GC to keep the ephemeral map bounded on long uptimes.
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, v] of ephemeral) if (v.expiresAt <= now) ephemeral.delete(k)
+}, 5 * 60_000).unref()
+
 async function lookupToken(token: string): Promise<TokenPrincipal | null> {
+  const fromEphemeral = ephemeral.get(token)
+  if (fromEphemeral) {
+    if (fromEphemeral.expiresAt <= Date.now()) {
+      ephemeral.delete(token)
+      return null
+    }
+    return fromEphemeral.principal
+  }
+
   const fromBootstrap = bootstrap.find((p) => p.token === token)
   if (fromBootstrap) return fromBootstrap
 
