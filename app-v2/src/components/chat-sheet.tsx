@@ -1,18 +1,28 @@
-// Phase 6 — right-side chat widget. Streams via SSE from
-// /api/v1/clients/:slug/chat/stream. Read-only assistant with slash chips.
+// Phase 6 chat widget (rev for fix pass).
+//
+// Why not shadcn Sheet:
+//   - SheetContent hardcodes <SheetOverlay> with bg-black/40 + backdrop-blur,
+//     and the underlying Radix Dialog is modal (focus trap + pointer block),
+//     so the dashboard would be both visually dimmed and uninteractable.
+//   - Native scroll with min-h-0 inside a flex column is more predictable than
+//     Radix ScrollArea once we also want autoscroll-on-stream.
+//
+// Instead: a plain framer-motion docked panel on the right. No overlay, no
+// pointer block, dashboard remains fully usable while chatting. ESC closes.
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet'
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Send, Loader2, Sparkles, Wrench } from 'lucide-react'
+import {
+  Send,
+  Loader2,
+  Sparkles,
+  Wrench,
+  X,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react'
 import {
   apiChatStream,
   apiLoadChatHistory,
@@ -72,12 +82,22 @@ export function ChatSheet({
     }
   }, [open, slug, thread])
 
-  // Autoscroll on new content.
-  useEffect(() => {
+  // Autoscroll the actual scroll container (not an inner div).
+  useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [messages])
+
+  // ESC closes (since we're not using a modal Dialog anymore, wire it ourselves).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onOpenChange])
 
   const send = useCallback(
     async (raw: string) => {
@@ -89,7 +109,6 @@ export function ChatSheet({
       setMessages((prev) => [...prev, userMsg, assistantMsg])
       setInput('')
 
-      // Build history from previous messages (cap last 10).
       const historyTurns: ChatTurn[] = messages
         .filter((m) => !m.streaming)
         .slice(-10)
@@ -179,20 +198,52 @@ export function ChatSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
-        <SheetHeader className="px-4 py-3 border-b border-border-subtle">
-          <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-brand-blue" />
-            Ask Viktor (staging chat)
-          </SheetTitle>
-          <SheetDescription className="text-[11px]">
-            Read-only assistant scoped to <code>{slug}</code>. For real changes, use Telegram or the kanban.
-          </SheetDescription>
-        </SheetHeader>
+    <AnimatePresence>
+      {open && (
+        <motion.aside
+          // Fixed panel docked to the right. No overlay, no pointer-events
+          // block on the dashboard underneath.
+          initial={{ x: '100%', opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '100%', opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+          className={cn(
+            'fixed top-0 right-0 z-50 h-full w-full sm:w-[420px] md:w-[460px]',
+            'bg-paper border-l border-border-subtle shadow-2xl',
+            'flex flex-col',
+          )}
+          role="dialog"
+          aria-label="Chat with Viktor"
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-border-subtle shrink-0">
+            <div className="min-w-0">
+              <h2 className="font-heading text-base font-medium flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-brand-blue" />
+                Ask Viktor (staging chat)
+              </h2>
+              <p className="text-[11px] text-ink-muted mt-0.5">
+                Read-only assistant scoped to <code>{slug}</code>. For real changes, use Telegram or the kanban.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              className="h-7 w-7 shrink-0"
+              aria-label="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
 
-        <ScrollArea className="flex-1">
-          <div ref={scrollRef} className="px-4 py-4 space-y-4">
+          {/* Scrolling message list.
+              min-h-0 is the key — without it, flex-1 children expand to
+              content size and overflow the parent instead of scrolling. */}
+          <div
+            ref={scrollRef}
+            className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4"
+          >
             {messages.length === 0 && (
               <EmptyState onPick={(cmd) => setInput(cmd)} />
             )}
@@ -200,42 +251,53 @@ export function ChatSheet({
               <MessageBubble key={i} m={m} />
             ))}
           </div>
-        </ScrollArea>
 
-        <div className="border-t border-border-subtle p-3 space-y-2">
-          <div className="flex gap-1.5 flex-wrap">
-            {SLASH_CHIPS.map((c) => (
-              <Button
-                key={c.cmd}
-                variant="outline"
-                size="sm"
-                onClick={() => setInput(c.cmd)}
-                className="h-7 text-[11px] font-mono"
+          {/* Composer */}
+          <div className="border-t border-border-subtle p-3 space-y-2 shrink-0">
+            <div className="flex gap-1.5 flex-wrap">
+              {SLASH_CHIPS.map((c) => (
+                <Button
+                  key={c.cmd}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setInput(c.cmd)}
+                  className="h-7 text-[11px] font-mono"
+                  disabled={busy}
+                >
+                  {c.cmd.trim()}
+                </Button>
+              ))}
+            </div>
+            <form onSubmit={onSubmit} className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about brief, posts, suggestions…"
+                className="flex-1 border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                 disabled={busy}
-              >
-                {c.cmd.trim()}
+              />
+              <Button type="submit" disabled={busy || !input.trim()}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
-            ))}
+            </form>
           </div>
-          <form onSubmit={onSubmit} className="flex gap-2">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about brief, posts, suggestions…"
-              className="flex-1 border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-              disabled={busy}
-            />
-            <Button type="submit" disabled={busy || !input.trim()}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </form>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </motion.aside>
+      )}
+    </AnimatePresence>
   )
 }
 
 function MessageBubble({ m }: { m: Message }) {
+  // Collapsible tool events. Default: collapsed once the message is done
+  // streaming (keeps the steps available without cluttering the answer);
+  // expanded while streaming so the user sees activity.
+  const [showTools, setShowTools] = useState(true)
+  useEffect(() => {
+    if (m.role === 'assistant' && !m.streaming) setShowTools(false)
+  }, [m.streaming, m.role])
+
+  const hasTools = m.role === 'assistant' && (m.tools?.length ?? 0) > 0
+
   return (
     <div className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
       <div
@@ -246,20 +308,39 @@ function MessageBubble({ m }: { m: Message }) {
             : 'bg-paper-muted text-ink border border-border-subtle',
         )}
       >
-        {m.role === 'assistant' && m.tools && m.tools.length > 0 && (
-          <div className="mb-2 space-y-1">
-            {m.tools.map((t, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1.5 text-[10px] text-ink-muted"
-              >
-                <Wrench className="h-2.5 w-2.5" />
-                <span className="font-mono">{t.label}</span>
-                {t.status === 'done' && (
-                  <Badge variant="outline" className="h-4 text-[9px] px-1">ok</Badge>
-                )}
+        {hasTools && (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => setShowTools((v) => !v)}
+              className="flex items-center gap-1 text-[10px] text-ink-muted hover:text-ink transition-colors"
+            >
+              {showTools ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              <Wrench className="h-2.5 w-2.5" />
+              <span>
+                {showTools ? 'Hide' : 'Show'} {m.tools!.length} thought
+                {m.tools!.length === 1 ? '' : 's'}
+              </span>
+            </button>
+            {showTools && (
+              <div className="mt-1 space-y-0.5 pl-3 border-l border-border-subtle/70">
+                {m.tools!.map((t, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5 text-[10px] text-ink-muted"
+                  >
+                    <span className="font-mono">{t.label}</span>
+                    {t.status === 'done' && (
+                      <Badge variant="outline" className="h-4 text-[9px] px-1">ok</Badge>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
         {m.content || (m.streaming ? <span className="opacity-60">…</span> : null)}
