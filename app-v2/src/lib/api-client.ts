@@ -274,8 +274,16 @@ export type ChatTurn = { role: 'user' | 'assistant'; content: string }
 export type ChatStreamEvent =
   | { type: 'tool'; label: string; status: 'start' | 'done' }
   | { type: 'token'; text: string }
+  // Phase 6+: real OpenAI-style tool-use events from the model.
+  | { type: 'tool_call'; id: string; name: string; arguments: string }
+  | { type: 'tool_result'; id: string; name: string; result: unknown }
   | { type: 'done'; messageId: string | null }
   | { type: 'error'; detail: string }
+
+const WRITE_TOOLS = new Set(['set_approval', 'patch_post', 'patch_suggestion'])
+export function isWriteTool(name: string): boolean {
+  return WRITE_TOOLS.has(name)
+}
 
 export async function* apiChatStream(args: {
   slug: string

@@ -308,8 +308,16 @@ export default function ClientLayout() {
           Passes the ORIGINAL bundle so downloads always include latest patches. */}
       <EditBar slug={slug} bundle={data} onSaved={refetch} />
 
-      {/* Phase 6 chat widget — read-only LLM scoped to this client. */}
-      <ChatSheet slug={slug} open={chatOpen} onOpenChange={setChatOpen} />
+      {/* Phase 6 chat widget — LLM scoped to this client. Write tools
+          (set_approval, patch_post, patch_suggestion) refresh the
+          dashboard via onWroteSomething so the kanban/drawer reflect
+          changes immediately. */}
+      <ChatSheet
+        slug={slug}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        onWroteSomething={refetch}
+      />
 
       {/* Help dialog */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>

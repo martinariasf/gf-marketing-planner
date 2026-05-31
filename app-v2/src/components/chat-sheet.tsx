@@ -22,11 +22,15 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  CheckCircle2,
+  XCircle,
+  PencilLine,
 } from 'lucide-react'
 import {
   apiChatStream,
   apiLoadChatHistory,
   isApiEnabled,
+  isWriteTool,
   type ChatTurn,
 } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
@@ -36,10 +40,19 @@ interface ToolEvent {
   status: 'start' | 'done'
 }
 
+interface ToolCall {
+  id: string
+  name: string
+  arguments: string
+  result?: unknown
+  done: boolean
+}
+
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  tools?: ToolEvent[]
+  tools?: ToolEvent[]      // synthetic UI labels from server (Reading brief.json…)
+  toolCalls?: ToolCall[]   // real OpenAI-style tool calls (set_approval, etc.)
   streaming?: boolean
 }
 
@@ -54,10 +67,13 @@ export function ChatSheet({
   slug,
   open,
   onOpenChange,
+  onWroteSomething,
 }: {
   slug: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Called after a write tool succeeded so the dashboard can refetch. */
+  onWroteSomething?: () => void
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -145,6 +161,44 @@ export function ChatSheet({
               }
               return next
             })
+          } else if (ev.type === 'tool_call') {
+            setMessages((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = {
+                  ...last,
+                  toolCalls: [
+                    ...(last.toolCalls ?? []),
+                    { id: ev.id, name: ev.name, arguments: ev.arguments, done: false },
+                  ],
+                }
+              }
+              return next
+            })
+          } else if (ev.type === 'tool_result') {
+            setMessages((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = {
+                  ...last,
+                  toolCalls: (last.toolCalls ?? []).map((tc) =>
+                    tc.id === ev.id ? { ...tc, result: ev.result, done: true } : tc,
+                  ),
+                }
+              }
+              return next
+            })
+            // If a write tool just finished successfully, refresh the dashboard
+            // so the kanban / drawer / suggestions reflect the new state.
+            if (isWriteTool(ev.name)) {
+              const ok =
+                typeof ev.result === 'object' &&
+                ev.result !== null &&
+                (ev.result as { ok?: boolean }).ok === true
+              if (ok) onWroteSomething?.()
+            }
           } else if (ev.type === 'error') {
             setMessages((prev) => {
               const next = [...prev]
@@ -189,7 +243,7 @@ export function ChatSheet({
         abortRef.current = null
       }
     },
-    [busy, messages, slug, thread],
+    [busy, messages, slug, thread, onWroteSomething],
   )
 
   const onSubmit = (e: React.FormEvent) => {
@@ -288,15 +342,16 @@ export function ChatSheet({
 }
 
 function MessageBubble({ m }: { m: Message }) {
-  // Collapsible tool events. Default: collapsed once the message is done
-  // streaming (keeps the steps available without cluttering the answer);
-  // expanded while streaming so the user sees activity.
+  // Collapsible synthetic tool steps. Default: collapsed once the message is
+  // done streaming. Real tool CALLS (set_approval etc.) always render — they're
+  // the value, not noise.
   const [showTools, setShowTools] = useState(true)
   useEffect(() => {
     if (m.role === 'assistant' && !m.streaming) setShowTools(false)
   }, [m.streaming, m.role])
 
   const hasTools = m.role === 'assistant' && (m.tools?.length ?? 0) > 0
+  const hasToolCalls = m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0
 
   return (
     <div className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
@@ -343,10 +398,85 @@ function MessageBubble({ m }: { m: Message }) {
             )}
           </div>
         )}
+        {hasToolCalls && (
+          <div className="mb-2 space-y-1.5">
+            {m.toolCalls!.map((tc) => (
+              <ToolCallChip key={tc.id} tc={tc} />
+            ))}
+          </div>
+        )}
         {m.content || (m.streaming ? <span className="opacity-60">…</span> : null)}
       </div>
     </div>
   )
+}
+
+const TOOL_LABEL: Record<string, { label: string; Icon: typeof Wrench }> = {
+  read_brief:        { label: 'Read brief',        Icon: Wrench },
+  read_plan:         { label: 'Read plan',         Icon: Wrench },
+  read_posts:        { label: 'List posts',        Icon: Wrench },
+  read_post:         { label: 'Read post',         Icon: Wrench },
+  read_suggestions:  { label: 'Read suggestions',  Icon: Wrench },
+  set_approval:      { label: 'Set approval',      Icon: CheckCircle2 },
+  patch_post:        { label: 'Edit post',         Icon: PencilLine },
+  patch_suggestion:  { label: 'Update suggestion', Icon: PencilLine },
+}
+
+function ToolCallChip({ tc }: { tc: ToolCall }) {
+  const meta = TOOL_LABEL[tc.name] ?? { label: tc.name, Icon: Wrench }
+  const Icon = meta.Icon
+  const write = isWriteTool(tc.name)
+  const args = parseArgs(tc.arguments)
+  const ok = tc.done && typeof tc.result === 'object' && tc.result !== null && (tc.result as { ok?: boolean }).ok !== false
+  const failed = tc.done && !ok
+  return (
+    <div
+      className={cn(
+        'rounded-md border px-2 py-1.5 text-[11px] flex items-start gap-1.5',
+        write ? 'border-brand-blue/30 bg-brand-blue-50/60' : 'border-border-subtle bg-paper',
+        failed && 'border-rose-300 bg-rose-50',
+      )}
+    >
+      {!tc.done ? (
+        <Loader2 className="h-3 w-3 animate-spin shrink-0 mt-0.5 text-ink-muted" />
+      ) : failed ? (
+        <XCircle className="h-3 w-3 shrink-0 mt-0.5 text-rose-600" />
+      ) : (
+        <Icon className={cn('h-3 w-3 shrink-0 mt-0.5', write ? 'text-brand-blue' : 'text-ink-muted')} />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">{meta.label}</div>
+        {args && (
+          <div className="text-[10px] text-ink-muted font-mono break-all">
+            {args}
+          </div>
+        )}
+        {failed && (
+          <div className="text-[10px] text-rose-700 mt-0.5">
+            {(tc.result as { detail?: string })?.detail ?? 'failed'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function parseArgs(raw: string): string | null {
+  if (!raw) return null
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>
+    const entries = Object.entries(obj)
+    if (entries.length === 0) return null
+    return entries
+      .map(([k, v]) => {
+        const sv = typeof v === 'string' ? v : JSON.stringify(v)
+        const trimmed = sv.length > 60 ? sv.slice(0, 57) + '…' : sv
+        return `${k}=${trimmed}`
+      })
+      .join(' · ')
+  } catch {
+    return raw.slice(0, 120)
+  }
 }
 
 function EmptyState({ onPick }: { onPick: (cmd: string) => void }) {
