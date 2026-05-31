@@ -29,7 +29,11 @@ integration.get(
   async (c) => {
     const slug = c.req.param('slug')
     const url = new URL(c.req.url)
-    const origin = `${url.protocol}//${url.host}`
+    // Honor the edge proxy's protocol — Caddy → api is plain http internally
+    // but the public origin is https. X-Forwarded-Proto is set by Caddy.
+    const proto = c.req.header('X-Forwarded-Proto') ?? url.protocol.replace(':', '')
+    const host = c.req.header('X-Forwarded-Host') ?? url.host
+    const origin = `${proto}://${host}`
     const apiBase = `${origin}/api/v1`
 
     // Look up the agent token from the bootstrap list. We surface it to the
