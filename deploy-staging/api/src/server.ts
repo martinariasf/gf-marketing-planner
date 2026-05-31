@@ -64,14 +64,16 @@ app.get(
   }),
 )
 
-// Mount under /api/v1
+// Mount under /api/v1. authExchange is mounted FIRST because the other
+// subapps register `use('*', requireAuth)` which would otherwise intercept
+// /auth/exchange and 401 it before our handler runs.
 app.route('/api/v1', health)
+app.route('/api/v1', authExchange)
 app.route('/api/v1', clients)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', chat)
-app.route('/api/v1', authExchange)
 
 // Friendly root.
 app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))
