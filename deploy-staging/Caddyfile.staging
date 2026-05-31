@@ -29,13 +29,9 @@
 
     # ── New REST API (Hono) ──────────────────────────────────────────────
     # The Hono app owns the full /api/v1/* path — no rewrite needed.
+    # SSE-friendly transport for /api/v1/clients/:slug/chat/stream (Phase 6).
     handle /api/v1/* {
-        reverse_proxy mp-staging-api:8080
-    }
-
-    # ── Hermes chat gateway (Phase 6) — SSE friendly ─────────────────────
-    handle /chat/* {
-        reverse_proxy hermes-marketing-staging:7000 {
+        reverse_proxy mp-staging-api:8080 {
             flush_interval -1
             transport http {
                 read_timeout 0

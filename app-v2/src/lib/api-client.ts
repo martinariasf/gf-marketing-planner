@@ -180,3 +180,73 @@ export async function apiPatchPost(
 ): Promise<void> {
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
 }
+
+// ── Phase 6: chat streaming ──────────────────────────────────────────────────
+
+export type ChatTurn = { role: 'user' | 'assistant'; content: string }
+
+export type ChatStreamEvent =
+  | { type: 'tool'; label: string; status: 'start' | 'done' }
+  | { type: 'token'; text: string }
+  | { type: 'done'; messageId: string | null }
+  | { type: 'error'; detail: string }
+
+export async function* apiChatStream(args: {
+  slug: string
+  thread: string
+  message: string
+  history: ChatTurn[]
+  signal?: AbortSignal
+}): AsyncGenerator<ChatStreamEvent> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await fetch(`${API_BASE}/clients/${args.slug}/chat/stream`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
+    body: JSON.stringify({ thread: args.thread, message: args.message, history: args.history }),
+    signal: args.signal,
+  })
+  if (!res.ok || !res.body) {
+    yield { type: 'error', detail: `Chat ${res.status}` }
+    return
+  }
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let nl: number
+    while ((nl = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, nl)
+      buf = buf.slice(nl + 2)
+      let ev: string | null = null
+      let data: string | null = null
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event:')) ev = line.slice(6).trim()
+        else if (line.startsWith('data:')) data = (data ?? '') + line.slice(5).trim()
+      }
+      if (!ev || !data) continue
+      try {
+        const parsed = JSON.parse(data) as Record<string, unknown>
+        yield { type: ev as ChatStreamEvent['type'], ...(parsed as object) } as ChatStreamEvent
+      } catch {
+        // skip malformed frame
+      }
+    }
+  }
+}
+
+export async function apiLoadChatHistory(
+  slug: string,
+  thread = 'default',
+): Promise<Array<{ id: string; role: 'user' | 'assistant' | 'tool'; content: string }>> {
+  try {
+    const r = await apiGet<{ items: Array<{ id: string; role: 'user' | 'assistant' | 'tool'; content: string }> }>(
+      `/clients/${slug}/chat/messages?thread=${encodeURIComponent(thread)}`,
+    )
+    return r.items
+  } catch {
+    return []
+  }
+}

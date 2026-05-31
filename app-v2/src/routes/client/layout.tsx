@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/dialog'
 import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
 import { EditBar } from '@/components/edit-bar'
+import { ChatSheet, ChatTrigger } from '@/components/chat-sheet'
 import { useClient } from '@/hooks/use-client'
 import { useEdit, deepMerge } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
@@ -77,6 +78,7 @@ export default function ClientLayout() {
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const { data, loading, error, refetch } = useClient(slug ?? 'fitvibe-demo')
   const { editMode, setEditMode, patches } = useEdit()
 
@@ -222,6 +224,7 @@ export default function ClientLayout() {
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600 hidden md:inline-flex">
               Viktor v2
             </Badge>
+            <ChatTrigger onClick={() => setChatOpen(true)} />
             <Button
               variant={editMode ? 'default' : 'outline'}
               size="sm"
@@ -304,6 +307,9 @@ export default function ClientLayout() {
       {/* Floating edit toggle + dirty-files panel.
           Passes the ORIGINAL bundle so downloads always include latest patches. */}
       <EditBar slug={slug} bundle={data} onSaved={refetch} />
+
+      {/* Phase 6 chat widget — read-only LLM scoped to this client. */}
+      <ChatSheet slug={slug} open={chatOpen} onOpenChange={setChatOpen} />
 
       {/* Help dialog */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>

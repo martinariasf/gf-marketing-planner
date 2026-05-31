@@ -36,7 +36,9 @@ services:
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
       BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
-      HERMES_CHAT_BASE: "http://hermes-marketing-staging:7000"
+      # Phase 6 chat — talks directly to OpenRouter from inside the api.
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      CHAT_MODEL: "${CHAT_MODEL:-anthropic/claude-sonnet-4.5}"
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:

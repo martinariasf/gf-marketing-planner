@@ -17,6 +17,7 @@ import { clients } from './routes/clients.js'
 import { userOwned } from './routes/userOwned.js'
 import { viktorOwned } from './routes/viktorOwned.js'
 import { auditRoute } from './routes/audit.js'
+import { chat } from './routes/chat.js'
 import { ensureCollections } from './ensureCollections.js'
 import { problem } from './problem.js'
 
@@ -64,6 +65,7 @@ app.route('/api/v1', clients)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', auditRoute)
+app.route('/api/v1', chat)
 
 // Friendly root.
 app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))

@@ -27,8 +27,10 @@ export const env = {
   //   agent_xxx:agent:staging-demo,dash_yyy:admin:*
   bootstrapTokens: process.env.BOOTSTRAP_TOKENS ?? '',
 
-  // Hermes chat (Phase 6 wires this up)
-  hermesChatBase: process.env.HERMES_CHAT_BASE ?? 'http://hermes-marketing-staging:7000',
+  // Phase 6 chat — in-process implementation lives in routes/chat.ts and
+  // talks to OpenRouter directly. No Hermes image fork required.
+  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  chatModel: process.env.CHAT_MODEL ?? 'anthropic/claude-sonnet-4.5',
 
   // Misc
   logLevel: process.env.LOG_LEVEL ?? 'info',
