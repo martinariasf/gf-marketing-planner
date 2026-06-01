@@ -11,7 +11,7 @@
 // pointer block, dashboard remains fully usable while chatting. ESC closes.
 
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -158,21 +158,30 @@ export function ChatSheet({
     }
   }, [open, initialMessage])
 
-  // Load history on open.
+  // Load history from the server ONCE per thread, on first open. We must not
+  // reload on every reopen: the panel now stays mounted across close/open (see
+  // the always-mounted aside below), so a running turn keeps streaming into
+  // state while the panel is hidden. Re-fetching here would clobber that live
+  // turn with the not-yet-persisted DB snapshot (Viktor's reply is only saved
+  // when the whole run finishes — ~minutes on the slow image model).
+  const loadedThreadRef = useRef<string | null>(null)
   useEffect(() => {
     if (!open) return
+    if (loadedThreadRef.current === thread) return
+    if (busy) return // never overwrite an in-flight conversation
     let cancelled = false
     apiLoadChatHistory(slug, thread).then((items) => {
       if (cancelled) return
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      loadedThreadRef.current = thread
       setMessages(hist)
     })
     return () => {
       cancelled = true
     }
-  }, [open, slug, thread])
+  }, [open, slug, thread, busy])
 
   // Autoscroll the actual scroll container (not an inner div).
   useLayoutEffect(() => {
@@ -328,23 +337,29 @@ export function ChatSheet({
   }
 
   return (
-    <AnimatePresence>
-      {open && (
+    <>
         <motion.aside
           // Fixed panel docked to the right. No overlay, no pointer-events
           // block on the dashboard underneath.
-          initial={{ x: '100%', opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: '100%', opacity: 0 }}
+          //
+          // IMPORTANT: this stays MOUNTED when closed (we slide it off-screen
+          // instead of unmounting via AnimatePresence). That's what lets a
+          // long-running turn keep streaming, and preserves the conversation,
+          // when you close the panel mid-task and reopen it. Unmounting used to
+          // throw the live reply away and make it look like Viktor "forgot".
+          initial={false}
+          animate={open ? { x: 0, opacity: 1 } : { x: '100%', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           className={cn(
             'fixed top-0 right-0 z-50 h-full w-full',
             'bg-paper border-l border-border-subtle shadow-2xl',
             'flex flex-col',
+            !open && 'pointer-events-none', // don't trap clicks while hidden
           )}
           style={{ maxWidth: '100vw', width: `min(100vw, ${width}px)` }}
           role="dialog"
           aria-label="Chat with Viktor"
+          aria-hidden={!open}
         >
           {/* Drag handle to resize. Hidden on mobile (panel is full-width). */}
           <div
@@ -392,6 +407,20 @@ export function ChatSheet({
             {messages.map((m, i) => (
               <MessageBubble key={i} m={m} />
             ))}
+            {/* If we're not actively streaming in THIS mount but the last saved
+                turn is an unanswered user message, a run is still in flight (or
+                was interrupted) — e.g. after a full page reload during a slow
+                image generation. Viktor's reply only persists when the whole
+                run finishes, so surface that instead of looking "forgotten". */}
+            {!busy &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === 'user' && (
+                <div className="flex items-center gap-2 text-[12px] text-ink-muted px-1">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" />
+                  Viktor is still working on your last message — this can take a
+                  few minutes with the current image model.
+                </div>
+              )}
           </div>
 
           {/* Composer */}
@@ -433,8 +462,7 @@ export function ChatSheet({
             </form>
           </div>
         </motion.aside>
-      )}
-    </AnimatePresence>
+    </>
   )
 }
 
