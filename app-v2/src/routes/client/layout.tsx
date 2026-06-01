@@ -26,6 +26,8 @@ import {
   HelpCircle,
   Pencil,
   Eye,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -81,7 +83,35 @@ export default function ClientLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [chatPrefill, setChatPrefill] = useState('')
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('mp.chatWidth'))
+    return Number.isFinite(saved) && saved >= 340 && saved <= 820 ? saved : 460
+  })
+  useEffect(() => {
+    localStorage.setItem('mp.chatWidth', String(chatWidth))
+  }, [chatWidth])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
+    () => localStorage.getItem('mp.sidebarCollapsed') === '1',
+  )
+  useEffect(() => {
+    localStorage.setItem('mp.sidebarCollapsed', sidebarCollapsed ? '1' : '0')
+  }, [sidebarCollapsed])
   const { data, loading, error, refetch } = useClient(slug ?? 'fitvibe-demo')
+
+  // Any component (e.g. the calendar's "Change picture" button) can ask the
+  // chat to open pre-filled by dispatching a `mp:open-chat` CustomEvent with
+  // { message }. ChatSheet fills its composer when it opens or when the message
+  // changes — both covered here since we set the message then open the panel.
+  useEffect(() => {
+    const onOpenChat = (e: Event) => {
+      const detail = (e as CustomEvent<{ message?: string }>).detail
+      setChatPrefill(detail?.message ?? '')
+      setChatOpen(true)
+    }
+    window.addEventListener('mp:open-chat', onOpenChat as EventListener)
+    return () => window.removeEventListener('mp:open-chat', onOpenChat as EventListener)
+  }, [])
   const { editMode, setEditMode, patches } = useEdit()
 
   // Build a "merged" bundle: original data + any locally-edited patches.
@@ -149,8 +179,18 @@ export default function ClientLayout() {
     />
   )
 
+  // When chat is open on sm+ we shift everything left so the panel doesn't
+  // cover content. Mobile chat is full-width — no shift needed there.
+  const chatShift =
+    chatOpen && typeof window !== 'undefined' && window.innerWidth >= 640
+      ? chatWidth
+      : 0
+
   return (
-    <div className="min-h-screen bg-paper-muted">
+    <div
+      className="min-h-screen bg-paper-muted transition-[padding] duration-200"
+      style={{ paddingRight: chatShift }}
+    >
       <header className="border-b border-border-subtle bg-paper sticky top-0 z-30">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 flex-wrap">
           {/* Mobile hamburger */}
@@ -286,11 +326,38 @@ export default function ClientLayout() {
         <WorkflowStrip current={currentPhase} />
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
+      <div
+        className="mx-auto max-w-7xl px-4 sm:px-6 py-6 grid grid-cols-1 gap-6"
+        style={{
+          gridTemplateColumns:
+            typeof window !== 'undefined' && window.innerWidth >= 1024
+              ? `${sidebarCollapsed ? 60 : 220}px 1fr`
+              : undefined,
+        }}
+      >
         {/* Desktop sidebar */}
         <aside className="hidden lg:block lg:sticky lg:top-[150px] lg:self-start">
+          <div className="flex items-center justify-end pb-2">
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:text-brand-blue hover:bg-paper transition-colors"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
+          </div>
           <ScrollArea className="lg:max-h-[calc(100vh-180px)]">
-            {navContent}
+            <NavContent
+              currentSegment={currentSegment}
+              openSuggestions={openSuggestions}
+              collapsed={sidebarCollapsed}
+            />
           </ScrollArea>
         </aside>
 
@@ -319,6 +386,9 @@ export default function ClientLayout() {
         open={chatOpen}
         onOpenChange={setChatOpen}
         onWroteSomething={refetch}
+        initialMessage={chatPrefill}
+        width={chatWidth}
+        onWidthChange={setChatWidth}
       />
 
       {/* Help dialog */}
@@ -370,9 +440,11 @@ export default function ClientLayout() {
 function NavContent({
   currentSegment,
   openSuggestions,
+  collapsed = false,
 }: {
   currentSegment: string
   openSuggestions: number
+  collapsed?: boolean
 }) {
   return (
     <nav className="space-y-0.5">
@@ -387,8 +459,10 @@ function NavContent({
             key={n.to}
             to={n.disabled ? '#' : n.to}
             onClick={(e) => n.disabled && e.preventDefault()}
+            title={collapsed ? n.label : undefined}
             className={cn(
-              'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+              'relative flex items-center gap-2.5 rounded-md py-2 text-sm transition-colors',
+              collapsed ? 'px-2 justify-center' : 'px-3',
               n.disabled
                 ? 'text-ink-muted/50 cursor-not-allowed'
                 : isActive
@@ -403,24 +477,38 @@ function NavContent({
                 transition={{ type: 'spring', stiffness: 400, damping: 32 }}
               />
             )}
-            <span className="relative flex items-center gap-2.5 flex-1">
-              <n.icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1 truncate">{n.label}</span>
-              {badge !== null && (
-                <span
-                  className={cn(
-                    'flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-semibold',
-                    isActive
-                      ? 'bg-white/25 text-white'
-                      : 'bg-brand-green-100 text-brand-green-600',
-                  )}
-                >
-                  {badge}
-                </span>
+            <span
+              className={cn(
+                'relative flex items-center gap-2.5',
+                collapsed ? '' : 'flex-1',
               )}
-              {n.disabled && (
-                <span className="text-[10px] uppercase tracking-wider opacity-70">
-                  soon
+            >
+              <n.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 truncate">{n.label}</span>
+                  {badge !== null && (
+                    <span
+                      className={cn(
+                        'flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                        isActive
+                          ? 'bg-white/25 text-white'
+                          : 'bg-brand-green-100 text-brand-green-600',
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                  {n.disabled && (
+                    <span className="text-[10px] uppercase tracking-wider opacity-70">
+                      soon
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && badge !== null && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-semibold bg-brand-green-100 text-brand-green-600">
+                  {badge}
                 </span>
               )}
             </span>

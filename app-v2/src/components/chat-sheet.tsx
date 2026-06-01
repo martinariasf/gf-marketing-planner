@@ -25,6 +25,9 @@ import {
   CheckCircle2,
   XCircle,
   PencilLine,
+  Plus,
+  Trash2,
+  FileText,
 } from 'lucide-react'
 import {
   apiChatStream,
@@ -57,30 +60,103 @@ interface Message {
 }
 
 const SLASH_CHIPS: Array<{ cmd: string; hint: string }> = [
+  { cmd: '/draft ', hint: 'draft a post on <topic>' },
   { cmd: '/suggest', hint: '3 next post ideas' },
   { cmd: '/weekly', hint: 'weekly summary' },
-  { cmd: '/sync metrics', hint: 'metrics plan' },
-  { cmd: '/draft ', hint: 'draft a post on <topic>' },
+  { cmd: '/approve ', hint: 'approve <postId>' },
+  { cmd: '/edit ', hint: 'edit post <id>: <change>' },
+  { cmd: '/brief ', hint: 'update brief: <change>' },
 ]
+
+const CHAT_WIDTH_MIN = 340
+const CHAT_WIDTH_MAX = 820
 
 export function ChatSheet({
   slug,
   open,
   onOpenChange,
   onWroteSomething,
+  initialMessage,
+  width,
+  onWidthChange,
 }: {
   slug: string
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Called after a write tool succeeded so the dashboard can refetch. */
   onWroteSomething?: () => void
+  /**
+   * When this changes to a non-empty value, the composer is pre-filled with it
+   * (not auto-sent) and focused. Used by "Change picture" on the calendar so
+   * the user lands in the chat with a ready-to-edit prompt.
+   */
+  initialMessage?: string
+  /** Panel width in px (desktop). Mobile stays full-width. */
+  width: number
+  onWidthChange: (w: number) => void
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const thread = `dash-${slug}`
+
+  // Drag-to-resize from the left edge.
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const onResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startW: width }
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      const next = Math.min(
+        CHAT_WIDTH_MAX,
+        Math.max(CHAT_WIDTH_MIN, d.startW + (d.startX - ev.clientX)),
+      )
+      onWidthChange(next)
+    }
+    const onUp = () => {
+      dragRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'ew-resize'
+  }
+
+  // Auto-grow the textarea up to ~8 lines.
+  const autosize = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+  }, [])
+  useLayoutEffect(() => {
+    autosize()
+  }, [input, autosize])
+
+  // Pre-fill the composer when a caller hands us an initial message (e.g. the
+  // "Change picture" button). Keyed on the raw string so re-clicking the same
+  // post re-fills even if the text is identical (we append a nonce upstream).
+  useEffect(() => {
+    if (open && initialMessage) {
+      setInput(initialMessage)
+      // Focus + move caret to end on the next frame, after the panel mounts.
+      requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (el) {
+          el.focus()
+          el.setSelectionRange(el.value.length, el.value.length)
+        }
+      })
+    }
+  }, [open, initialMessage])
 
   // Load history on open.
   useEffect(() => {
@@ -262,22 +338,34 @@ export function ChatSheet({
           exit={{ x: '100%', opacity: 0 }}
           transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           className={cn(
-            'fixed top-0 right-0 z-50 h-full w-full sm:w-[420px] md:w-[460px]',
+            'fixed top-0 right-0 z-50 h-full w-full',
             'bg-paper border-l border-border-subtle shadow-2xl',
             'flex flex-col',
           )}
+          style={{ maxWidth: '100vw', width: `min(100vw, ${width}px)` }}
           role="dialog"
           aria-label="Chat with Viktor"
         >
+          {/* Drag handle to resize. Hidden on mobile (panel is full-width). */}
+          <div
+            onPointerDown={onResizeStart}
+            className="hidden sm:block absolute left-0 top-0 h-full w-1.5 -translate-x-1/2 cursor-ew-resize z-10 group"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chat"
+            title="Drag to resize"
+          >
+            <div className="h-full w-px mx-auto bg-border-subtle group-hover:bg-brand-blue/60 transition-colors" />
+          </div>
           {/* Header */}
           <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-border-subtle shrink-0">
             <div className="min-w-0">
               <h2 className="font-heading text-base font-medium flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-brand-blue" />
-                Ask Viktor (staging chat)
+                Ask Viktor
               </h2>
               <p className="text-[11px] text-ink-muted mt-0.5">
-                Read-only assistant scoped to <code>{slug}</code>. For real changes, use Telegram or the kanban.
+                Scoped to <code>{slug}</code>. Same actions as the Telegram bot — draft, edit, approve, update brief/plan/goals.
               </p>
             </div>
             <Button
@@ -322,15 +410,24 @@ export function ChatSheet({
                 </Button>
               ))}
             </div>
-            <form onSubmit={onSubmit} className="flex gap-2">
-              <input
+            <form onSubmit={onSubmit} className="flex gap-2 items-end">
+              <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about brief, posts, suggestions…"
-                className="flex-1 border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                onKeyDown={(e) => {
+                  // Enter sends, Shift+Enter newline.
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void send(input)
+                  }
+                }}
+                rows={1}
+                placeholder="Ask about brief, posts, suggestions… (Shift+Enter for newline)"
+                className="flex-1 resize-y min-h-[40px] max-h-[200px] border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 leading-snug"
                 disabled={busy}
               />
-              <Button type="submit" disabled={busy || !input.trim()}>
+              <Button type="submit" disabled={busy || !input.trim()} className="shrink-0">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
@@ -419,7 +516,13 @@ const TOOL_LABEL: Record<string, { label: string; Icon: typeof Wrench }> = {
   read_suggestions:  { label: 'Read suggestions',  Icon: Wrench },
   set_approval:      { label: 'Set approval',      Icon: CheckCircle2 },
   patch_post:        { label: 'Edit post',         Icon: PencilLine },
+  create_post:       { label: 'Create post',       Icon: Plus },
+  delete_post:       { label: 'Delete post',       Icon: Trash2 },
   patch_suggestion:  { label: 'Update suggestion', Icon: PencilLine },
+  patch_brief:       { label: 'Update brief',      Icon: FileText },
+  patch_plan:        { label: 'Update plan',       Icon: FileText },
+  patch_goals:       { label: 'Update goals',      Icon: FileText },
+  patch_learnings:   { label: 'Update learnings',  Icon: FileText },
 }
 
 function ToolCallChip({ tc }: { tc: ToolCall }) {
@@ -483,9 +586,9 @@ function EmptyState({ onPick }: { onPick: (cmd: string) => void }) {
   return (
     <div className="text-center py-8 space-y-3">
       <Sparkles className="h-8 w-8 mx-auto text-brand-blue/40" />
-      <p className="text-sm font-medium">Hi. Ask anything about this client.</p>
+      <p className="text-sm font-medium">Hi. I can do what the Telegram bot does.</p>
       <p className="text-xs text-ink-muted max-w-xs mx-auto">
-        I can read the brief, plan, posts and suggestions, and reason over them. Try a slash command:
+        Draft, edit or delete posts. Approve or reject. Update the brief, plan and goals. Just tell me what you want — no need to confirm.
       </p>
       <div className="flex flex-col gap-1.5 max-w-xs mx-auto">
         {SLASH_CHIPS.map((c) => (

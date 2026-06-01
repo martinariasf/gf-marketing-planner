@@ -11,6 +11,7 @@ import { audit } from '../audit.js'
 import { disk } from '../diskData.js'
 import {
   loadPostPatches,
+  loadCreatedPosts,
   loadSuggestionStates,
   loadApprovalsV2,
   latestApprovalByPost,
@@ -24,14 +25,36 @@ type PostBase = {
   approval?: { status?: string }
 } & Record<string, unknown>
 
+// The chat agent doesn't always write the full image URL — it sometimes PATCHes
+// a relative path like "assets/p002_cover.png", a bare filename, or even an
+// absolute container path. Any of those break the dashboard <img>. Normalize to
+// our public, basicauth-bypassing file route (root-relative so it works on any
+// host). Leaves real absolute URLs (Unsplash, or the already-correct full URL)
+// untouched.
+function normalizeImageUrl(slug: string, image: unknown): unknown {
+  if (typeof image !== 'string') return image
+  const v = image.trim()
+  if (!v) return v
+  if (/^https?:\/\//i.test(v) || v.startsWith('/api/v1/')) return v
+  const name = v.split('/').filter(Boolean).pop() ?? v
+  return `/api/v1/clients/${slug}/assets/files/${name}`
+}
+
 async function buildPost(slug: string, id: string): Promise<PostBase | null> {
-  const base = (await disk.post(slug, id)) as PostBase | null
-  if (!base) return null
+  // Try disk first, then fall back to dashboard/chat-created posts in PB.
+  let base = (await disk.post(slug, id)) as PostBase | null
+  if (!base) {
+    const created = await loadCreatedPosts(slug)
+    const c = created.get(id)
+    if (!c) return null
+    base = { ...(c as PostBase), id }
+  }
   const patches = await loadPostPatches(slug)
   const approvals = await latestApprovalByPost(slug)
   const patch = patches.get(id) ?? {}
   const approval = approvals.get(id)
   const next: PostBase = { ...base, ...patch, id }
+  if ('image' in next) next.image = normalizeImageUrl(slug, next.image)
   if (approval) {
     next.approval = {
       ...(base.approval ?? {}),
@@ -48,19 +71,99 @@ viktorOwned.use('*', requireAuth)
 viktorOwned.get('/clients/:slug/posts', requireScope(), async (c) => {
   const slug = c.req.param('slug')
   const idsFromIndex = (await disk.postsIndex(slug))?.posts
-  const ids = idsFromIndex ?? (await disk.listPostFiles(slug))
+  const diskIds = idsFromIndex ?? (await disk.listPostFiles(slug))
+  const created = await loadCreatedPosts(slug)
+  const allIds = [...diskIds, ...Array.from(created.keys()).filter((id) => !diskIds.includes(id))]
   const status = c.req.query('status')
   const pillar = c.req.query('pillar')
+  const includeDeleted = c.req.query('includeDeleted') === 'true'
   const items: PostBase[] = []
-  for (const id of ids) {
+  for (const id of allIds) {
     const post = await buildPost(slug, id)
     if (!post) continue
+    if (!includeDeleted && post.status === 'deleted') continue
     if (status && post.approval?.status !== status && post.status !== status) continue
     if (pillar && post.pillar !== pillar) continue
     items.push(post)
   }
   return c.json({ items })
 })
+
+// Create a new post originated from the dashboard or chat. Lives in
+// `posts_created`. Auto-assigns an id like `c-<timestamp>` so it can't collide
+// with Viktor's `pNNN` ids.
+viktorOwned.post(
+  '/clients/:slug/posts',
+  requireScope(),
+  // 'agent' = the Hermes bot (Telegram + in-app chat). requireScope() already
+  // confines it to its own client, so letting it create/patch posts, move
+  // approvals and update suggestions is safe — and is exactly what the system
+  // prompt instructs it to do. Strategy docs (brief/plan/goals/learnings PUT in
+  // userOwned) stay dash/admin-only on purpose.
+  requireRole('dash', 'admin', 'agent'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    let body: Record<string, unknown>
+    try {
+      body = await c.req.json()
+    } catch {
+      return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
+    }
+    const principal = c.get('principal')
+    const id =
+      typeof body.id === 'string' && body.id.trim()
+        ? body.id.trim()
+        : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const data = { ...body, id }
+    await withPb((pb) =>
+      pb.collection('posts_created').create({
+        slug,
+        postId: id,
+        data,
+        ts: new Date().toISOString(),
+        actor: principal.label ?? principal.token.slice(0, 12),
+      }),
+    )
+    await audit(principal, { action: 'post.create', slug, resourceId: id, after: data })
+    const next = await buildPost(slug, id)
+    return c.json(next, 201)
+  },
+)
+
+// Soft delete: appends a posts_patches row with { status: 'deleted' }.
+// List endpoint filters these out unless ?includeDeleted=true. Recovery is
+// a single PATCH back to a different status.
+viktorOwned.delete(
+  '/clients/:slug/posts/:id',
+  requireScope(),
+  requireRole('dash', 'admin', 'agent'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const postId = c.req.param('id')
+    const exists = await buildPost(slug, postId)
+    if (!exists) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'No such post' })
+    }
+    const principal = c.get('principal')
+    await withPb((pb) =>
+      pb.collection('posts_patches').create({
+        slug,
+        postId,
+        patch: { status: 'deleted' },
+        ts: new Date().toISOString(),
+        actor: principal.label ?? principal.token.slice(0, 12),
+      }),
+    )
+    await audit(principal, {
+      action: 'post.delete',
+      slug,
+      resourceId: postId,
+      before: exists,
+      after: { status: 'deleted' },
+    })
+    return c.json({ ok: true, id: postId })
+  },
+)
 
 viktorOwned.get('/clients/:slug/posts/:id', requireScope(), async (c) => {
   const post = await buildPost(c.req.param('slug'), c.req.param('id'))
@@ -71,7 +174,7 @@ viktorOwned.get('/clients/:slug/posts/:id', requireScope(), async (c) => {
 viktorOwned.patch(
   '/clients/:slug/posts/:id',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     const postId = c.req.param('id')
@@ -126,7 +229,7 @@ viktorOwned.get('/clients/:slug/suggestions', requireScope(), async (c) => {
 viktorOwned.patch(
   '/clients/:slug/suggestions/:id',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     const suggestionId = c.req.param('id')
@@ -229,7 +332,7 @@ viktorOwned.get('/clients/:slug/approvals', requireScope(), async (c) => {
 viktorOwned.post(
   '/clients/:slug/approvals',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     let body: { postId?: string; decision?: string; note?: string }

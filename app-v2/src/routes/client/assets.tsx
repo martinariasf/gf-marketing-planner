@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
+import { useOutletContext, useParams } from 'react-router'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -18,12 +19,19 @@ import {
 } from '@/components/ui/tabs'
 import { Pillar } from '@/components/pillar'
 import { fmtDate } from '@/lib/format'
-import { ImageOff, Check, AlertCircle, Sparkles, User, Briefcase } from 'lucide-react'
+import { ImageOff, Check, AlertCircle, Sparkles, User, Briefcase, Upload, Trash2, Loader2, Lightbulb } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  isApiEnabled,
+  apiListInspiration,
+  apiUploadInspiration,
+  apiDeleteInspiration,
+  type InspirationItem,
+} from '@/lib/api-client'
 import type { ClientBundle } from '@/lib/client-data'
 import type { AssetItem, AssetSource } from '@/types'
 
-const SOURCE_ICON: Record<AssetSource, typeof Sparkles> = {
+const SOURCE_ICON: Record<string, typeof Sparkles> = {
   'nano-banana': Sparkles,
   canva: Briefcase,
   unsplash: User,
@@ -31,7 +39,7 @@ const SOURCE_ICON: Record<AssetSource, typeof Sparkles> = {
   other: User,
 }
 
-const SOURCE_LABEL: Record<AssetSource, string> = {
+const SOURCE_LABEL: Record<string, string> = {
   'nano-banana': 'AI generated',
   canva: 'Canva',
   unsplash: 'Stock',
@@ -39,10 +47,34 @@ const SOURCE_LABEL: Record<AssetSource, string> = {
   other: 'Other',
 }
 
+const SOURCE_TONE: Record<string, string> = {
+  'nano-banana': 'bg-violet-100 text-violet-700',
+  canva: 'bg-cyan-100 text-cyan-700',
+  unsplash: 'bg-neutral-100 text-neutral-700',
+  internal: 'bg-brand-blue-50 text-brand-blue',
+  other: 'bg-paper-muted text-ink-muted',
+}
+
+// The agent writes provider strings like "openrouter:gpt-5.4-image-2". Anything
+// not in the maps above is treated as an AI-generated image so the tab never
+// crashes on an unknown source (the original bug: undefined icon component).
+function sourceMeta(source: AssetSource): { Icon: typeof Sparkles; label: string; tone: string } {
+  return {
+    Icon: SOURCE_ICON[source] ?? Sparkles,
+    label: SOURCE_LABEL[source] ?? 'AI generated',
+    tone: SOURCE_TONE[source] ?? 'bg-violet-100 text-violet-700',
+  }
+}
+
+// Stock = Unsplash; everything else that isn't a manual/internal upload counts
+// as AI for the filter chips.
+const isAiSource = (s: AssetSource) => s !== 'unsplash' && s !== 'canva' && s !== 'internal'
+
 type Filter = 'all' | 'approved' | 'draft' | 'ai' | 'stock'
 
 export default function AssetsView() {
   const { assets, posts, plan, slug } = useOutletContext<ClientBundle>()
+  const { slug: routeSlug = slug } = useParams<{ slug: string }>()
   const [filter, setFilter] = useState<Filter>('all')
   const [selected, setSelected] = useState<AssetItem | null>(null)
 
@@ -64,7 +96,7 @@ export default function AssetsView() {
     switch (filter) {
       case 'approved': return items.filter((i) => i.finalApproved)
       case 'draft':    return items.filter((i) => !i.finalApproved)
-      case 'ai':       return items.filter((i) => i.source === 'nano-banana')
+      case 'ai':       return items.filter((i) => isAiSource(i.source))
       case 'stock':    return items.filter((i) => i.source === 'unsplash')
       default:         return items
     }
@@ -72,20 +104,25 @@ export default function AssetsView() {
 
   if (!assets || items.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-10 text-center text-ink-muted">
-          <ImageOff className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">
-            No <code>assets/manifest.json</code> yet. Viktor populates this when
-            he generates an image or Pilar uploads one via Telegram.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="space-y-8">
+        {isApiEnabled && <InspirationBoard slug={routeSlug} />}
+        <Card>
+          <CardContent className="p-10 text-center text-ink-muted">
+            <ImageOff className="h-8 w-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">
+              No <code>assets/manifest.json</code> yet. Viktor populates this when
+              he generates an image or Pilar uploads one via Telegram.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {isApiEnabled && <InspirationBoard slug={routeSlug} />}
+      <div className="space-y-6">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
@@ -194,7 +231,7 @@ export default function AssetsView() {
                   )}
                 </DialogTitle>
                 <DialogDescription>
-                  {SOURCE_LABEL[selected.source]} · Created by {selected.owner} ·{' '}
+                  {sourceMeta(selected.source).label} · Created by {selected.owner} ·{' '}
                   {fmtDate(selected.createdAt)}
                 </DialogDescription>
               </DialogHeader>
@@ -247,23 +284,159 @@ export default function AssetsView() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }
 
-function SourceBadge({ source }: { source: AssetSource }) {
-  const Icon = SOURCE_ICON[source]
-  const tone: Record<AssetSource, string> = {
-    'nano-banana': 'bg-violet-100 text-violet-700',
-    canva: 'bg-cyan-100 text-cyan-700',
-    unsplash: 'bg-neutral-100 text-neutral-700',
-    internal: 'bg-brand-blue-50 text-brand-blue',
-    other: 'bg-paper-muted text-ink-muted',
+// ── Inspiration board (per-client drag-drop image library) ───────────────────
+
+function InspirationBoard({ slug }: { slug: string }) {
+  const [items, setItems] = useState<InspirationItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    apiListInspiration(slug).then((list) => {
+      if (!cancelled) {
+        setItems(list)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  const uploadFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const images = Array.from(files).filter((f) => f.type.startsWith('image/'))
+      if (images.length === 0) {
+        toast.error('Only image files can be added here')
+        return
+      }
+      setUploading(true)
+      try {
+        for (const file of images) {
+          const item = await apiUploadInspiration(slug, file)
+          setItems((prev) => [item, ...prev])
+        }
+        toast(`Added ${images.length} image${images.length === 1 ? '' : 's'} to inspiration`)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Upload failed')
+      } finally {
+        setUploading(false)
+      }
+    },
+    [slug],
+  )
+
+  const remove = async (id: string) => {
+    const prev = items
+    setItems((cur) => cur.filter((i) => i.id !== id))
+    try {
+      await apiDeleteInspiration(slug, id)
+    } catch {
+      setItems(prev) // rollback
+      toast.error('Could not remove')
+    }
   }
+
   return (
-    <Badge className={cn('text-[10px] flex items-center gap-1', tone[source])}>
+    <section className="space-y-3">
+      <div>
+        <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
+          <Lightbulb className="h-3 w-3" />
+          Inspiration
+        </p>
+        <h2 className="text-lg font-semibold">Mood & reference board</h2>
+        <p className="text-sm text-ink-muted">
+          Drop images here that capture the look you're after. Viktor can use them
+          as style reference when generating visuals.
+        </p>
+      </div>
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          if (e.dataTransfer.files?.length) void uploadFiles(e.dataTransfer.files)
+        }}
+        onClick={() => fileRef.current?.click()}
+        className={cn(
+          'rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors',
+          dragOver
+            ? 'border-brand-blue bg-brand-blue-50/50'
+            : 'border-border-subtle hover:border-brand-blue/50 hover:bg-paper-muted/50',
+        )}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length) void uploadFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+        <div className="flex flex-col items-center gap-1.5 text-ink-muted">
+          {uploading ? (
+            <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
+          ) : (
+            <Upload className="h-6 w-6" />
+          )}
+          <p className="text-sm">
+            <span className="text-brand-blue font-medium">Drag & drop</span> images, or click to browse
+          </p>
+          <p className="text-[11px]">PNG, JPG, WEBP or GIF · up to 15 MB each</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-ink-muted">Loading inspiration…</p>
+      ) : items.length > 0 ? (
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {items.map((it) => (
+            <div
+              key={it.id}
+              className="group relative aspect-square rounded-lg overflow-hidden border border-border-subtle bg-paper-muted"
+            >
+              <img src={it.url} alt={it.note || it.filename} loading="lazy" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => remove(it.id)}
+                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600"
+                aria-label="Remove from inspiration"
+                title="Remove"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-muted italic">No inspiration images yet — drop some above.</p>
+      )}
+    </section>
+  )
+}
+
+function SourceBadge({ source }: { source: AssetSource }) {
+  const { Icon, label, tone } = sourceMeta(source)
+  return (
+    <Badge className={cn('text-[10px] flex items-center gap-1', tone)}>
       <Icon className="h-2.5 w-2.5" />
-      {SOURCE_LABEL[source]}
+      {label}
     </Badge>
   )
 }
