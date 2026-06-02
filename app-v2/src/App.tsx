@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { EditProvider } from '@/lib/edit-store'
+import { LanguageProvider } from '@/lib/i18n'
 
 const ClientPicker  = lazy(() => import('@/routes/index'))
 const ClientLayout  = lazy(() => import('@/routes/client/layout'))
@@ -9,7 +10,6 @@ const ContextView   = lazy(() => import('@/routes/client/context'))
 const GoalsView     = lazy(() => import('@/routes/client/goals'))
 const StrategyView  = lazy(() => import('@/routes/client/strategy'))
 const CalendarView  = lazy(() => import('@/routes/client/calendar'))
-const PipelineView  = lazy(() => import('@/routes/client/pipeline'))
 const ApprovalsView = lazy(() => import('@/routes/client/approvals'))
 const AssetsView    = lazy(() => import('@/routes/client/assets'))
 const PerformanceView = lazy(() => import('@/routes/client/performance'))
@@ -28,6 +28,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      <LanguageProvider>
       <EditProvider>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -38,7 +39,6 @@ export default function App() {
             <Route path="goals"       element={<GoalsView />} />
             <Route path="strategy"    element={<StrategyView />} />
             <Route path="calendar"    element={<CalendarView />} />
-            <Route path="pipeline"    element={<PipelineView />} />
             <Route path="approvals"   element={<ApprovalsView />} />
             <Route path="assets"      element={<AssetsView />} />
             <Route path="performance" element={<PerformanceView />} />
@@ -50,6 +50,7 @@ export default function App() {
         </Routes>
       </Suspense>
       </EditProvider>
+      </LanguageProvider>
     </BrowserRouter>
   )
 }

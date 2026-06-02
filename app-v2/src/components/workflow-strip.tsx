@@ -1,21 +1,19 @@
 import { motion } from 'framer-motion'
 import { NavLink, useParams } from 'react-router'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 
 export type WorkflowPhase = 'plan' | 'draft' | 'refine' | 'prepare' | 'learn'
 
 const PHASES: Array<{
   key: WorkflowPhase
-  label: string
-  hint: string
   /** Sub-route to land on when this phase is clicked. */
   to: string
 }> = [
-  { key: 'plan',    label: 'Plan',    hint: 'Read strategy, priorities, and goals', to: 'context' },
-  { key: 'draft',   label: 'Draft',   hint: 'Create content ideas and assets',      to: 'calendar' },
-  { key: 'refine',  label: 'Refine',  hint: 'Adjust based on human feedback',       to: 'pipeline' },
-  { key: 'prepare', label: 'Prepare', hint: 'Package approved content',             to: 'approvals' },
-  { key: 'learn',   label: 'Learn',   hint: 'Review outcomes and store lessons',    to: 'performance' },
+  { key: 'plan',    to: 'context' },
+  { key: 'draft',   to: 'calendar' },
+  { key: 'prepare', to: 'approvals' },
+  { key: 'learn',   to: 'performance' },
 ]
 
 interface Props {
@@ -24,6 +22,7 @@ interface Props {
 
 export function WorkflowStrip({ current = 'plan' }: Props) {
   const { slug } = useParams<{ slug: string }>()
+  const t = useT()
 
   return (
     <div className="border-b border-border-subtle bg-paper">
@@ -34,7 +33,7 @@ export function WorkflowStrip({ current = 'plan' }: Props) {
             const href = slug ? `/${slug}/${p.to}` : `/${p.to}`
             return (
               <div key={p.key} className="flex items-center gap-2 shrink-0">
-                <NavLink to={href} title={p.hint} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-full">
+                <NavLink to={href} title={t(`workflow.${p.key}.hint`)} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-full">
                   <motion.div
                     initial={false}
                     animate={{
@@ -55,7 +54,7 @@ export function WorkflowStrip({ current = 'plan' }: Props) {
                     >
                       {i + 1}
                     </span>
-                    <span>{p.label}</span>
+                    <span>{t(`workflow.${p.key}`)}</span>
                   </motion.div>
                 </NavLink>
                 {i < PHASES.length - 1 && (

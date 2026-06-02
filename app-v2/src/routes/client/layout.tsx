@@ -13,7 +13,6 @@ import {
   Target,
   Compass,
   CalendarDays,
-  KanbanSquare,
   ShieldCheck,
   Images,
   TrendingUp,
@@ -50,6 +49,8 @@ import {
 import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
 import { EditBar } from '@/components/edit-bar'
 import { ChatSheet, ChatTrigger } from '@/components/chat-sheet'
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { useT } from '@/lib/i18n'
 import { useClient } from '@/hooks/use-client'
 import { useEdit, deepMerge } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
@@ -57,27 +58,27 @@ import { cn } from '@/lib/utils'
 
 interface NavItem {
   to: string
-  label: string
+  labelKey: string
   icon: typeof Building2
   phase: WorkflowPhase
   disabled?: boolean
 }
 
 const NAV: NavItem[] = [
-  { to: 'context',     label: 'Company Context',  icon: Building2,     phase: 'plan'    as WorkflowPhase },
-  { to: 'goals',       label: 'Goals vs Actuals', icon: Target,        phase: 'plan'    as WorkflowPhase },
-  { to: 'strategy',    label: 'Strategy',         icon: Compass,       phase: 'plan'    as WorkflowPhase },
-  { to: 'suggestions', label: 'AI Suggestions',   icon: Sparkles,      phase: 'plan'    as WorkflowPhase },
-  { to: 'calendar',    label: 'Content Calendar', icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
-  { to: 'pipeline',    label: 'Pipeline',         icon: KanbanSquare,  phase: 'refine'  as WorkflowPhase },
-  { to: 'approvals',   label: 'Approvals',        icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
-  { to: 'assets',      label: 'Assets',           icon: Images,        phase: 'prepare' as WorkflowPhase },
-  { to: 'performance', label: 'Performance',      icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
-  { to: 'learnings',   label: 'Learnings',        icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
-  { to: 'integration', label: 'Integration',      icon: Plug,          phase: 'learn'   as WorkflowPhase },
+  { to: 'context',     labelKey: 'nav.context',     icon: Building2,     phase: 'plan'    as WorkflowPhase },
+  { to: 'goals',       labelKey: 'nav.goals',       icon: Target,        phase: 'plan'    as WorkflowPhase },
+  { to: 'strategy',    labelKey: 'nav.strategy',    icon: Compass,       phase: 'plan'    as WorkflowPhase },
+  { to: 'suggestions', labelKey: 'nav.suggestions', icon: Sparkles,      phase: 'plan'    as WorkflowPhase },
+  { to: 'calendar',    labelKey: 'nav.calendar',    icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
+  { to: 'approvals',   labelKey: 'nav.approvals',   icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
+  { to: 'assets',      labelKey: 'nav.assets',      icon: Images,        phase: 'prepare' as WorkflowPhase },
+  { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
+  { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
+  { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
 ]
 
 export default function ClientLayout() {
+  const t = useT()
   const { slug } = useParams<{ slug: string }>()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -151,16 +152,16 @@ export default function ClientLayout() {
       <div className="min-h-screen flex items-center justify-center p-8">
         <div className="max-w-md space-y-3 text-center">
           <h2 className="text-lg font-semibold text-rose-700">
-            Could not load client data
+            {t('loading.couldNotLoad')}
           </h2>
           <p className="text-sm text-ink-muted">{error}</p>
           <p className="text-xs text-ink-muted">
-            Expected files in <code>/data/{slug}/</code>.
+            {t('loading.expectedFiles', { slug })}
           </p>
           <Button asChild variant="outline" size="sm">
             <Link to="/">
               <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-              Back to clients
+              {t('loading.backToClients')}
             </Link>
           </Button>
         </div>
@@ -200,7 +201,7 @@ export default function ClientLayout() {
                 variant="ghost"
                 size="icon"
                 className="lg:hidden h-9 w-9 shrink-0"
-                aria-label="Open navigation"
+                aria-label={t('nav.openNav')}
               >
                 <Menu className="h-5 w-5" />
               </Button>
@@ -218,13 +219,13 @@ export default function ClientLayout() {
                 <Button asChild variant="ghost" size="sm" className="w-full justify-start">
                   <Link to="/">
                     <ChevronLeft className="h-3.5 w-3.5 mr-1.5" />
-                    All clients
+                    {t('nav.allClients')}
                   </Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm" className="w-full justify-start">
                   <a href="https://gfinnov.com" target="_blank" rel="noreferrer">
                     <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
-                    Help &middot; gfinnov.com
+                    {t('nav.help')}
                   </a>
                 </Button>
                 <div className="pt-2 flex justify-center opacity-70">
@@ -260,18 +261,16 @@ export default function ClientLayout() {
           </Link>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="secondary" className="bg-brand-blue-50 text-brand-blue hidden sm:inline-flex">
-              {mergedData.plan.quarter.label}
-            </Badge>
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600 hidden md:inline-flex">
-              Viktor v2
+              {t('header.viktorV2')}
             </Badge>
+            <LanguageSwitcher />
             <ChatTrigger onClick={() => setChatOpen(true)} />
             <Button
               variant={editMode ? 'default' : 'outline'}
               size="sm"
               onClick={() => setEditMode(!editMode)}
-              title={editMode ? 'Exit edit mode' : 'Edit setup data'}
+              title={editMode ? t('header.exitEdit') : t('header.editSetup')}
               className={cn(
                 'h-9 px-3 hidden sm:inline-flex',
                 editMode && 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500',
@@ -280,12 +279,12 @@ export default function ClientLayout() {
               {editMode ? (
                 <>
                   <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden md:inline">Preview</span>
+                  <span className="hidden md:inline">{t('common.preview')}</span>
                 </>
               ) : (
                 <>
                   <Pencil className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden md:inline">Edit</span>
+                  <span className="hidden md:inline">{t('common.edit')}</span>
                 </>
               )}
             </Button>
@@ -293,8 +292,8 @@ export default function ClientLayout() {
               variant={editMode ? 'default' : 'ghost'}
               size="icon"
               onClick={() => setEditMode(!editMode)}
-              title={editMode ? 'Exit edit mode' : 'Edit setup data'}
-              aria-label={editMode ? 'Exit edit mode' : 'Edit setup data'}
+              title={editMode ? t('header.exitEdit') : t('header.editSetup')}
+              aria-label={editMode ? t('header.exitEdit') : t('header.editSetup')}
               className={cn(
                 'h-9 w-9 sm:hidden',
                 editMode && 'bg-amber-500 hover:bg-amber-600 text-white',
@@ -305,8 +304,8 @@ export default function ClientLayout() {
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
-              title="Help & shortcuts"
-              aria-label="Help & shortcuts"
+              title={t('header.help')}
+              aria-label={t('header.help')}
               className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
             >
               <GFLogo size="sm" />
@@ -315,8 +314,8 @@ export default function ClientLayout() {
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
-              title="Help & shortcuts"
-              aria-label="Help & shortcuts"
+              title={t('header.help')}
+              aria-label={t('header.help')}
               className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-ink-muted hover:text-brand-blue hover:bg-paper-muted transition-colors"
             >
               <HelpCircle className="h-5 w-5" />
@@ -341,8 +340,8 @@ export default function ClientLayout() {
             <button
               type="button"
               onClick={() => setSidebarCollapsed((v) => !v)}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={sidebarCollapsed ? t('header.expandSidebar') : t('header.collapseSidebar')}
+              aria-label={sidebarCollapsed ? t('header.expandSidebar') : t('header.collapseSidebar')}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:text-brand-blue hover:bg-paper transition-colors"
             >
               {sidebarCollapsed ? (
@@ -395,30 +394,30 @@ export default function ClientLayout() {
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Help & shortcuts</DialogTitle>
+            <DialogTitle>{t('help.title')}</DialogTitle>
             <DialogDescription>
-              Viktor handles writes via Telegram. This dashboard is the human review surface.
+              {t('help.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div>
-              <p className="font-semibold mb-1">Navigation</p>
+              <p className="font-semibold mb-1">{t('help.navigationTitle')}</p>
               <ul className="text-ink-muted text-xs space-y-1">
-                <li>Use the sidebar (or the workflow strip across the top) to move between phases.</li>
-                <li>On the Content Calendar, press <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">←</kbd> / <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">→</kbd> to flip between posts.</li>
+                <li>{t('help.navLine1')}</li>
+                <li>{t('help.navLine2.prefix')}<kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">←</kbd> / <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">→</kbd>{t('help.navLine2.suffix')}</li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold mb-1">Editing</p>
+              <p className="font-semibold mb-1">{t('help.editingTitle')}</p>
               <ul className="text-ink-muted text-xs space-y-1">
-                <li>Toggle <strong>Edit</strong> in the header, then click any field to change it.</li>
-                <li>Press <kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">Ctrl/Cmd+Enter</kbd> to save a single field.</li>
-                <li>The bottom bar collects all unsaved files. Save persists; Discard wipes the patch.</li>
+                <li>{t('help.editLine1.prefix')}<strong>{t('common.edit')}</strong>{t('help.editLine1.suffix')}</li>
+                <li>{t('help.editLine2.prefix')}<kbd className="px-1 py-0.5 rounded bg-paper-muted border text-[10px]">Ctrl/Cmd+Enter</kbd>{t('help.editLine2.suffix')}</li>
+                <li>{t('help.editLine3')}</li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold mb-1">Approvals</p>
-              <p className="text-ink-muted text-xs">Nothing publishes without you writing <code className="px-1 py-0.5 rounded bg-paper-muted text-[11px]">approve p###</code> to Viktor on Telegram.</p>
+              <p className="font-semibold mb-1">{t('help.approvalsTitle')}</p>
+              <p className="text-ink-muted text-xs">{t('help.approvalsBody.prefix')}<code className="px-1 py-0.5 rounded bg-paper-muted text-[11px]">approve p###</code>{t('help.approvalsBody.suffix')}</p>
             </div>
             <div className="pt-2 border-t border-border-subtle">
               <a
@@ -446,9 +445,11 @@ function NavContent({
   openSuggestions: number
   collapsed?: boolean
 }) {
+  const t = useT()
   return (
     <nav className="space-y-0.5">
       {NAV.map((n) => {
+        const label = t(n.labelKey)
         const isActive = currentSegment === n.to
         const badge =
           n.to === 'suggestions' && openSuggestions > 0
@@ -459,7 +460,7 @@ function NavContent({
             key={n.to}
             to={n.disabled ? '#' : n.to}
             onClick={(e) => n.disabled && e.preventDefault()}
-            title={collapsed ? n.label : undefined}
+            title={collapsed ? label : undefined}
             className={cn(
               'relative flex items-center gap-2.5 rounded-md py-2 text-sm transition-colors',
               collapsed ? 'px-2 justify-center' : 'px-3',
@@ -486,7 +487,7 @@ function NavContent({
               <n.icon className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 truncate">{n.label}</span>
+                  <span className="flex-1 truncate">{label}</span>
                   {badge !== null && (
                     <span
                       className={cn(
@@ -501,7 +502,7 @@ function NavContent({
                   )}
                   {n.disabled && (
                     <span className="text-[10px] uppercase tracking-wider opacity-70">
-                      soon
+                      {t('nav.soon')}
                     </span>
                   )}
                 </>
@@ -520,6 +521,7 @@ function NavContent({
 }
 
 function LoadingState({ slug }: { slug: string }) {
+  const t = useT()
   return (
     <div className="min-h-screen bg-paper-muted">
       <header className="border-b border-border-subtle bg-paper">
@@ -539,7 +541,7 @@ function LoadingState({ slug }: { slug: string }) {
         </div>
         <div className="flex items-center gap-2 text-ink-muted text-xs mt-8">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Loading {slug}…
+          {t('loading.loadingClient', { slug })}
         </div>
       </main>
     </div>
