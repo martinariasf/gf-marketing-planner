@@ -31,8 +31,10 @@ import {
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import { apiLoadIntegration, type IntegrationInfo } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 
 export default function IntegrationView() {
+  const t = useT()
   const { slug = '' } = useParams<{ slug: string }>()
   const [info, setInfo] = useState<IntegrationInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +50,7 @@ export default function IntegrationView() {
     return (
       <Card className="border-rose-200 bg-rose-50/40">
         <CardContent className="p-5 text-sm text-rose-700">
-          Could not load integration info: {error}
+          {t('integration.couldNotLoad', { error })}
         </CardContent>
       </Card>
     )
@@ -58,7 +60,7 @@ export default function IntegrationView() {
     return (
       <div className="flex items-center gap-2 text-ink-muted text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading integration info…
+        {t('integration.loadingInfo')}
       </div>
     )
   }
@@ -69,31 +71,35 @@ export default function IntegrationView() {
 
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-          Integration
+          {t('integration.eyebrow')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue">
-          How other bots talk to this client
+          {t('integration.heading')}
         </h1>
         <p className="text-ink-muted mt-1 text-sm max-w-2xl">
-          Paste these credentials into Telegram bots, Make.com / n8n flows,
-          or your own scripts. The API is the single source of truth — every
-          write is audited and shows up in this dashboard live.
+          {t('integration.intro')}
         </p>
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-brand-blue-200/60 bg-brand-blue-50/40 px-3 py-2 text-xs text-ink max-w-2xl">
+          <Bot className="h-4 w-4 text-brand-blue shrink-0 mt-0.5" />
+          <p>
+            <strong>{t('integration.forWhoTitle')}</strong>{t('integration.forWhoBody')}
+          </p>
+        </div>
       </div>
 
       {/* ── API endpoint ─────────────────────────────────────────────── */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-brand-blue" />
-          REST API
+          {t('integration.restApi')}
         </h2>
         <Card>
           <CardContent className="p-5 space-y-3">
-            <Field label="Base URL" value={info.apiBase} />
+            <Field label={t('integration.baseUrl')} value={info.apiBase} />
             <Field
-              label="Client slug"
+              label={t('integration.clientSlug')}
               value={info.slug}
-              hint="Always included in the path. Tokens are scoped per slug."
+              hint={t('integration.slugHint')}
             />
             <div className="flex flex-wrap gap-2 pt-1">
               <a
@@ -102,7 +108,7 @@ export default function IntegrationView() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-brand-blue hover:underline"
               >
-                OpenAPI docs <ExternalLink className="h-3 w-3" />
+                {t('integration.openapiDocs')} <ExternalLink className="h-3 w-3" />
               </a>
               <a
                 href={info.openapiUrl}
@@ -110,7 +116,7 @@ export default function IntegrationView() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-brand-blue hover:underline"
               >
-                openapi.json <ExternalLink className="h-3 w-3" />
+                {t('integration.openapiJson')} <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           </CardContent>
@@ -121,7 +127,7 @@ export default function IntegrationView() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <Bot className="h-4 w-4 text-brand-blue" />
-          Agent token
+          {t('integration.agentToken')}
         </h2>
         {info.agentToken ? (
           <TokenCard token={info.agentToken} />
@@ -130,16 +136,14 @@ export default function IntegrationView() {
             <CardContent className="p-5 text-sm text-amber-800 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium mb-1">No agent token issued yet</p>
+                <p className="font-medium mb-1">{t('integration.noToken')}</p>
                 <p className="text-xs">{info.tokenHint}</p>
               </div>
             </CardContent>
           </Card>
         )}
         <p className="text-xs text-ink-muted">
-          Send this as <code>Authorization: Bearer &lt;token&gt;</code> on
-          every API call. The token is scoped to <strong>{info.slug}</strong>{' '}
-          only — it cannot read or write other clients' data.
+          {t('integration.bearerHint.prefix')}<code>Authorization: Bearer &lt;token&gt;</code>{t('integration.bearerHint.suffix', { slug: info.slug })}
         </p>
       </section>
 
@@ -149,25 +153,20 @@ export default function IntegrationView() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-brand-blue" />
-          Where bots should save images
+          {t('integration.imagesTitle')}
         </h2>
         <Card>
           <CardContent className="p-5 space-y-3 text-sm">
-            <p>
-              Generated images go into the client's <code>assets/</code>{' '}
-              folder so they appear in the dashboard's{' '}
-              <strong>Assets</strong> tab. After saving the file, append a
-              row to <code>manifest.json</code> with id, filename, kind,
-              designBrief and the post id(s) it's used in.
+            <p className="text-xs text-ink-muted bg-paper-muted rounded px-2 py-1.5">
+              {t('integration.imagesOptional')}
             </p>
-            <Field label="Assets directory" value={info.assetsDir} />
-            <Field label="Manifest file" value={info.assetsManifestPath} />
+            <p>
+              {t('integration.imagesIntro')}
+            </p>
+            <Field label={t('integration.assetsDir')} value={info.assetsDir} />
+            <Field label={t('integration.manifestFile')} value={info.assetsManifestPath} />
             <p className="text-xs text-ink-muted leading-relaxed">
-              For the Hermes Telegram bot this is bind-mounted at{' '}
-              <code>/opt/marketing-planner/client/assets/</code>. The bot
-              writes the image file, runs <code>jq</code> or Python to
-              append a manifest row, and the SPA Assets page picks it up on
-              the next refetch.
+              {t('integration.hermesNote')}
             </p>
           </CardContent>
         </Card>
@@ -175,16 +174,14 @@ export default function IntegrationView() {
 
       {/* ── Examples ────────────────────────────────────────────────── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Quick start</h2>
-        <CodeBlock label="Read the brief" code={info.examples.curlReadBrief} />
-        <CodeBlock label="Edit a post" code={info.examples.curlPatchPost} />
-        <CodeBlock label="Approve a post" code={info.examples.curlSetApproval} />
+        <h2 className="text-sm font-semibold">{t('integration.quickStart')}</h2>
+        <CodeBlock label={t('integration.curlReadBrief')} code={info.examples.curlReadBrief} />
+        <CodeBlock label={t('integration.curlPatchPost')} code={info.examples.curlPatchPost} />
+        <CodeBlock label={t('integration.curlSetApproval')} code={info.examples.curlSetApproval} />
       </section>
 
       <p className="text-[11px] text-ink-muted">
-        Every write through this token shows up in <strong>Approvals →
-        Recent activity</strong> with <code>via</code> indicating the
-        source.
+        {t('integration.everyWrite')}
       </p>
     </div>
   )
@@ -199,12 +196,13 @@ function Field({
   value: string
   hint?: string
 }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const copy = () => {
     navigator.clipboard.writeText(value).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
-    toast(`${label} copied`, { duration: 1000 })
+    toast(t('integration.copied', { label }), { duration: 1000 })
   }
   return (
     <div>
@@ -225,6 +223,7 @@ function Field({
 }
 
 function TokenCard({ token }: { token: string }) {
+  const t = useT()
   const [revealed, setRevealed] = useState(false)
   const [copied, setCopied] = useState(false)
   const masked = token.slice(0, 6) + '•'.repeat(Math.max(0, token.length - 10)) + token.slice(-4)
@@ -232,7 +231,7 @@ function TokenCard({ token }: { token: string }) {
     navigator.clipboard.writeText(token).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
-    toast('Agent token copied', { duration: 1200 })
+    toast(t('integration.tokenCopied'), { duration: 1200 })
   }
   return (
     <Card>
@@ -246,7 +245,7 @@ function TokenCard({ token }: { token: string }) {
             size="sm"
             onClick={() => setRevealed((v) => !v)}
             className="h-8 shrink-0"
-            title={revealed ? 'Hide' : 'Reveal'}
+            title={revealed ? t('integration.hide') : t('integration.reveal')}
           >
             {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
           </Button>
@@ -256,13 +255,13 @@ function TokenCard({ token }: { token: string }) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Badge variant="secondary" className="bg-brand-blue-50 text-brand-blue text-[10px]">
-            role: agent
+            {t('integration.roleAgent')}
           </Badge>
           <Badge variant="outline" className="text-[10px]">
-            scope: this client only
+            {t('integration.scopeThisClient')}
           </Badge>
           <Badge variant="outline" className="text-[10px]">
-            no expiry
+            {t('integration.noExpiry')}
           </Badge>
         </div>
       </CardContent>
@@ -271,12 +270,13 @@ function TokenCard({ token }: { token: string }) {
 }
 
 function CodeBlock({ label, code }: { label: string; code: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const copy = () => {
     navigator.clipboard.writeText(code).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1200)
-    toast(`${label} copied`, { duration: 1000 })
+    toast(t('integration.copied', { label }), { duration: 1000 })
   }
   return (
     <div>
@@ -286,7 +286,7 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
         </span>
         <Button variant="ghost" size="sm" onClick={copy} className="h-6 px-2 text-[11px]">
           {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('common.copied') : t('common.copy')}
         </Button>
       </div>
       <pre className="text-[11px] bg-paper-muted border border-border-subtle rounded p-3 overflow-x-auto font-mono leading-relaxed">

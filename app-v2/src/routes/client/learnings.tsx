@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Lightbulb, ArrowRight, Calendar, Tag } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Learning } from '@/types'
 
@@ -20,6 +21,7 @@ const CONFIDENCE_TONE: Record<Learning['confidence'], string> = {
 }
 
 export default function LearningsView() {
+  const t = useT()
   const { learnings, posts, plan } = useOutletContext<ClientBundle>()
   const [filter, setFilter] = useState<ConfidenceFilter>('all')
 
@@ -54,9 +56,7 @@ export default function LearningsView() {
         <CardContent className="p-10 text-center text-ink-muted">
           <Lightbulb className="h-8 w-8 mx-auto mb-2 opacity-40" />
           <p className="text-sm">
-            No <code>learnings.json</code> yet. Viktor (or a human) logs lessons
-            here as the quarter unfolds - each one should change behavior next
-            time.
+            {t('learnings.empty')}
           </p>
         </CardContent>
       </Card>
@@ -68,23 +68,22 @@ export default function LearningsView() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            Learnings
+            {t('learnings.eyebrow')}
           </p>
           <h1 className="text-3xl font-bold text-brand-blue">
-            What did we learn this quarter?
+            {t('learnings.heading')}
           </h1>
           <p className="text-ink-muted mt-1 text-sm max-w-2xl">
-            Every entry should answer: <em>what changes next time?</em> A
-            learning that doesn't change behavior is just trivia.
+            {t('learnings.introPrefix')}<em>{t('learnings.introQuestion')}</em>{t('learnings.introSuffix')}
           </p>
         </div>
 
         <Tabs value={filter} onValueChange={(v) => setFilter(v as ConfidenceFilter)}>
           <TabsList>
-            <TabsTrigger value="all">All ({items.length})</TabsTrigger>
-            <TabsTrigger value="high">High ({byConfidence.high})</TabsTrigger>
-            <TabsTrigger value="medium">Medium ({byConfidence.medium})</TabsTrigger>
-            <TabsTrigger value="low">Low ({byConfidence.low})</TabsTrigger>
+            <TabsTrigger value="all">{t('learnings.tabAll', { n: items.length })}</TabsTrigger>
+            <TabsTrigger value="high">{t('learnings.tabHigh', { n: byConfidence.high })}</TabsTrigger>
+            <TabsTrigger value="medium">{t('learnings.tabMedium', { n: byConfidence.medium })}</TabsTrigger>
+            <TabsTrigger value="low">{t('learnings.tabLow', { n: byConfidence.low })}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -113,7 +112,7 @@ export default function LearningsView() {
                           variant="outline"
                           className={cn('text-[10px] uppercase tracking-wider font-semibold', CONFIDENCE_TONE[item.confidence])}
                         >
-                          {item.confidence} confidence
+                          {t(`confidence.${item.confidence}`)}{t('learnings.confidenceSuffix')}
                         </Badge>
                         <span className="text-[11px] text-ink-muted flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -134,7 +133,7 @@ export default function LearningsView() {
                     </Badge>
                     {item.relatedPostId && (
                       <Badge variant="outline" className="font-mono text-[10px]">
-                        post {item.relatedPostId}
+                        {t('suggestions.postPrefix')}{item.relatedPostId}
                       </Badge>
                     )}
                     {item.relatedCampaign && (
@@ -158,13 +157,13 @@ export default function LearningsView() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                        What happened
+                        {t('learnings.whatHappened')}
                       </p>
                       <p className="text-sm leading-relaxed">{item.whatHappened}</p>
                     </div>
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                        Lesson
+                        {t('learnings.lesson')}
                       </p>
                       <p className="text-sm leading-relaxed">{item.lesson}</p>
                     </div>
@@ -173,7 +172,7 @@ export default function LearningsView() {
                   <div className="rounded-md border-l-4 border-l-brand-blue bg-brand-blue-50/30 p-4">
                     <p className="text-[10px] uppercase tracking-wider text-brand-blue font-semibold mb-1 flex items-center gap-1">
                       <ArrowRight className="h-3 w-3" />
-                      Behavior change going forward
+                      {t('learnings.behaviorChange')}
                     </p>
                     <p className="text-sm leading-relaxed font-medium">
                       {item.recommendedBehaviorChange}

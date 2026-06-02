@@ -20,27 +20,28 @@ import { Trophy, Clock, Bookmark, Eye, MessageSquare, Heart, Share2, MousePointe
 import { fmtCompact, fmtDate } from '@/lib/format'
 import { BRAND } from '@/lib/brand'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, PostMetrics } from '@/types'
 
 type MetricKey = keyof PostMetrics
 
-const METRIC_META: Record<MetricKey, { label: string; Icon: typeof Eye }> = {
-  reach:         { label: 'Reach',          Icon: Eye },
-  impressions:   { label: 'Impressions',    Icon: Eye },
-  saves:         { label: 'Saves',          Icon: Bookmark },
-  shares:        { label: 'Shares',         Icon: Share2 },
-  comments:      { label: 'Comments',       Icon: MessageSquare },
-  likes:         { label: 'Likes',          Icon: Heart },
-  profileVisits: { label: 'Profile visits', Icon: Eye },
-  clicks:        { label: 'Clicks',         Icon: MousePointer },
-  dms:           { label: 'DMs',            Icon: Mail },
+const METRIC_META: Record<MetricKey, { labelKey: string; Icon: typeof Eye }> = {
+  reach:         { labelKey: 'performance.colReach',   Icon: Eye },
+  impressions:   { labelKey: 'performance.colReach',   Icon: Eye },
+  saves:         { labelKey: 'performance.colSaves',   Icon: Bookmark },
+  shares:        { labelKey: 'performance.colShares',  Icon: Share2 },
+  comments:      { labelKey: 'performance.colComments',Icon: MessageSquare },
+  likes:         { labelKey: 'performance.colReach',   Icon: Heart },
+  profileVisits: { labelKey: 'performance.colProfile', Icon: Eye },
+  clicks:        { labelKey: 'performance.colClicks',  Icon: MousePointer },
+  dms:           { labelKey: 'performance.colDms',     Icon: Mail },
 }
 
-const TOP_METRIC_PRESETS: Array<{ key: MetricKey; label: string; subtitle: string }> = [
-  { key: 'saves', label: 'Best educational pull',  subtitle: 'Top saves' },
-  { key: 'dms',   label: 'Best intent driver',      subtitle: 'Most qualified DMs' },
-  { key: 'reach', label: 'Furthest distribution',   subtitle: 'Top reach' },
+const TOP_METRIC_PRESETS: Array<{ key: MetricKey; labelKey: string; subtitleKey: string }> = [
+  { key: 'saves', labelKey: 'performance.bestEducational', subtitleKey: 'performance.topSaves' },
+  { key: 'dms',   labelKey: 'performance.bestIntent',      subtitleKey: 'performance.qualifiedDms' },
+  { key: 'reach', labelKey: 'performance.furthestDist',    subtitleKey: 'performance.topReach' },
 ]
 
 interface ChartTooltipPayload {
@@ -58,7 +59,7 @@ function ReachTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-md border border-border-subtle bg-paper px-3 py-2 shadow-md text-xs">
-      <p className="font-semibold mb-1">Week {label}</p>
+      <p className="font-semibold mb-1">W{label}</p>
       {payload.map((p) => (
         <p key={p.dataKey} style={{ color: p.color }}>
           {p.dataKey}: {fmtCompact(p.value ?? 0)}
@@ -69,6 +70,7 @@ function ReachTooltip({ active, payload, label }: ChartTooltipProps) {
 }
 
 export default function PerformanceView() {
+  const t = useT()
   const { performance, posts, plan } = useOutletContext<ClientBundle>()
   const [sortBy, setSortBy] = useState<MetricKey>('reach')
 
@@ -90,8 +92,7 @@ export default function PerformanceView() {
         <CardContent className="p-10 text-center text-ink-muted">
           <Eye className="h-8 w-8 mx-auto mb-2 opacity-40" />
           <p className="text-sm">
-            No <code>performance.json</code> yet. Viktor populates this after
-            the first Postiz sync.
+            {t('performance.empty')}
           </p>
         </CardContent>
       </Card>
@@ -126,23 +127,25 @@ export default function PerformanceView() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            Performance
+            {t('performance.eyebrow')}
           </p>
           <h1 className="text-3xl font-bold text-brand-blue">
-            What's actually working?
+            {t('performance.heading')}
           </h1>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-ink-muted">
           <Clock className="h-3.5 w-3.5" />
-          {fmtDate(performance.lastSyncedAt)} &middot; from {performance.source}
+          {fmtDate(performance.lastSyncedAt)} &middot; {t('performance.from')} {performance.source}
         </div>
       </div>
 
       {/* Top performers */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Top performers</h2>
+        <h2 className="text-lg font-semibold">{t('performance.topPerformers')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TOP_METRIC_PRESETS.map(({ key, label, subtitle }) => {
+          {TOP_METRIC_PRESETS.map(({ key, labelKey, subtitleKey }) => {
+            const label = t(labelKey)
+            const subtitle = t(subtitleKey)
             const top = [...measuredPosts].sort(
               (a, b) => b.metrics[key] - a.metrics[key],
             )[0]
@@ -192,7 +195,7 @@ export default function PerformanceView() {
                       {fmtCompact(top.metrics[key])}
                     </span>
                     <span className="text-xs text-ink-muted">
-                      {METRIC_META[key].label.toLowerCase()}
+                      {t(METRIC_META[key].labelKey).toLowerCase()}
                     </span>
                   </div>
                 </CardContent>
@@ -206,7 +209,7 @@ export default function PerformanceView() {
 
       {/* Weekly reach trend */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Weekly reach trend</h2>
+        <h2 className="text-lg font-semibold">{t('performance.weeklyReach')}</h2>
         <Card>
           <CardContent className="p-5">
             <div className="h-56">
@@ -254,8 +257,8 @@ export default function PerformanceView() {
               </ResponsiveContainer>
             </div>
             <p className="text-xs text-ink-muted mt-2">
-              Total reach this quarter so far: <span className="font-semibold text-ink">{fmtCompact(performance.aggregates.quarterly.reach)}</span> &middot;
-              Follower delta: <span className="font-semibold text-ink">+{performance.aggregates.quarterly.followerDelta}%</span>
+              {t('performance.totalReach')} <span className="font-semibold text-ink">{fmtCompact(performance.aggregates.quarterly.reach)}</span> &middot;
+              {' '}{t('performance.followerDelta')} <span className="font-semibold text-ink">+{performance.aggregates.quarterly.followerDelta}%</span>
             </p>
           </CardContent>
         </Card>
@@ -267,17 +270,17 @@ export default function PerformanceView() {
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-lg font-semibold">Per-post metrics</h2>
+            <h2 className="text-lg font-semibold">{t('performance.perPostMetrics')}</h2>
             <p className="text-sm text-ink-muted">
-              Sort by any metric. Hover a row to see the campaign + pillar.
+              {t('performance.perPostHint')}
             </p>
           </div>
           <Tabs value={sortBy} onValueChange={(v) => setSortBy(v as MetricKey)}>
             <TabsList>
-              <TabsTrigger value="reach">Reach</TabsTrigger>
-              <TabsTrigger value="saves">Saves</TabsTrigger>
-              <TabsTrigger value="dms">DMs</TabsTrigger>
-              <TabsTrigger value="clicks">Clicks</TabsTrigger>
+              <TabsTrigger value="reach">{t('performance.colReach')}</TabsTrigger>
+              <TabsTrigger value="saves">{t('performance.colSaves')}</TabsTrigger>
+              <TabsTrigger value="dms">{t('performance.colDms')}</TabsTrigger>
+              <TabsTrigger value="clicks">{t('performance.colClicks')}</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -288,14 +291,14 @@ export default function PerformanceView() {
               <table className="w-full text-sm">
                 <thead className="bg-paper-muted text-[10px] uppercase tracking-wider text-ink-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium">Post</th>
-                    <th className="px-3 py-3 text-right font-medium">Reach</th>
-                    <th className="px-3 py-3 text-right font-medium">Saves</th>
-                    <th className="px-3 py-3 text-right font-medium">Shares</th>
-                    <th className="px-3 py-3 text-right font-medium">Comments</th>
-                    <th className="px-3 py-3 text-right font-medium">Profile visits</th>
-                    <th className="px-3 py-3 text-right font-medium">Clicks</th>
-                    <th className="px-3 py-3 text-right font-medium">DMs</th>
+                    <th className="px-4 py-3 text-left font-medium">{t('performance.colPost')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colReach')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colSaves')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colShares')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colComments')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colProfile')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colClicks')}</th>
+                    <th className="px-3 py-3 text-right font-medium">{t('performance.colDms')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -349,7 +352,7 @@ export default function PerformanceView() {
                 </tbody>
                 <tfoot className="border-t-2 border-border-subtle bg-paper-muted/30 text-[11px] uppercase tracking-wider text-ink-muted">
                   <tr>
-                    <td className="px-4 py-2 font-semibold">Total ({sorted.length})</td>
+                    <td className="px-4 py-2 font-semibold">{t('performance.total', { n: sorted.length })}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.reach)}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.saves)}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.shares)}</td>
@@ -371,22 +374,22 @@ export default function PerformanceView() {
           <Separator />
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">
-              Week {performance.weeklySummary.week} retrospective
+              {t('performance.weekRetro', { n: performance.weeklySummary.week })}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <SummaryColumn
-                title="Wins"
+                title={t('performance.wins')}
                 items={performance.weeklySummary.wins}
                 tone="green"
               />
               <SummaryColumn
-                title="Losses"
+                title={t('performance.losses')}
                 items={performance.weeklySummary.losses}
                 tone="red"
               />
               <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-blue">Next test</CardTitle>
+                  <CardTitle className="text-sm text-brand-blue">{t('performance.nextTest')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm leading-relaxed">

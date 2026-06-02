@@ -17,43 +17,20 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fmtDateShort } from '@/lib/format'
 import { apiSetApproval, type ApprovalDecision } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 import type { Post } from '@/types'
 
 const COLUMNS: Array<{
   key: ApprovalDecision
-  label: string
+  labelKey: string
   Icon: typeof Eye
   tone: string
   cardTone: string
 }> = [
-  {
-    key: 'in_review',
-    label: 'In review',
-    Icon: Eye,
-    tone: 'text-blue-700 bg-blue-50 border-blue-200',
-    cardTone: 'border-blue-100',
-  },
-  {
-    key: 'approved',
-    label: 'Approved',
-    Icon: ShieldCheck,
-    tone: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    cardTone: 'border-emerald-100',
-  },
-  {
-    key: 'scheduled',
-    label: 'Scheduled',
-    Icon: Calendar,
-    tone: 'text-violet-700 bg-violet-50 border-violet-200',
-    cardTone: 'border-violet-100',
-  },
-  {
-    key: 'rejected',
-    label: 'Rejected',
-    Icon: Ban,
-    tone: 'text-rose-700 bg-rose-50 border-rose-200',
-    cardTone: 'border-rose-100',
-  },
+  { key: 'in_review', labelKey: 'status.in_review', Icon: Eye,         tone: 'text-blue-700 bg-blue-50 border-blue-200',         cardTone: 'border-blue-100' },
+  { key: 'approved',  labelKey: 'status.approved',  Icon: ShieldCheck, tone: 'text-emerald-700 bg-emerald-50 border-emerald-200', cardTone: 'border-emerald-100' },
+  { key: 'scheduled', labelKey: 'status.scheduled', Icon: Calendar,    tone: 'text-violet-700 bg-violet-50 border-violet-200',   cardTone: 'border-violet-100' },
+  { key: 'rejected',  labelKey: 'status.rejected',  Icon: Ban,         tone: 'text-rose-700 bg-rose-50 border-rose-200',         cardTone: 'border-rose-100' },
 ]
 
 function columnFor(post: Post): ApprovalDecision {
@@ -75,6 +52,7 @@ export function ApprovalKanban({
   pillarColor: Record<string, string>
   onChanged: () => void
 }) {
+  const t = useT()
   // Optimistic overrides keyed by postId
   const [overrides, setOverrides] = useState<Record<string, ApprovalDecision>>({})
   const [pending, setPending] = useState<Set<string>>(new Set())
@@ -103,7 +81,7 @@ export function ApprovalKanban({
     setPending((p) => new Set(p).add(post.id))
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(`${post.id} → ${decision.replace('_', ' ')}`, { duration: 1800 })
+      toast(`${post.id} → ${t(`status.${decision}`)}`, { duration: 1800 })
       onChanged()
     } catch (err) {
       setOverrides((o) => {
@@ -112,7 +90,7 @@ export function ApprovalKanban({
         else delete next[post.id]
         return next
       })
-      toast.error(err instanceof Error ? err.message : 'Approval write failed')
+      toast.error(err instanceof Error ? err.message : t('approvals.approvalWriteFailed'))
     } finally {
       setPending((p) => {
         const next = new Set(p)
@@ -176,13 +154,13 @@ export function ApprovalKanban({
               )}
             >
               <Icon className="h-4 w-4" />
-              <span>{col.label}</span>
+              <span>{t(col.labelKey)}</span>
               <span className="ml-auto text-xs opacity-70">{items.length}</span>
             </div>
             <div className="space-y-2 min-h-[80px] p-1">
               {items.length === 0 && (
                 <p className="text-[11px] text-ink-muted px-2 py-6 text-center border border-dashed border-border-subtle rounded-md">
-                  {isDropTarget ? 'drop here' : 'empty'}
+                  {isDropTarget ? t('approvals.dropHere') : t('common.empty')}
                 </p>
               )}
               {items.map((post) => {
@@ -198,7 +176,7 @@ export function ApprovalKanban({
                       col.cardTone,
                       isDragging && 'opacity-50 ring-2 ring-brand-blue/60',
                     )}
-                    title="Drag to another column to move"
+                    title={t('approvals.dragToMove')}
                   >
                     <CardContent className="p-3 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -233,7 +211,7 @@ export function ApprovalKanban({
                             disabled={pending.has(post.id)}
                             onClick={() => move(post, c.key)}
                           >
-                            → {c.label}
+                            → {t(c.labelKey)}
                           </Button>
                         ))}
                       </div>

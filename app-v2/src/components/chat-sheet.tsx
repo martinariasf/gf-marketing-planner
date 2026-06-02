@@ -37,6 +37,7 @@ import {
   type ChatTurn,
 } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 
 interface ToolEvent {
   label: string
@@ -59,13 +60,13 @@ interface Message {
   streaming?: boolean
 }
 
-const SLASH_CHIPS: Array<{ cmd: string; hint: string }> = [
-  { cmd: '/draft ', hint: 'draft a post on <topic>' },
-  { cmd: '/suggest', hint: '3 next post ideas' },
-  { cmd: '/weekly', hint: 'weekly summary' },
-  { cmd: '/approve ', hint: 'approve <postId>' },
-  { cmd: '/edit ', hint: 'edit post <id>: <change>' },
-  { cmd: '/brief ', hint: 'update brief: <change>' },
+const SLASH_CHIPS: Array<{ cmd: string; hintKey: string }> = [
+  { cmd: '/draft ',   hintKey: 'chat.chip.draft' },
+  { cmd: '/suggest',  hintKey: 'chat.chip.suggest' },
+  { cmd: '/weekly',   hintKey: 'chat.chip.weekly' },
+  { cmd: '/approve ', hintKey: 'chat.chip.approve' },
+  { cmd: '/edit ',    hintKey: 'chat.chip.edit' },
+  { cmd: '/brief ',   hintKey: 'chat.chip.brief' },
 ]
 
 const CHAT_WIDTH_MIN = 340
@@ -95,6 +96,7 @@ export function ChatSheet({
   width: number
   onWidthChange: (w: number) => void
 }) {
+  const t = useT()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -291,7 +293,7 @@ export function ChatSheet({
               if (last?.role === 'assistant') {
                 next[next.length - 1] = {
                   ...last,
-                  content: last.content + `\n\n_Error: ${ev.detail}_`,
+                  content: last.content + `\n\n_${t('chat.errorPrefix')}${ev.detail}_`,
                   streaming: false,
                 }
               }
@@ -316,7 +318,7 @@ export function ChatSheet({
             if (last?.role === 'assistant') {
               next[next.length - 1] = {
                 ...last,
-                content: last.content + `\n\n_Network error_`,
+                content: last.content + `\n\n_${t('chat.networkError')}_`,
                 streaming: false,
               }
             }
@@ -358,7 +360,7 @@ export function ChatSheet({
           )}
           style={{ maxWidth: '100vw', width: `min(100vw, ${width}px)` }}
           role="dialog"
-          aria-label="Chat with Viktor"
+          aria-label={t('chat.askViktor')}
           aria-hidden={!open}
         >
           {/* Drag handle to resize. Hidden on mobile (panel is full-width). */}
@@ -367,8 +369,8 @@ export function ChatSheet({
             className="hidden sm:block absolute left-0 top-0 h-full w-1.5 -translate-x-1/2 cursor-ew-resize z-10 group"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize chat"
-            title="Drag to resize"
+            aria-label={t('chat.resize')}
+            title={t('chat.dragToResize')}
           >
             <div className="h-full w-px mx-auto bg-border-subtle group-hover:bg-brand-blue/60 transition-colors" />
           </div>
@@ -377,10 +379,10 @@ export function ChatSheet({
             <div className="min-w-0">
               <h2 className="font-heading text-base font-medium flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-brand-blue" />
-                Ask Viktor
+                {t('chat.askViktor')}
               </h2>
               <p className="text-[11px] text-ink-muted mt-0.5">
-                Scoped to <code>{slug}</code>. Same actions as the Telegram bot — draft, edit, approve, update brief/plan/goals.
+                {t('chat.scopedToPrefix')}<code>{slug}</code>{t('chat.scopedToSuffix')}
               </p>
             </div>
             <Button
@@ -388,7 +390,7 @@ export function ChatSheet({
               size="icon"
               onClick={() => onOpenChange(false)}
               className="h-7 w-7 shrink-0"
-              aria-label="Close chat"
+              aria-label={t('chat.close')}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -417,8 +419,7 @@ export function ChatSheet({
               messages[messages.length - 1].role === 'user' && (
                 <div className="flex items-center gap-2 text-[12px] text-ink-muted px-1">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" />
-                  Viktor is still working on your last message — this can take a
-                  few minutes with the current image model.
+                  {t('chat.stillWorking')}
                 </div>
               )}
           </div>
@@ -452,7 +453,7 @@ export function ChatSheet({
                   }
                 }}
                 rows={1}
-                placeholder="Ask about brief, posts, suggestions… (Shift+Enter for newline)"
+                placeholder={t('chat.placeholder')}
                 className="flex-1 resize-y min-h-[40px] max-h-[200px] border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 leading-snug"
                 disabled={busy}
               />
@@ -467,6 +468,7 @@ export function ChatSheet({
 }
 
 function MessageBubble({ m }: { m: Message }) {
+  const t = useT()
   // Collapsible synthetic tool steps. Default: collapsed once the message is
   // done streaming. Real tool CALLS (set_approval etc.) always render — they're
   // the value, not noise.
@@ -502,20 +504,25 @@ function MessageBubble({ m }: { m: Message }) {
               )}
               <Wrench className="h-2.5 w-2.5" />
               <span>
-                {showTools ? 'Hide' : 'Show'} {m.tools!.length} thought
-                {m.tools!.length === 1 ? '' : 's'}
+                {(() => {
+                  const n = m.tools!.length
+                  const key = showTools
+                    ? n === 1 ? 'chat.thoughtsHide' : 'chat.thoughtsHidePlural'
+                    : n === 1 ? 'chat.thoughtsShow' : 'chat.thoughtsShowPlural'
+                  return t(key, { n })
+                })()}
               </span>
             </button>
             {showTools && (
               <div className="mt-1 space-y-0.5 pl-3 border-l border-border-subtle/70">
-                {m.tools!.map((t, i) => (
+                {m.tools!.map((te, i) => (
                   <div
                     key={i}
                     className="flex items-center gap-1.5 text-[10px] text-ink-muted"
                   >
-                    <span className="font-mono">{t.label}</span>
-                    {t.status === 'done' && (
-                      <Badge variant="outline" className="h-4 text-[9px] px-1">ok</Badge>
+                    <span className="font-mono">{te.label}</span>
+                    {te.status === 'done' && (
+                      <Badge variant="outline" className="h-4 text-[9px] px-1">{t('common.ok')}</Badge>
                     )}
                   </div>
                 ))}
@@ -536,26 +543,28 @@ function MessageBubble({ m }: { m: Message }) {
   )
 }
 
-const TOOL_LABEL: Record<string, { label: string; Icon: typeof Wrench }> = {
-  read_brief:        { label: 'Read brief',        Icon: Wrench },
-  read_plan:         { label: 'Read plan',         Icon: Wrench },
-  read_posts:        { label: 'List posts',        Icon: Wrench },
-  read_post:         { label: 'Read post',         Icon: Wrench },
-  read_suggestions:  { label: 'Read suggestions',  Icon: Wrench },
-  set_approval:      { label: 'Set approval',      Icon: CheckCircle2 },
-  patch_post:        { label: 'Edit post',         Icon: PencilLine },
-  create_post:       { label: 'Create post',       Icon: Plus },
-  delete_post:       { label: 'Delete post',       Icon: Trash2 },
-  patch_suggestion:  { label: 'Update suggestion', Icon: PencilLine },
-  patch_brief:       { label: 'Update brief',      Icon: FileText },
-  patch_plan:        { label: 'Update plan',       Icon: FileText },
-  patch_goals:       { label: 'Update goals',      Icon: FileText },
-  patch_learnings:   { label: 'Update learnings',  Icon: FileText },
+const TOOL_ICON: Record<string, typeof Wrench> = {
+  read_brief:        Wrench,
+  read_plan:         Wrench,
+  read_posts:        Wrench,
+  read_post:         Wrench,
+  read_suggestions:  Wrench,
+  set_approval:      CheckCircle2,
+  patch_post:        PencilLine,
+  create_post:       Plus,
+  delete_post:       Trash2,
+  patch_suggestion:  PencilLine,
+  patch_brief:       FileText,
+  patch_plan:        FileText,
+  patch_goals:       FileText,
+  patch_learnings:   FileText,
 }
 
 function ToolCallChip({ tc }: { tc: ToolCall }) {
-  const meta = TOOL_LABEL[tc.name] ?? { label: tc.name, Icon: Wrench }
-  const Icon = meta.Icon
+  const t = useT()
+  const Icon = TOOL_ICON[tc.name] ?? Wrench
+  const labelKey = `chat.tool.${tc.name}`
+  const label = t(labelKey) === labelKey ? tc.name : t(labelKey)
   const write = isWriteTool(tc.name)
   const args = parseArgs(tc.arguments)
   const ok = tc.done && typeof tc.result === 'object' && tc.result !== null && (tc.result as { ok?: boolean }).ok !== false
@@ -576,7 +585,7 @@ function ToolCallChip({ tc }: { tc: ToolCall }) {
         <Icon className={cn('h-3 w-3 shrink-0 mt-0.5', write ? 'text-brand-blue' : 'text-ink-muted')} />
       )}
       <div className="min-w-0 flex-1">
-        <div className="font-medium">{meta.label}</div>
+        <div className="font-medium">{label}</div>
         {args && (
           <div className="text-[10px] text-ink-muted font-mono break-all">
             {args}
@@ -584,7 +593,7 @@ function ToolCallChip({ tc }: { tc: ToolCall }) {
         )}
         {failed && (
           <div className="text-[10px] text-rose-700 mt-0.5">
-            {(tc.result as { detail?: string })?.detail ?? 'failed'}
+            {(tc.result as { detail?: string })?.detail ?? t('common.failed')}
           </div>
         )}
       </div>
@@ -611,12 +620,13 @@ function parseArgs(raw: string): string | null {
 }
 
 function EmptyState({ onPick }: { onPick: (cmd: string) => void }) {
+  const t = useT()
   return (
     <div className="text-center py-8 space-y-3">
       <Sparkles className="h-8 w-8 mx-auto text-brand-blue/40" />
-      <p className="text-sm font-medium">Hi. I can do what the Telegram bot does.</p>
+      <p className="text-sm font-medium">{t('chat.empty.title')}</p>
       <p className="text-xs text-ink-muted max-w-xs mx-auto">
-        Draft, edit or delete posts. Approve or reject. Update the brief, plan and goals. Just tell me what you want — no need to confirm.
+        {t('chat.empty.body')}
       </p>
       <div className="flex flex-col gap-1.5 max-w-xs mx-auto">
         {SLASH_CHIPS.map((c) => (
@@ -626,7 +636,7 @@ function EmptyState({ onPick }: { onPick: (cmd: string) => void }) {
             className="text-left text-xs px-3 py-2 rounded-md border border-border-subtle hover:bg-paper-muted transition-colors flex items-center justify-between"
           >
             <code className="font-mono text-brand-blue">{c.cmd.trim()}</code>
-            <span className="text-ink-muted">{c.hint}</span>
+            <span className="text-ink-muted">{t(c.hintKey)}</span>
           </button>
         ))}
       </div>
@@ -635,6 +645,7 @@ function EmptyState({ onPick }: { onPick: (cmd: string) => void }) {
 }
 
 export function ChatTrigger({ onClick }: { onClick: () => void }) {
+  const t = useT()
   if (!isApiEnabled) return null
   return (
     <Button
@@ -642,10 +653,10 @@ export function ChatTrigger({ onClick }: { onClick: () => void }) {
       size="sm"
       onClick={onClick}
       className="h-9 px-3 hidden sm:inline-flex"
-      title="Open chat"
+      title={t('chat.open')}
     >
       <Sparkles className="h-3.5 w-3.5 sm:mr-1.5 text-brand-blue" />
-      <span className="hidden md:inline">Chat</span>
+      <span className="hidden md:inline">{t('chat.button')}</span>
     </Button>
   )
 }

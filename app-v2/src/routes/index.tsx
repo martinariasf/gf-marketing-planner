@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, ExternalLink, Loader2, Users } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { useT } from '@/lib/i18n'
 import { loadClientIndex } from '@/lib/client-data'
 import { cn } from '@/lib/utils'
 import type { ClientIndex, ClientIndexEntry, ClientStatus } from '@/types'
@@ -18,6 +20,7 @@ const STATUS_TONE: Record<ClientStatus, string> = {
 }
 
 export default function ClientPicker() {
+  const t = useT()
   const [index, setIndex] = useState<ClientIndex | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,7 +43,7 @@ export default function ClientPicker() {
                 Viktor
               </p>
               <h1 className="text-sm font-semibold leading-tight text-ink">
-                Marketing Operating Dashboard
+                {t('home.eyebrow')}
               </h1>
             </div>
           </Link>
@@ -57,6 +60,7 @@ export default function ClientPicker() {
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600">
               v2
             </Badge>
+            <LanguageSwitcher />
           </div>
         </div>
       </header>
@@ -64,22 +68,20 @@ export default function ClientPicker() {
       <main className="mx-auto max-w-5xl px-6 py-12">
         <div className="mb-8">
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            Pick a client
+            {t('home.pickClient')}
           </p>
           <h2 className="text-4xl font-bold text-brand-blue tracking-tight">
-            Whose dashboard?
+            {t('home.heading')}
           </h2>
           <p className="text-ink-muted mt-2 max-w-2xl">
-            One cockpit per client. Strategy, content, approvals, performance,
-            and learnings — all in one place. Viktor runs the writes; humans
-            review here.
+            {t('home.subhead')}
           </p>
         </div>
 
         {error && (
           <Card className="border-rose-200 bg-rose-50/40">
             <CardContent className="p-5 text-sm text-rose-700">
-              Could not load <code>clients/index.json</code>: {error}
+              {t('home.cannotLoadIndex', { error })}
             </CardContent>
           </Card>
         )}
@@ -87,7 +89,7 @@ export default function ClientPicker() {
         {!error && !index && (
           <div className="flex items-center gap-2 text-ink-muted text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading clients…
+            {t('home.loadingClients')}
           </div>
         )}
 
@@ -96,9 +98,7 @@ export default function ClientPicker() {
             <CardContent className="p-10 text-center text-ink-muted">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-40" />
               <p className="text-sm">
-                No clients yet. Add one by creating{' '}
-                <code>clients/&lt;slug&gt;/brief.json</code> and appending the
-                slug to <code>clients/index.json</code>.
+                {t('home.noClients')}
               </p>
             </CardContent>
           </Card>
@@ -114,6 +114,11 @@ export default function ClientPicker() {
       </main>
     </div>
   )
+}
+
+function OpenCockpitLabel() {
+  const t = useT()
+  return <>{t('home.openCockpit')}</>
 }
 
 function ClientCard({ client, delay }: { client: ClientIndexEntry; delay: number }) {
@@ -162,7 +167,7 @@ function ClientCard({ client, delay }: { client: ClientIndexEntry; delay: number
                 {client.quarter ?? '—'}
               </span>
               <span className="flex items-center gap-1 text-brand-blue font-medium group-hover:gap-2 transition-all">
-                Open cockpit
+                <OpenCockpitLabel />
                 <ArrowRight className="h-3 w-3" />
               </span>
             </div>

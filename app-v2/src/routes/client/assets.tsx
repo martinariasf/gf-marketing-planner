@@ -28,6 +28,7 @@ import {
   apiDeleteInspiration,
   type InspirationItem,
 } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { AssetItem, AssetSource } from '@/types'
 
@@ -39,12 +40,12 @@ const SOURCE_ICON: Record<string, typeof Sparkles> = {
   other: User,
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  'nano-banana': 'AI generated',
-  canva: 'Canva',
-  unsplash: 'Stock',
-  internal: 'Internal',
-  other: 'Other',
+const SOURCE_LABEL_KEY: Record<string, string> = {
+  'nano-banana': 'assets.source.ai',
+  canva: 'assets.source.canva',
+  unsplash: 'assets.source.unsplash',
+  internal: 'assets.source.internal',
+  other: 'assets.source.other',
 }
 
 const SOURCE_TONE: Record<string, string> = {
@@ -58,10 +59,10 @@ const SOURCE_TONE: Record<string, string> = {
 // The agent writes provider strings like "openrouter:gpt-5.4-image-2". Anything
 // not in the maps above is treated as an AI-generated image so the tab never
 // crashes on an unknown source (the original bug: undefined icon component).
-function sourceMeta(source: AssetSource): { Icon: typeof Sparkles; label: string; tone: string } {
+function sourceMeta(source: AssetSource, t: (k: string) => string): { Icon: typeof Sparkles; label: string; tone: string } {
   return {
     Icon: SOURCE_ICON[source] ?? Sparkles,
-    label: SOURCE_LABEL[source] ?? 'AI generated',
+    label: t(SOURCE_LABEL_KEY[source] ?? 'assets.source.ai'),
     tone: SOURCE_TONE[source] ?? 'bg-violet-100 text-violet-700',
   }
 }
@@ -73,6 +74,7 @@ const isAiSource = (s: AssetSource) => s !== 'unsplash' && s !== 'canva' && s !=
 type Filter = 'all' | 'approved' | 'draft' | 'ai' | 'stock'
 
 export default function AssetsView() {
+  const t = useT()
   const { assets, posts, plan, slug } = useOutletContext<ClientBundle>()
   const { slug: routeSlug = slug } = useParams<{ slug: string }>()
   const [filter, setFilter] = useState<Filter>('all')
@@ -110,8 +112,7 @@ export default function AssetsView() {
           <CardContent className="p-10 text-center text-ink-muted">
             <ImageOff className="h-8 w-8 mx-auto mb-2 opacity-40" />
             <p className="text-sm">
-              No <code>assets/manifest.json</code> yet. Viktor populates this when
-              he generates an image or Pilar uploads one via Telegram.
+              {t('assets.emptyManifest')}
             </p>
           </CardContent>
         </Card>
@@ -126,13 +127,13 @@ export default function AssetsView() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            Assets
+            {t('assets.eyebrow')}
           </p>
           <h1 className="text-3xl font-bold text-brand-blue">
-            Visual library
+            {t('assets.heading')}
           </h1>
           <p className="text-ink-muted mt-1 text-sm">
-            Every asset Viktor or Pilar dropped into{' '}
+            {t('assets.introPrefix')}
             <code className="text-xs bg-paper-muted px-1 rounded">
               clients/{slug}/assets/
             </code>
@@ -142,20 +143,20 @@ export default function AssetsView() {
 
         <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <TabsList>
-            <TabsTrigger value="all">All ({items.length})</TabsTrigger>
+            <TabsTrigger value="all">{t('assets.tabAll', { n: items.length })}</TabsTrigger>
             <TabsTrigger value="approved">
               <Check className="h-3 w-3 mr-1" />
-              Approved
+              {t('assets.tabApproved')}
             </TabsTrigger>
             <TabsTrigger value="draft">
               <AlertCircle className="h-3 w-3 mr-1" />
-              Draft
+              {t('assets.tabDraft')}
             </TabsTrigger>
             <TabsTrigger value="ai">
               <Sparkles className="h-3 w-3 mr-1" />
-              AI
+              {t('assets.tabAi')}
             </TabsTrigger>
-            <TabsTrigger value="stock">Stock</TabsTrigger>
+            <TabsTrigger value="stock">{t('assets.tabStock')}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -181,8 +182,8 @@ export default function AssetsView() {
                 />
                 {!item.finalApproved && (
                   <div className="absolute top-2 left-2">
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px]">
-                      DRAFT
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px] uppercase">
+                      {t('common.draft')}
                     </Badge>
                   </div>
                 )}
@@ -196,7 +197,7 @@ export default function AssetsView() {
                 </p>
                 <div className="flex items-center gap-1 flex-wrap">
                   {item.usedInPosts.length === 0 ? (
-                    <span className="text-[11px] text-ink-muted">Unused</span>
+                    <span className="text-[11px] text-ink-muted">{t('assets.unused')}</span>
                   ) : (
                     item.usedInPosts.slice(0, 2).map((postId) => {
                       const pillar = pillarByPost[postId]
@@ -225,13 +226,13 @@ export default function AssetsView() {
                 <DialogTitle className="flex items-center gap-2">
                   {selected.filename}
                   {selected.finalApproved ? (
-                    <Badge className="bg-emerald-100 text-emerald-700">Approved</Badge>
+                    <Badge className="bg-emerald-100 text-emerald-700">{t('common.approved')}</Badge>
                   ) : (
-                    <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
+                    <Badge className="bg-amber-100 text-amber-800">{t('common.draft')}</Badge>
                   )}
                 </DialogTitle>
                 <DialogDescription>
-                  {sourceMeta(selected.source).label} · Created by {selected.owner} ·{' '}
+                  {sourceMeta(selected.source, t).label} · {selected.owner} ·{' '}
                   {fmtDate(selected.createdAt)}
                 </DialogDescription>
               </DialogHeader>
@@ -247,7 +248,7 @@ export default function AssetsView() {
               {selected.designBrief && (
                 <div className="space-y-1">
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                    Design brief
+                    {t('assets.designBrief')}
                   </p>
                   <p className="text-sm">{selected.designBrief}</p>
                 </div>
@@ -255,10 +256,10 @@ export default function AssetsView() {
 
               <div className="space-y-1">
                 <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                  Used in posts
+                  {t('assets.usedInPosts')}
                 </p>
                 {selected.usedInPosts.length === 0 ? (
-                  <p className="text-sm text-ink-muted">— not yet attached to a post</p>
+                  <p className="text-sm text-ink-muted">{t('assets.notAttached')}</p>
                 ) : (
                   <div className="flex gap-1.5 flex-wrap">
                     {selected.usedInPosts.map((postId) => (
@@ -272,11 +273,11 @@ export default function AssetsView() {
 
               <div className="flex justify-between items-center pt-2">
                 <p className="text-[10px] text-ink-muted font-mono">
-                  asset id: {selected.id}
+                  {t('assets.assetId', { id: selected.id })}
                 </p>
                 <Button asChild size="sm" variant="outline">
                   <a href={selected.url} target="_blank" rel="noreferrer">
-                    Open full size
+                    {t('assets.openFullSize')}
                   </a>
                 </Button>
               </div>
@@ -292,6 +293,7 @@ export default function AssetsView() {
 // ── Inspiration board (per-client drag-drop image library) ───────────────────
 
 function InspirationBoard({ slug }: { slug: string }) {
+  const t = useT()
   const [items, setItems] = useState<InspirationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -315,7 +317,7 @@ function InspirationBoard({ slug }: { slug: string }) {
     async (files: FileList | File[]) => {
       const images = Array.from(files).filter((f) => f.type.startsWith('image/'))
       if (images.length === 0) {
-        toast.error('Only image files can be added here')
+        toast.error(t('inspiration.imagesOnly'))
         return
       }
       setUploading(true)
@@ -324,14 +326,18 @@ function InspirationBoard({ slug }: { slug: string }) {
           const item = await apiUploadInspiration(slug, file)
           setItems((prev) => [item, ...prev])
         }
-        toast(`Added ${images.length} image${images.length === 1 ? '' : 's'} to inspiration`)
+        toast(
+          images.length === 1
+            ? t('inspiration.added', { n: images.length })
+            : t('inspiration.addedPlural', { n: images.length }),
+        )
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Upload failed')
+        toast.error(err instanceof Error ? err.message : t('inspiration.uploadFailed'))
       } finally {
         setUploading(false)
       }
     },
-    [slug],
+    [slug, t],
   )
 
   const remove = async (id: string) => {
@@ -341,7 +347,7 @@ function InspirationBoard({ slug }: { slug: string }) {
       await apiDeleteInspiration(slug, id)
     } catch {
       setItems(prev) // rollback
-      toast.error('Could not remove')
+      toast.error(t('inspiration.couldNotRemove'))
     }
   }
 
@@ -350,12 +356,11 @@ function InspirationBoard({ slug }: { slug: string }) {
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
           <Lightbulb className="h-3 w-3" />
-          Inspiration
+          {t('inspiration.eyebrow')}
         </p>
-        <h2 className="text-lg font-semibold">Mood & reference board</h2>
+        <h2 className="text-lg font-semibold">{t('inspiration.heading')}</h2>
         <p className="text-sm text-ink-muted">
-          Drop images here that capture the look you're after. Viktor can use them
-          as style reference when generating visuals.
+          {t('inspiration.intro')}
         </p>
       </div>
 
@@ -396,14 +401,14 @@ function InspirationBoard({ slug }: { slug: string }) {
             <Upload className="h-6 w-6" />
           )}
           <p className="text-sm">
-            <span className="text-brand-blue font-medium">Drag & drop</span> images, or click to browse
+            <span className="text-brand-blue font-medium">{t('inspiration.dragDrop')}</span>{t('inspiration.orClick')}
           </p>
-          <p className="text-[11px]">PNG, JPG, WEBP or GIF · up to 15 MB each</p>
+          <p className="text-[11px]">{t('inspiration.fileTypes')}</p>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-xs text-ink-muted">Loading inspiration…</p>
+        <p className="text-xs text-ink-muted">{t('inspiration.loading')}</p>
       ) : items.length > 0 ? (
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {items.map((it) => (
@@ -416,8 +421,8 @@ function InspirationBoard({ slug }: { slug: string }) {
                 type="button"
                 onClick={() => remove(it.id)}
                 className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600"
-                aria-label="Remove from inspiration"
-                title="Remove"
+                aria-label={t('inspiration.removeFromBoard')}
+                title={t('common.remove')}
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -425,14 +430,15 @@ function InspirationBoard({ slug }: { slug: string }) {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-ink-muted italic">No inspiration images yet — drop some above.</p>
+        <p className="text-xs text-ink-muted italic">{t('inspiration.noneYet')}</p>
       )}
     </section>
   )
 }
 
 function SourceBadge({ source }: { source: AssetSource }) {
-  const { Icon, label, tone } = sourceMeta(source)
+  const t = useT()
+  const { Icon, label, tone } = sourceMeta(source, t)
   return (
     <Badge className={cn('text-[10px] flex items-center gap-1', tone)}>
       <Icon className="h-2.5 w-2.5" />

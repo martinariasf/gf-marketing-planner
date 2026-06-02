@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { Calendar, Star, ArrowRight } from 'lucide-react'
 import { fmtDateShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { KeyDate } from '@/types'
 
@@ -24,6 +25,7 @@ const TYPE_BG: Record<KeyDate['type'], string> = {
 }
 
 export default function StrategyView() {
+  const t = useT()
   const { plan } = useOutletContext<ClientBundle>()
   const totalWeeks = 12
 
@@ -32,7 +34,7 @@ export default function StrategyView() {
       {/* Hero */}
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-          {plan.quarter.label} strategy
+          {plan.quarter.label} {t('strategy.eyebrowSuffix')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue tracking-tight max-w-3xl">
           {plan.headline ?? plan.quarter.theme}
@@ -64,7 +66,7 @@ export default function StrategyView() {
         <Card className="border-l-4 border-l-brand-blue">
           <CardContent className="p-5">
             <p className="text-xs uppercase tracking-wider text-ink-muted mb-2">
-              Positioning this quarter
+              {t('strategy.positioning')}
             </p>
             <p className="text-base leading-relaxed">{plan.positioningStatement}</p>
           </CardContent>
@@ -75,7 +77,7 @@ export default function StrategyView() {
 
       {/* Strategic priorities */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Strategic priorities</h2>
+        <h2 className="text-lg font-semibold">{t('strategy.strategicPriorities')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {plan.strategicPriorities.map((p, i) => (
             <Card key={p.label}>
@@ -99,9 +101,9 @@ export default function StrategyView() {
 
       {/* Content pillars */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Content pillars</h2>
+        <h2 className="text-lg font-semibold">{t('strategy.contentPillars')}</h2>
         <p className="text-sm text-ink-muted">
-          Weighted by share of total post volume.
+          {t('strategy.pillarsDesc')}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {plan.pillars.map((p) => (
@@ -128,7 +130,7 @@ export default function StrategyView() {
 
       {/* Campaign timeline */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Campaign roadmap (12 weeks)</h2>
+        <h2 className="text-lg font-semibold">{t('strategy.campaignRoadmap')}</h2>
         <Card>
           <CardContent className="p-5">
             <div className="space-y-2">
@@ -197,7 +199,7 @@ export default function StrategyView() {
 
       {/* Monthly focus */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Monthly focus</h2>
+        <h2 className="text-lg font-semibold">{t('strategy.monthlyFocus')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {plan.monthlyFocus.map((m) => (
             <Card key={m.month}>
@@ -211,7 +213,7 @@ export default function StrategyView() {
                 <p className="text-sm text-ink-muted">{m.intent}</p>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Priorities
+                    {t('strategy.priorities')}
                   </p>
                   <ul className="text-sm space-y-1">
                     {m.priorities.map((p) => (
@@ -224,7 +226,7 @@ export default function StrategyView() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Watch
+                    {t('strategy.watch')}
                   </p>
                   <p className="text-sm">{m.watch}</p>
                 </div>
@@ -238,7 +240,7 @@ export default function StrategyView() {
 
       {/* Platforms */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Platforms</h2>
+        <h2 className="text-lg font-semibold">{t('strategy.platforms')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {plan.platforms.map((p) => (
             <Card key={p.channelKey}>
@@ -250,13 +252,13 @@ export default function StrategyView() {
                 <p className="text-sm">{p.rationale}</p>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Cadence
+                    {t('strategy.cadence')}
                   </p>
                   <p className="text-sm">{p.cadence}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Format mix
+                    {t('strategy.formatMix')}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {p.formatMix.map((f) => (
@@ -268,7 +270,7 @@ export default function StrategyView() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Watch
+                    {t('strategy.watch')}
                   </p>
                   <ul className="text-xs space-y-0.5 text-ink-muted">
                     {p.watch.map((w) => (
@@ -288,7 +290,7 @@ export default function StrategyView() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          Key dates
+          {t('strategy.keyDates')}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {plan.keyDates.map((d) => (

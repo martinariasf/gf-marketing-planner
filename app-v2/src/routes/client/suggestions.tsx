@@ -27,15 +27,16 @@ import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Suggestion, SuggestionKind, SuggestionStatus, Confidence } from '@/types'
 import { isApiEnabled, apiPatchSuggestion } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 
-const KIND_META: Record<SuggestionKind, { Icon: typeof Sparkles; label: string; tone: string }> = {
-  post_idea:       { Icon: Lightbulb, label: 'Post idea',       tone: 'bg-amber-50  text-amber-700' },
-  hook_rewrite:    { Icon: Wand2,     label: 'Hook rewrite',    tone: 'bg-violet-50 text-violet-700' },
-  cta_alternative: { Icon: Replace,   label: 'CTA alternative', tone: 'bg-cyan-50   text-cyan-700' },
-  pillar_balance:  { Icon: Scale,     label: 'Pillar balance',  tone: 'bg-blue-50   text-blue-700' },
-  next_action:     { Icon: Compass,   label: 'Next action',     tone: 'bg-brand-blue-50 text-brand-blue' },
-  follow_up:       { Icon: Repeat,    label: 'Follow-up',       tone: 'bg-brand-green-100 text-brand-green-600' },
-  pivot:           { Icon: GitFork,   label: 'Pivot',           tone: 'bg-rose-50   text-rose-700' },
+const KIND_META: Record<SuggestionKind, { Icon: typeof Sparkles; labelKey: string; tone: string }> = {
+  post_idea:       { Icon: Lightbulb, labelKey: 'suggestions.kind.post_idea',       tone: 'bg-amber-50  text-amber-700' },
+  hook_rewrite:    { Icon: Wand2,     labelKey: 'suggestions.kind.hook_rewrite',    tone: 'bg-violet-50 text-violet-700' },
+  cta_alternative: { Icon: Replace,   labelKey: 'suggestions.kind.cta_alternative', tone: 'bg-cyan-50   text-cyan-700' },
+  pillar_balance:  { Icon: Scale,     labelKey: 'suggestions.kind.pillar_balance',  tone: 'bg-blue-50   text-blue-700' },
+  next_action:     { Icon: Compass,   labelKey: 'suggestions.kind.next_action',     tone: 'bg-brand-blue-50 text-brand-blue' },
+  follow_up:       { Icon: Repeat,    labelKey: 'suggestions.kind.follow_up',       tone: 'bg-brand-green-100 text-brand-green-600' },
+  pivot:           { Icon: GitFork,   labelKey: 'suggestions.kind.pivot',           tone: 'bg-rose-50   text-rose-700' },
 }
 
 const CONFIDENCE_TONE: Record<Confidence, string> = {
@@ -47,6 +48,7 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
 type Filter = 'open' | 'accepted' | 'dismissed' | 'all'
 
 export default function SuggestionsView() {
+  const t = useT()
   const { suggestions, plan, slug, refetch } = useOutletContext<
     ClientBundle & { refetch: () => void }
   >()
@@ -80,8 +82,7 @@ export default function SuggestionsView() {
         <CardContent className="p-10 text-center text-ink-muted">
           <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-40" />
           <p className="text-sm">
-            No <code>suggestions.json</code> yet. Viktor's <code>ai-suggestions</code>{' '}
-            skill writes this file when he spots an opportunity in the data.
+            {t('suggestions.empty')}
           </p>
         </CardContent>
       </Card>
@@ -96,29 +97,27 @@ export default function SuggestionsView() {
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
             <Sparkles className="h-3 w-3" />
-            AI suggestions
+            {t('suggestions.eyebrow')}
           </p>
           <h1 className="text-3xl font-bold text-brand-blue">
-            What does Viktor think you should do next?
+            {t('suggestions.heading')}
           </h1>
           <p className="text-ink-muted mt-1 text-sm max-w-2xl">
-            Proactive recommendations grounded in your performance, learnings,
-            and brief. Each one is a one-line copy-paste into Telegram - the
-            agent does the actual writing.
+            {t('suggestions.intro')}
           </p>
         </div>
 
         <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <TabsList>
             <TabsTrigger value="open">
-              Open
+              {t('suggestions.tabOpen')}
               {counts.open > 0 && (
                 <Badge className="ml-1.5 bg-brand-blue text-white">{counts.open}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="accepted">Accepted ({counts.accepted})</TabsTrigger>
-            <TabsTrigger value="dismissed">Dismissed ({counts.dismissed})</TabsTrigger>
-            <TabsTrigger value="all">All ({items.length})</TabsTrigger>
+            <TabsTrigger value="accepted">{t('suggestions.tabAccepted', { n: counts.accepted })}</TabsTrigger>
+            <TabsTrigger value="dismissed">{t('suggestions.tabDismissed', { n: counts.dismissed })}</TabsTrigger>
+            <TabsTrigger value="all">{t('suggestions.tabAll', { n: items.length })}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -150,7 +149,7 @@ export default function SuggestionsView() {
       {filtered.length === 0 && (
         <Card>
           <CardContent className="p-10 text-center text-ink-muted text-sm">
-            Nothing in this tab.
+            {t('suggestions.nothing')}
           </CardContent>
         </Card>
       )}
@@ -169,9 +168,11 @@ function SuggestionCard({
   slug: string
   onChanged: () => void
 }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
-  const { Icon, label, tone } = KIND_META[suggestion.kind]
+  const { Icon, labelKey, tone } = KIND_META[suggestion.kind]
+  const label = t(labelKey)
 
   async function setStatus(next: 'accepted' | 'dismissed') {
     if (busy) return
@@ -181,7 +182,7 @@ function SuggestionCard({
       toast(`${suggestion.id} → ${next}`, { duration: 1800 })
       onChanged()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Update failed')
+      toast.error(err instanceof Error ? err.message : t('suggestions.updateFailed'))
     } finally {
       setBusy(false)
     }
@@ -191,7 +192,7 @@ function SuggestionCard({
     navigator.clipboard.writeText(suggestion.suggestedAction).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
-    toast('Copied. Paste into Viktor on Telegram.', {
+    toast(t('suggestions.copiedPaste'), {
       description: <code className="font-mono text-xs">{suggestion.suggestedAction}</code>,
     })
   }
@@ -199,7 +200,7 @@ function SuggestionCard({
   const dismiss = () => {
     const cmd = `dismiss ${suggestion.id}`
     navigator.clipboard.writeText(cmd).catch(() => {})
-    toast('Copied dismiss command.', {
+    toast(t('suggestions.copiedDismiss'), {
       description: <code className="font-mono text-xs">{cmd}</code>,
     })
   }
@@ -230,17 +231,17 @@ function SuggestionCard({
             </Badge>
             {suggestion.status === 'accepted' && (
               <Badge className="text-[10px] bg-emerald-100 text-emerald-700">
-                <Check className="h-3 w-3 mr-1" /> Accepted
+                <Check className="h-3 w-3 mr-1" /> {t('common.accepted')}
               </Badge>
             )}
             {suggestion.status === 'dismissed' && (
               <Badge className="text-[10px] bg-neutral-100 text-neutral-700">
-                <X className="h-3 w-3 mr-1" /> Dismissed
+                <X className="h-3 w-3 mr-1" /> {t('common.dismissed')}
               </Badge>
             )}
             {expired && isOpen && (
               <Badge className="text-[10px] bg-rose-50 text-rose-700">
-                <Clock className="h-3 w-3 mr-1" /> Expired
+                <Clock className="h-3 w-3 mr-1" /> {t('common.expired')}
               </Badge>
             )}
           </div>
@@ -260,7 +261,7 @@ function SuggestionCard({
           <div className="flex items-center gap-1.5 flex-wrap">
             {suggestion.relatedPostId && (
               <Badge variant="outline" className="font-mono text-[10px]">
-                post {suggestion.relatedPostId}
+                {t('suggestions.postPrefix')}{suggestion.relatedPostId}
               </Badge>
             )}
             {suggestion.relatedCampaign && (
@@ -277,7 +278,7 @@ function SuggestionCard({
         {/* Suggested action + CTAs */}
         <div className="rounded-md bg-paper-muted border border-border-subtle p-3 space-y-2">
           <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-            Paste this into Viktor on Telegram to accept
+            {t('suggestions.pasteHint')}
           </p>
           <code className="block font-mono text-xs text-brand-blue break-all">
             {suggestion.suggestedAction}
@@ -286,14 +287,14 @@ function SuggestionCard({
             <div className="flex items-center gap-2 pt-1 flex-wrap">
               <Button size="sm" onClick={copy} className="bg-brand-blue hover:bg-brand-blue-600">
                 {copied ? (
-                  <><Check className="h-3.5 w-3.5 mr-1.5" /> Copied</>
+                  <><Check className="h-3.5 w-3.5 mr-1.5" /> {t('common.copied')}</>
                 ) : (
-                  <><Copy className="h-3.5 w-3.5 mr-1.5" /> Copy & accept</>
+                  <><Copy className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.copyAccept')}</>
                 )}
               </Button>
               <Button size="sm" variant="outline" onClick={dismiss}>
                 <X className="h-3.5 w-3.5 mr-1.5" />
-                Dismiss (copy)
+                {t('suggestions.dismissCopy')}
               </Button>
               {isApiEnabled && (
                 <>
@@ -304,7 +305,7 @@ function SuggestionCard({
                     onClick={() => setStatus('accepted')}
                     disabled={busy}
                   >
-                    <Check className="h-3.5 w-3.5 mr-1.5" /> Accept (staging)
+                    <Check className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.acceptStaging')}
                   </Button>
                   <Button
                     size="sm"
@@ -313,7 +314,7 @@ function SuggestionCard({
                     onClick={() => setStatus('dismissed')}
                     disabled={busy}
                   >
-                    <X className="h-3.5 w-3.5 mr-1.5" /> Dismiss (staging)
+                    <X className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.dismissStaging')}
                   </Button>
                 </>
               )}

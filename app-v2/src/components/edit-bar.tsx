@@ -23,6 +23,7 @@ import { useEdit, deepMerge, type EditableFile } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
 import { isPocketBaseEnabled, pbSave } from '@/lib/pocketbase'
 import { isApiEnabled, apiSave } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 
 /**
  * Floating bar that appears whenever the current slug has unsaved patches.
@@ -46,6 +47,7 @@ export function EditBar({
   /** Called after a successful PocketBase save — layout can refetch. */
   onSaved?: () => void
 }) {
+  const t = useT()
   const { patches, resetFile, resetSlug, editMode, setEditMode } = useEdit()
   const slugPatches = patches[slug] ?? {}
   const dirtyFiles = useMemo(
@@ -119,11 +121,11 @@ export function EditBar({
       setTimeout(() => setSaveSuccess(false), 2000)
       onSaved?.()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed')
+      setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
     } finally {
       setSaving(false)
     }
-  }, [dirtyFiles, saveOne, onSaved])
+  }, [dirtyFiles, saveOne, onSaved, t])
 
   const handleSaveOne = useCallback(
     async (file: EditableFile) => {
@@ -133,12 +135,12 @@ export function EditBar({
         await saveOne(file)
         onSaved?.()
       } catch (err) {
-        setSaveError(err instanceof Error ? err.message : 'Save failed')
+        setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
       } finally {
         setSaving(false)
       }
     },
-    [saveOne, onSaved],
+    [saveOne, onSaved, t],
   )
 
   // ── Phase 4: debounced autosave when API mode is on ─────────────────────
@@ -160,7 +162,7 @@ export function EditBar({
         setLastSavedAt(Date.now())
         onSaved?.()
       } catch (err) {
-        setSaveError(err instanceof Error ? err.message : 'Autosave failed')
+        setSaveError(err instanceof Error ? err.message : t('editBar.autosaveFailed'))
       } finally {
         setSaving(false)
       }
@@ -180,14 +182,14 @@ export function EditBar({
   }, [lastSavedAt])
 
   function savedAgoLabel(): string {
-    if (saving) return 'Saving…'
+    if (saving) return t('common.saving')
     if (saveError) return saveError
     if (lastSavedAt === null) return ''
     const s = Math.round((Date.now() - lastSavedAt) / 1000)
-    if (s < 5) return 'Saved just now'
-    if (s < 60) return `Saved ${s}s ago`
+    if (s < 5) return t('editBar.savedJustNow')
+    if (s < 60) return t('editBar.savedAgoS', { s })
     const m = Math.round(s / 60)
-    return `Saved ${m}m ago`
+    return t('editBar.savedAgoM', { m })
   }
 
   const showEditToggle = editMode || dirtyFiles.length > 0
@@ -195,17 +197,17 @@ export function EditBar({
   // Choose action labels + icons based on mode.
   const usePB = isPocketBaseEnabled || isApiEnabled
   const ActionIcon = usePB ? Save : Download
-  const actionLabel = usePB ? 'Save' : 'Download'
+  const actionLabel = usePB ? t('editBar.save') : t('editBar.download')
   const bulkLabel = usePB
     ? dirtyFiles.length === 1
-      ? 'Save'
-      : 'Save all'
+      ? t('editBar.save')
+      : t('editBar.saveAll')
     : dirtyFiles.length === 1
-      ? 'Download file'
-      : 'Download all'
+      ? t('editBar.downloadFile')
+      : t('editBar.downloadAll')
   const subtitle = usePB
-    ? 'Save to publish changes instantly.'
-    : `Download & commit to clients/${slug}/ to publish.`
+    ? t('editBar.subtitleSave')
+    : t('editBar.subtitleDownload', { slug })
 
   return (
     <>
@@ -232,11 +234,11 @@ export function EditBar({
             >
               {editMode ? (
                 <>
-                  <Eye className="h-3.5 w-3.5 mr-1.5" /> Preview
+                  <Eye className="h-3.5 w-3.5 mr-1.5" /> {t('common.preview')}
                 </>
               ) : (
                 <>
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('common.edit')}
                 </>
               )}
             </Button>
@@ -259,9 +261,10 @@ export function EditBar({
                 <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-ink">
-                    {dirtyFiles.length} file
-                    {dirtyFiles.length === 1 ? '' : 's'} modified
-                    {usePB ? '' : ' locally'}
+                    {(dirtyFiles.length === 1
+                      ? t('editBar.modified', { count: dirtyFiles.length })
+                      : t('editBar.modifiedPlural', { count: dirtyFiles.length })
+                    ) + (usePB ? '' : t('editBar.locallySuffix'))}
                   </p>
                   <p className="text-[11px] text-ink-muted">
                     {isApiEnabled && savedAgoLabel() ? savedAgoLabel() : subtitle}
@@ -276,7 +279,7 @@ export function EditBar({
                       ? 'bg-amber-500 hover:bg-amber-600 text-white'
                       : ''
                   }
-                  title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
+                  title={editMode ? t('header.exitEdit') : t('editBar.enterEditMode')}
                 >
                   {editMode ? (
                     <Eye className="h-3.5 w-3.5" />
@@ -288,7 +291,7 @@ export function EditBar({
                   type="button"
                   onClick={() => setExpanded((x) => !x)}
                   className="p-1 rounded hover:bg-amber-100"
-                  aria-label={expanded ? 'Collapse' : 'Expand'}
+                  aria-label={expanded ? t('editBar.collapse') : t('editBar.expand')}
                 >
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${
@@ -322,7 +325,7 @@ export function EditBar({
                             className="h-7 px-2 text-xs text-ink-muted hover:text-rose-600"
                             disabled={saving}
                           >
-                            Discard
+                            {t('editBar.discard')}
                           </Button>
                           <Button
                             size="sm"
@@ -357,7 +360,7 @@ export function EditBar({
                         disabled={saving}
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Discard all
+                        {t('editBar.discardAll')}
                       </Button>
                       <span className="flex-1" />
                       {saveSuccess && (
@@ -366,7 +369,7 @@ export function EditBar({
                           animate={{ opacity: 1, scale: 1 }}
                           className="text-xs text-brand-green-600 flex items-center gap-1"
                         >
-                          <Check className="h-3.5 w-3.5" /> Saved
+                          <Check className="h-3.5 w-3.5" /> {t('common.saved')}
                         </motion.span>
                       )}
                       <Button
@@ -394,15 +397,14 @@ export function EditBar({
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Discard all changes?</DialogTitle>
+            <DialogTitle>{t('editBar.discardTitle')}</DialogTitle>
             <DialogDescription>
-              This drops every local edit for <code>{slug}</code> (
-              {dirtyFiles.join(', ')}). It cannot be undone.
+              {t('editBar.discardBody', { slug, files: dirtyFiles.join(', ') })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDiscardOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -411,7 +413,7 @@ export function EditBar({
                 setDiscardOpen(false)
               }}
             >
-              Discard all
+              {t('editBar.discardAll')}
             </Button>
           </DialogFooter>
         </DialogContent>

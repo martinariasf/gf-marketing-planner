@@ -1,4 +1,5 @@
-import { useOutletContext } from 'react-router'
+import { useState } from 'react'
+import { useOutletContext, useParams } from 'react-router'
 import {
   BarChart,
   Bar,
@@ -14,7 +15,9 @@ import { Separator } from '@/components/ui/separator'
 import { KpiCard } from '@/components/kpi-card'
 import { fmtCompact, fmtDate } from '@/lib/format'
 import { BRAND, PACE_COLORS } from '@/lib/brand'
-import { Clock } from 'lucide-react'
+import { Clock, Pencil, Lock } from 'lucide-react'
+import { useEdit } from '@/lib/edit-store'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 
 interface ChartTooltipPayload {
@@ -27,6 +30,83 @@ interface MonthlyTooltipProps {
   payload?: ChartTooltipPayload[]
   label?: string
 }
+/**
+ * A single editable goal-target cell. Read-only (plain) unless global edit mode
+ * is on, in which case it gets a tinted background + pencil affordance and turns
+ * into a number input on click. Writes into the goals file via the edit store.
+ */
+function EditableTargetCell({
+  slug,
+  path,
+  value,
+  unit,
+  editMode,
+}: {
+  slug: string
+  path: (string | number)[]
+  value: number
+  unit: string
+  editMode: boolean
+}) {
+  const t = useT()
+  const { setField } = useEdit()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+  const suffix = unit && unit !== 'count' ? ` ${unit}` : ''
+
+  if (!editMode) {
+    return (
+      <span className="tabular-nums font-medium">
+        {fmtCompact(value)}
+        {suffix}
+      </span>
+    )
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const n = Number(draft)
+          if (!Number.isNaN(n) && n !== value) setField(slug, 'goals', path, n)
+          setEditing(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            const n = Number(draft)
+            if (!Number.isNaN(n) && n !== value) setField(slug, 'goals', path, n)
+            setEditing(false)
+          } else if (e.key === 'Escape') {
+            setDraft(String(value))
+            setEditing(false)
+          }
+        }}
+        className="w-28 text-right tabular-nums rounded border border-amber-300 bg-amber-50/40 px-1.5 py-0.5 outline-none ring-2 ring-amber-200/60 focus:border-amber-400"
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(String(value))
+        setEditing(true)
+      }}
+      className="group inline-flex items-center gap-1.5 rounded px-2 py-0.5 tabular-nums font-medium bg-brand-blue-50/70 border border-brand-blue-200/60 text-brand-blue hover:bg-brand-blue-50 transition-colors"
+      title={t('goals.targetEditTip')}
+    >
+      <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      {fmtCompact(value)}
+      {suffix}
+    </button>
+  )
+}
+
 function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
   if (!active || !payload?.length) return null
   return (
@@ -42,7 +122,10 @@ function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
 }
 
 export default function GoalsView() {
+  const t = useT()
   const { goals, performance } = useOutletContext<ClientBundle>()
+  const { slug = '' } = useParams<{ slug: string }>()
+  const { editMode } = useEdit()
 
   const monthlyReachData = goals.monthly.map((m) => {
     const reachGoal = m.goals.find((g) => g.ref === 'g_reach')
@@ -59,16 +142,16 @@ export default function GoalsView() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            Goals vs Actuals
+            {t('goals.eyebrow')}
           </p>
           <h1 className="text-3xl font-bold text-brand-blue">
-            How are we tracking?
+            {t('goals.heading')}
           </h1>
         </div>
         {performance?.lastSyncedAt && (
           <div className="flex items-center gap-1.5 text-xs text-ink-muted">
             <Clock className="h-3.5 w-3.5" />
-            Last sync: {fmtDate(performance.lastSyncedAt)}
+            {t('goals.lastSync')} {fmtDate(performance.lastSyncedAt)}
             <span className="ml-1 text-ink-muted/70">({performance.source})</span>
           </div>
         )}
@@ -77,15 +160,13 @@ export default function GoalsView() {
       {!performance && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardContent className="p-4 text-sm text-amber-700">
-            No <code>performance.json</code> yet. Viktor populates this after the
-            first Postiz sync. Targets shown below; actuals will appear once data
-            arrives.
+            {t('goals.noPerformance')}
           </CardContent>
         </Card>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Quarterly KPIs</h2>
+        <h2 className="text-lg font-semibold">{t('goals.quarterlyKpis')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.quarterly.map((g) => {
             const progress = performance?.vsGoals[g.id]
@@ -107,8 +188,84 @@ export default function GoalsView() {
 
       <Separator />
 
+      {/* Editable goal targets. Only the Target column is user-editable —
+          actuals are synced from integrations and shown read-only. The colour
+          + pencil affordance makes the editable slots obvious. */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Monthly reach: target vs actual</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-lg font-semibold">{t('goals.targets')}</h2>
+          {editMode ? (
+            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center gap-1.5">
+              <Pencil className="h-3 w-3" /> {t('goals.editOn')}
+            </span>
+          ) : (
+            <span className="text-xs text-ink-muted flex items-center gap-1.5">
+              {t('goals.editHintPrefix')}<strong className="text-ink">{t('common.edit')}</strong>{t('goals.editHintSuffix')}
+            </span>
+          )}
+        </div>
+        <Card>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border-subtle text-[11px] uppercase tracking-wider text-ink-muted">
+                  <th className="text-left font-medium px-4 py-2.5">{t('goals.colKpi')}</th>
+                  <th className="text-right font-medium px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1 text-brand-blue">
+                      <Pencil className="h-3 w-3" /> {t('goals.colTarget')}
+                    </span>
+                  </th>
+                  <th className="text-right font-medium px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1">
+                      <Lock className="h-3 w-3" /> {t('goals.colActual')}
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {goals.quarterly.map((g, i) => {
+                  const actual = performance?.vsGoals[g.id]?.current
+                  return (
+                    <tr key={g.id} className="border-b border-border-subtle/60 last:border-0">
+                      <td className="px-4 py-3">
+                        <span className="font-medium">{g.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <EditableTargetCell
+                          slug={slug}
+                          path={['quarterly', i, 'target']}
+                          value={g.target}
+                          unit={g.unit}
+                          editMode={editMode}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-right text-ink-muted tabular-nums">
+                        {actual != null ? (
+                          <>
+                            {fmtCompact(actual)}
+                            {g.unit && g.unit !== 'count' ? ` ${g.unit}` : ''}
+                          </>
+                        ) : (
+                          <span className="text-ink-muted/50">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+        <p className="text-[11px] text-ink-muted">
+          <Lock className="h-3 w-3 inline mr-1 -mt-0.5" />
+          {t('goals.actualsHint')}
+        </p>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">{t('goals.monthlyTitle')}</h2>
         <Card>
           <CardContent className="p-5">
             <div className="h-64">
@@ -150,15 +307,15 @@ export default function GoalsView() {
             <div className="flex items-center gap-4 mt-2 text-xs text-ink-muted">
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: BRAND.blue + '40' }} />
-                Target
+                {t('goals.legendTarget')}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PACE_COLORS.ahead }} />
-                On / ahead of pace
+                {t('goals.legendAhead')}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PACE_COLORS.behind }} />
-                Behind
+                {t('goals.legendBehind')}
               </span>
             </div>
           </CardContent>
@@ -168,17 +325,16 @@ export default function GoalsView() {
       <Separator />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Weekly focus</h2>
+        <h2 className="text-lg font-semibold">{t('goals.weeklyFocus')}</h2>
         <p className="text-sm text-ink-muted">
-          One rotating priority each week. Viktor reads this when planning the
-          next batch of content.
+          {t('goals.weeklyFocusDesc')}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {goals.weekly.map((w) => (
             <Card key={w.week}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center justify-between">
-                  Week {w.week}
+                  {t('goals.week', { n: w.week })}
                   <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-normal">
                     {w.kpi}
                   </Badge>
@@ -195,14 +351,14 @@ export default function GoalsView() {
       {performance?.weeklySummary && (
         <>
           <Separator />
-          <section className="space-y-3">
+          <section id="weekly-summary" className="space-y-3">
             <h2 className="text-lg font-semibold">
-              Week {performance.weeklySummary.week} summary
+              {t('goals.weekSummary', { n: performance.weeklySummary.week })}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="border-brand-green-200/60">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-green-600">Wins</CardTitle>
+                  <CardTitle className="text-sm text-brand-green-600">{t('goals.wins')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="text-sm space-y-2">
@@ -214,7 +370,7 @@ export default function GoalsView() {
               </Card>
               <Card className="border-rose-200/60">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-rose-700">Losses</CardTitle>
+                  <CardTitle className="text-sm text-rose-700">{t('goals.losses')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="text-sm space-y-2">
@@ -226,7 +382,7 @@ export default function GoalsView() {
               </Card>
               <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-blue">Next test</CardTitle>
+                  <CardTitle className="text-sm text-brand-blue">{t('goals.nextTest')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm">{performance.weeklySummary.nextTest}</p>

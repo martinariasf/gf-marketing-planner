@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiPatchPost } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 import type { Post } from '@/types'
 
 export function PostDrawer({
@@ -33,6 +34,7 @@ export function PostDrawer({
   onOpenChange: (open: boolean) => void
   onSaved: () => void
 }) {
+  const t = useT()
   const [title, setTitle] = useState('')
   const [copy, setCopy] = useState('')
   const [date, setDate] = useState('')
@@ -58,11 +60,11 @@ export function PostDrawer({
     setSaving(true)
     try {
       await apiPatchPost(slug, post.id, patch)
-      toast(`${post.id} updated`, { duration: 1800 })
+      toast(t('calendar.updated', { id: post.id }), { duration: 1800 })
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Patch failed')
+      toast.error(err instanceof Error ? err.message : t('postDrawer.patchFailed'))
     } finally {
       setSaving(false)
     }
@@ -72,10 +74,9 @@ export function PostDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
         <SheetHeader>
-          <SheetTitle>Edit post</SheetTitle>
+          <SheetTitle>{t('postDrawer.editPost')}</SheetTitle>
           <SheetDescription>
-            Staging-only quick edit. Saved into <code>posts_patches</code> and
-            merged on read. The agent's on-disk JSON is unchanged.
+            {t('postDrawer.description')}
           </SheetDescription>
         </SheetHeader>
 
@@ -85,7 +86,7 @@ export function PostDrawer({
               {post.id} · {post.channel} · {post.pillar}
             </div>
             <label className="block space-y-1">
-              <span className="text-[11px] uppercase tracking-wider text-ink-muted">Title</span>
+              <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.title')}</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -93,7 +94,7 @@ export function PostDrawer({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] uppercase tracking-wider text-ink-muted">Date</span>
+              <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.date')}</span>
               <input
                 type="date"
                 value={date}
@@ -102,7 +103,7 @@ export function PostDrawer({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] uppercase tracking-wider text-ink-muted">Copy</span>
+              <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.copy')}</span>
               <textarea
                 value={copy}
                 onChange={(e) => setCopy(e.target.value)}
@@ -116,10 +117,10 @@ export function PostDrawer({
         <SheetFooter>
           <Button onClick={save} disabled={saving || !post}>
             {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save
+            {t('common.save')}
           </Button>
           <SheetClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">{t('common.cancel')}</Button>
           </SheetClose>
         </SheetFooter>
       </SheetContent>
