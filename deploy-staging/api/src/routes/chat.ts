@@ -1,37 +1,26 @@
-// Phase 6 + agentic upgrade — POST /api/v1/clients/:slug/chat/stream.
+// Chat route — thin SSE proxy to hermes-marketing-staging's built-in OpenAI
+// gateway (the `api_server` platform). The same Hermes agent that powers the
+// Telegram bot now powers the in-app chat panel: identical model, prompt,
+// plugins, and tools.
 //
-// Real OpenAI-style tool-use loop against OpenRouter:
-//   1. Send (system + history + user) with `tools: [...]` to OpenRouter
-//   2. Stream the response back as SSE `token` events
-//   3. If the assistant emitted `tool_calls`, run them locally against our
-//      own API routes (no HTTP hop), emit `tool_call` + `tool_result` events,
-//      append a `tool` message and loop.
-//   4. When the assistant returns text without tool_calls, emit `done`.
+// Flow:
+//   1. Browser → POST /api/v1/clients/:slug/chat/stream  (SSE)
+//   2. We POST to http://hermes-marketing-staging:8642/v1/runs with the user
+//      message + conversation history + a Bearer key.
+//   3. Hermes returns { run_id }.
+//   4. We open GET /v1/runs/{run_id}/events (SSE) and translate Hermes
+//      lifecycle events (`tool.started`, `tool.completed`, `run.completed`,
+//      `run.failed`) into our existing wire shape (token / tool_call /
+//      tool_result / done / error) so the chat-sheet UI is unchanged.
 //
-// Tools (read + write parity with the Telegram bot, minus brief/plan rewrites):
-//
-//   read_brief           read_plan         read_posts        read_suggestions
-//   set_approval(...)    patch_post(...)   patch_suggestion(...)
-//
-// Writes use the same audit pipeline as the dashboard kanban / drawer, so
-// every chat-driven action shows up in the Recent Activity feed.
-//
-// Auth: dash_* or admin token. We deliberately keep brief/plan/goals/learnings
-// PUT off the tool list — the LLM can read them but not rewrite strategy
-// docs. Phase 8 work if needed.
+// Hermes does all tool execution server-side. The tools talk to *our* API
+// (this same Hono service) via curl using the API_TOKEN env var the
+// container ships with. There is no in-process tool implementation anymore.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { stream } from 'hono/streaming'
 import { withPb } from '../pb.js'
-import { requireAuth, requireRole, requireScope, type AppEnv, type TokenPrincipal } from '../auth.js'
-import { audit } from '../audit.js'
-import { disk } from '../diskData.js'
-import {
-  loadPostPatches,
-  loadSuggestionStates,
-  loadApprovalsV2,
-  latestApprovalByPost,
-} from '../overlays.js'
+import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { env } from '../env.js'
 import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
@@ -40,371 +29,43 @@ export const chat = new OpenAPIHono<AppEnv>()
 chat.use('/clients/:slug/chat/*', rateLimit({ windowMs: 60_000, max: 10 }, 'chat'))
 chat.use('*', requireAuth)
 
-// ── Tool implementations (call our own routes' logic directly) ──────────────
-
-interface PostShape {
-  id: string
-  title?: string
-  copy?: string
-  date?: string
-  status?: string
-  pillar?: string
-  channel?: string
-  approval?: { status?: string }
-}
-
-async function readPosts(slug: string, limit = 30): Promise<PostShape[]> {
-  const idx = await disk.postsIndex(slug)
-  const ids = idx?.posts ?? (await disk.listPostFiles(slug))
-  const patches = await loadPostPatches(slug)
-  const approvals = await latestApprovalByPost(slug)
-  const out: PostShape[] = []
-  for (const id of ids.slice(0, limit)) {
-    const base = (await disk.post(slug, id)) as PostShape | null
-    if (!base) continue
-    const patch = patches.get(id) ?? {}
-    const ap = approvals.get(id)
-    out.push({
-      ...base,
-      ...patch,
-      id,
-      status: ap?.decision ?? base.status,
-    })
-  }
-  return out
-}
-
-async function readSuggestions(slug: string): Promise<Array<Record<string, unknown>>> {
-  const raw = (await disk.suggestions(slug)) as { items?: Array<Record<string, unknown>> } | null
-  const items = raw?.items ?? []
-  const states = await loadSuggestionStates(slug)
-  return items.map((it) => {
-    const id = String(it.id ?? '')
-    const st = states.get(id)
-    return { ...it, ...(st?.status ? { status: st.status } : {}) }
-  })
-}
-
-async function toolSetApproval(
-  principal: TokenPrincipal,
-  slug: string,
-  args: { postId: string; decision: string; note?: string },
-): Promise<{ ok: boolean; detail?: string }> {
-  const allowed = new Set(['in_review', 'approved', 'scheduled', 'rejected'])
-  if (!args.postId || !allowed.has(args.decision)) {
-    return { ok: false, detail: 'decision must be in_review|approved|scheduled|rejected' }
-  }
-  const row = {
-    slug,
-    postId: args.postId,
-    decision: args.decision,
-    note: args.note ?? '',
-    actor: principal.label ?? principal.token.slice(0, 12),
-    ts: new Date().toISOString(),
-  }
-  await withPb((pb) => pb.collection('approvals_v2').create(row))
-  await audit(principal, {
-    action: 'approval.decide',
-    slug,
-    resourceId: args.postId,
-    after: { decision: args.decision, note: args.note, via: 'chat' },
-  })
-  return { ok: true }
-}
-
-async function toolPatchPost(
-  principal: TokenPrincipal,
-  slug: string,
-  args: { postId: string; title?: string; copy?: string; date?: string },
-): Promise<{ ok: boolean; detail?: string }> {
-  if (!args.postId) return { ok: false, detail: 'postId required' }
-  const patch: Record<string, unknown> = {}
-  if (typeof args.title === 'string') patch.title = args.title
-  if (typeof args.copy === 'string') patch.copy = args.copy
-  if (typeof args.date === 'string') patch.date = args.date
-  if (Object.keys(patch).length === 0) {
-    return { ok: false, detail: 'provide at least one of title, copy, date' }
-  }
-  await withPb((pb) =>
-    pb.collection('posts_patches').create({
-      slug,
-      postId: args.postId,
-      patch,
-      ts: new Date().toISOString(),
-      actor: principal.label ?? principal.token.slice(0, 12),
-    }),
-  )
-  await audit(principal, {
-    action: 'post.patch',
-    slug,
-    resourceId: args.postId,
-    after: { ...patch, via: 'chat' },
-  })
-  return { ok: true }
-}
-
-async function toolPatchSuggestion(
-  principal: TokenPrincipal,
-  slug: string,
-  args: { suggestionId: string; status?: string; priority?: number; reason?: string },
-): Promise<{ ok: boolean; detail?: string }> {
-  if (!args.suggestionId) return { ok: false, detail: 'suggestionId required' }
-  const payload = {
-    slug,
-    suggestionId: args.suggestionId,
-    status: args.status ?? '',
-    priority: typeof args.priority === 'number' ? args.priority : null,
-    reason: args.reason ?? '',
-    ts: new Date().toISOString(),
-    actor: principal.label ?? principal.token.slice(0, 12),
-  }
-  await withPb(async (pb) => {
-    try {
-      const existing = await pb
-        .collection('suggestion_states')
-        .getFirstListItem<{ id: string }>(`slug="${slug}" && suggestionId="${args.suggestionId}"`)
-      await pb.collection('suggestion_states').update(existing.id, payload)
-    } catch {
-      await pb.collection('suggestion_states').create(payload)
-    }
-  })
-  await audit(principal, {
-    action: 'suggestion.update',
-    slug,
-    resourceId: args.suggestionId,
-    after: { ...args, via: 'chat' },
-  })
-  return { ok: true }
-}
-
-// ── Tool schema (OpenAI function-call format) ───────────────────────────────
-
-const tools = [
-  {
-    type: 'function',
-    function: {
-      name: 'read_brief',
-      description: 'Read the client brief (positioning, audience, voice, etc.). Use whenever the user asks about strategy, tone, or who the client is.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_plan',
-      description: 'Read the quarterly content plan (pillars, themes, cadence).',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_posts',
-      description: 'List the most recent posts with their status, pillar, channel and title. Returns up to 30.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_post',
-      description: 'Read a single post in full (title, copy, date, status). Use before editing.',
-      parameters: {
-        type: 'object',
-        properties: { postId: { type: 'string' } },
-        required: ['postId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_suggestions',
-      description: 'Read open AI suggestions for new posts/themes.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'set_approval',
-      description: 'Move a post into in_review | approved | scheduled | rejected. Equivalent to the Telegram bot commands `approve p014`, `reject p014`, etc. Writes to approvals_v2 and audit. Confirm with the user first only if they were not explicit.',
-      parameters: {
-        type: 'object',
-        properties: {
-          postId: { type: 'string', description: 'e.g. p014' },
-          decision: { type: 'string', enum: ['in_review', 'approved', 'scheduled', 'rejected'] },
-          note: { type: 'string', description: 'optional reason; recommended on reject' },
-        },
-        required: ['postId', 'decision'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'patch_post',
-      description: 'Edit a post — set any of title, copy, date. Stored in posts_patches overlay (the agent\'s on-disk JSON is untouched).',
-      parameters: {
-        type: 'object',
-        properties: {
-          postId: { type: 'string' },
-          title: { type: 'string' },
-          copy: { type: 'string' },
-          date: { type: 'string', description: 'ISO date YYYY-MM-DD' },
-        },
-        required: ['postId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'patch_suggestion',
-      description: 'Accept, dismiss or reprioritize a suggestion.',
-      parameters: {
-        type: 'object',
-        properties: {
-          suggestionId: { type: 'string' },
-          status: { type: 'string', enum: ['open', 'accepted', 'dismissed'] },
-          priority: { type: 'number' },
-          reason: { type: 'string' },
-        },
-        required: ['suggestionId'],
-      },
-    },
-  },
-] as const
-
-type ToolName =
-  | 'read_brief'
-  | 'read_plan'
-  | 'read_posts'
-  | 'read_post'
-  | 'read_suggestions'
-  | 'set_approval'
-  | 'patch_post'
-  | 'patch_suggestion'
-
-async function runTool(
-  name: ToolName,
-  rawArgs: string,
-  ctx: { principal: TokenPrincipal; slug: string },
-): Promise<unknown> {
-  let args: Record<string, unknown> = {}
-  try {
-    args = rawArgs ? (JSON.parse(rawArgs) as Record<string, unknown>) : {}
-  } catch {
-    return { ok: false, detail: `invalid JSON arguments: ${rawArgs.slice(0, 200)}` }
-  }
-  switch (name) {
-    case 'read_brief':
-      return (await disk.brief(ctx.slug)) ?? { empty: true }
-    case 'read_plan':
-      return (await disk.plan(ctx.slug)) ?? { empty: true }
-    case 'read_posts':
-      return { items: await readPosts(ctx.slug) }
-    case 'read_post': {
-      const id = String(args.postId ?? '')
-      if (!id) return { ok: false, detail: 'postId required' }
-      const all = await readPosts(ctx.slug, 100)
-      const p = all.find((q) => q.id === id)
-      return p ?? { ok: false, detail: 'not found' }
-    }
-    case 'read_suggestions':
-      return { items: await readSuggestions(ctx.slug) }
-    case 'set_approval':
-      return toolSetApproval(ctx.principal, ctx.slug, {
-        postId: String(args.postId ?? ''),
-        decision: String(args.decision ?? ''),
-        note: typeof args.note === 'string' ? args.note : undefined,
-      })
-    case 'patch_post':
-      return toolPatchPost(ctx.principal, ctx.slug, {
-        postId: String(args.postId ?? ''),
-        title: typeof args.title === 'string' ? args.title : undefined,
-        copy: typeof args.copy === 'string' ? args.copy : undefined,
-        date: typeof args.date === 'string' ? args.date : undefined,
-      })
-    case 'patch_suggestion':
-      return toolPatchSuggestion(ctx.principal, ctx.slug, {
-        suggestionId: String(args.suggestionId ?? ''),
-        status: typeof args.status === 'string' ? args.status : undefined,
-        priority: typeof args.priority === 'number' ? args.priority : undefined,
-        reason: typeof args.reason === 'string' ? args.reason : undefined,
-      })
-  }
-}
-
-// ── SSE ─────────────────────────────────────────────────────────────────────
-
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
-// ── OpenRouter streaming with tool-call collection ──────────────────────────
-
-interface OrChunk {
-  choices?: Array<{
-    delta?: {
-      content?: string
-      tool_calls?: Array<{
-        index?: number
-        id?: string
-        type?: string
-        function?: { name?: string; arguments?: string }
-      }>
-    }
-    finish_reason?: string
-  }>
+interface HermesRunEvent {
+  event: string
+  run_id?: string
+  timestamp?: number
+  // tool.* fields
+  tool?: string
+  preview?: string
+  duration?: number
+  error?: boolean | string
+  // run.completed
+  output?: string
+  usage?: unknown
+  // reasoning.available
+  text?: string
 }
 
-interface CollectedToolCall {
-  id: string
-  name: string
-  arguments: string
-}
-
-interface ChatMsg {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content?: string | null
-  tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
-  tool_call_id?: string
-  name?: string
-}
-
-async function streamModelTurn(args: {
-  apiKey: string
-  model: string
-  messages: ChatMsg[]
-  onToken: (t: string) => Promise<void>
-}): Promise<{ text: string; toolCalls: CollectedToolCall[] }> {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://staging.marketing.gfinnov.com',
-      'X-Title': 'Marketing Planner staging chat',
-    },
-    body: JSON.stringify({
-      model: args.model,
-      stream: true,
-      messages: args.messages,
-      tools,
-      tool_choice: 'auto',
-    }),
+// Open a long-lived SSE GET against Hermes and yield parsed event objects.
+async function* hermesRunEvents(
+  runId: string,
+  signal: AbortSignal,
+): AsyncGenerator<HermesRunEvent> {
+  const res = await fetch(`${env.hermesBaseUrl}/v1/runs/${runId}/events`, {
+    headers: { Authorization: `Bearer ${env.hermesApiKey}`, Accept: 'text/event-stream' },
+    signal,
   })
   if (!res.ok || !res.body) {
-    const t = await res.text().catch(() => '')
-    throw new Error(`OpenRouter ${res.status}: ${t.slice(0, 300)}`)
+    const text = await res.text().catch(() => '')
+    throw new Error(`Hermes events ${res.status}: ${text.slice(0, 300)}`)
   }
   const reader = res.body.getReader()
   const dec = new TextDecoder()
   let buf = ''
-  let text = ''
-  // Tool calls stream as deltas (index-keyed) per OpenAI's spec.
-  const partial: Record<number, { id: string; name: string; arguments: string }> = {}
+  let currentEvent = ''
   while (true) {
     const { value, done } = await reader.read()
     if (done) break
@@ -412,37 +73,27 @@ async function streamModelTurn(args: {
     const lines = buf.split('\n')
     buf = lines.pop() ?? ''
     for (const raw of lines) {
-      const line = raw.trim()
-      if (!line.startsWith('data:')) continue
-      const payload = line.slice(5).trim()
-      if (payload === '[DONE]') continue
-      try {
-        const j = JSON.parse(payload) as OrChunk
-        const delta = j.choices?.[0]?.delta
-        if (delta?.content) {
-          text += delta.content
-          await args.onToken(delta.content)
+      const line = raw.replace(/\r$/, '')
+      if (line === '') {
+        currentEvent = ''
+        continue
+      }
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim()
+      } else if (line.startsWith('data:')) {
+        const payload = line.slice(5).trim()
+        if (!payload) continue
+        try {
+          const parsed = JSON.parse(payload) as HermesRunEvent
+          if (!parsed.event && currentEvent) parsed.event = currentEvent
+          yield parsed
+        } catch {
+          /* skip non-JSON keepalives */
         }
-        if (delta?.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index ?? 0
-            const cur = partial[idx] ?? { id: '', name: '', arguments: '' }
-            if (tc.id) cur.id = tc.id
-            if (tc.function?.name) cur.name = tc.function.name
-            if (tc.function?.arguments) cur.arguments += tc.function.arguments
-            partial[idx] = cur
-          }
-        }
-      } catch {
-        // ignore non-JSON keepalives
       }
     }
   }
-  const toolCalls = Object.values(partial).filter((c) => c.name)
-  return { text, toolCalls }
 }
-
-// ── Route ───────────────────────────────────────────────────────────────────
 
 chat.post(
   '/clients/:slug/chat/stream',
@@ -450,7 +101,11 @@ chat.post(
   requireRole('dash', 'admin'),
   async (c) => {
     const slug = c.req.param('slug')
-    let body: { thread?: string; message?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }
+    let body: {
+      thread?: string
+      message?: string
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>
+    }
     try {
       body = await c.req.json()
     } catch {
@@ -460,17 +115,18 @@ chat.post(
     const thread = (body.thread ?? 'default').slice(0, 100)
     const history = (body.history ?? []).slice(-10)
     if (!message) return problem(c, { title: 'Bad Request', status: 400, detail: 'message required' })
-    if (!env.openrouterApiKey) {
+    if (!env.hermesApiKey) {
       return problem(c, {
         title: 'Misconfigured',
         status: 503,
-        detail: 'OPENROUTER_API_KEY not set on mp-staging-api',
+        detail: 'HERMES_API_KEY not set on mp-staging-api — chat proxy disabled',
       })
     }
 
     const principal = c.get('principal')
 
-    // Persist user message immediately.
+    // Persist user message immediately so chat history is queryable even if
+    // the run errors mid-flight.
     withPb((pb) =>
       pb.collection('chat_messages').create({
         slug,
@@ -486,83 +142,90 @@ chat.post(
       c.header('Cache-Control', 'no-cache, no-transform')
       c.header('X-Accel-Buffering', 'no')
 
-      const systemPrompt = [
-        `You are the Marketing Planner staging assistant for client "${slug}".`,
-        `You have READ tools (read_brief, read_plan, read_posts, read_post, read_suggestions) and WRITE tools (set_approval, patch_post, patch_suggestion).`,
-        `Match the Telegram bot's UX: when the user says "approve p014" or "reject p015 it's off-brand", call set_approval directly — do NOT ask for confirmation. The audit log catches everything; undo is just another command.`,
-        `Cite post IDs (e.g. p014) in your answers. Match the brief's language.`,
-        `When proposing edits or new drafts, briefly read the brief first if you have not already this session.`,
-        `Today is ${new Date().toISOString().slice(0, 10)}.`,
-      ].join(' ')
-
-      const messages: ChatMsg[] = [
-        { role: 'system', content: systemPrompt },
-        ...history.map((h) => ({ role: h.role, content: h.content })),
-        { role: 'user', content: message },
-      ]
-
+      // Start the run on Hermes.
+      let runId: string | null = null
       let assistantFinalText = ''
-      let safety = 0
+      const toolIds = new Map<string, string>() // tool name -> synthetic id for matching started→completed
+      let toolCounter = 0
+      const ac = new AbortController()
+      // If the client disconnects we want the Hermes event stream to close too.
+      const onAbort = () => ac.abort()
+      c.req.raw.signal?.addEventListener('abort', onAbort, { once: true })
+
       try {
-        // Loop until the model returns no more tool calls (or a safety cap).
-        while (safety++ < 6) {
-          const turn = await streamModelTurn({
-            apiKey: env.openrouterApiKey,
-            model: env.chatModel,
-            messages,
-            onToken: async (t) => {
-              await s.write(sse('token', { text: t }))
-            },
-          })
+        const runRes = await fetch(`${env.hermesBaseUrl}/v1/runs`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.hermesApiKey}`,
+            'Content-Type': 'application/json',
+            // Scope long-term memory per client so different slugs don't bleed.
+            'X-Hermes-Session-Key': `mp-${slug}-${thread}`,
+          },
+          body: JSON.stringify({
+            input: message,
+            conversation_history: history.map((h) => ({ role: h.role, content: h.content })),
+          }),
+          signal: ac.signal,
+        })
+        if (!runRes.ok) {
+          const text = await runRes.text().catch(() => '')
+          throw new Error(`Hermes /v1/runs ${runRes.status}: ${text.slice(0, 300)}`)
+        }
+        const runJson = (await runRes.json()) as { run_id?: string }
+        runId = runJson.run_id ?? null
+        if (!runId) throw new Error('Hermes did not return a run_id')
 
-          if (turn.toolCalls.length === 0) {
-            assistantFinalText = turn.text
-            break
-          }
-
-          // Push the assistant's tool_call message into history.
-          messages.push({
-            role: 'assistant',
-            content: turn.text || null,
-            tool_calls: turn.toolCalls.map((tc) => ({
-              id: tc.id,
-              type: 'function',
-              function: { name: tc.name, arguments: tc.arguments },
-            })),
-          })
-
-          // Execute each tool, emit events, append tool result messages.
-          for (const tc of turn.toolCalls) {
+        for await (const ev of hermesRunEvents(runId, ac.signal)) {
+          if (ev.event === 'tool.started') {
+            const id = `t${++toolCounter}`
+            toolIds.set(ev.tool ?? `tool-${toolCounter}`, id)
             await s.write(
               sse('tool_call', {
-                id: tc.id,
-                name: tc.name,
-                arguments: tc.arguments,
+                id,
+                name: ev.tool ?? 'tool',
+                arguments: ev.preview ?? '',
               }),
             )
-            let result: unknown
-            try {
-              result = await runTool(tc.name as ToolName, tc.arguments, {
-                principal,
-                slug,
-              })
-            } catch (err) {
-              result = { ok: false, detail: err instanceof Error ? err.message : 'tool error' }
+          } else if (ev.event === 'tool.completed') {
+            const id = toolIds.get(ev.tool ?? '') ?? `t${++toolCounter}`
+            const ok = !ev.error
+            await s.write(
+              sse('tool_result', {
+                id,
+                name: ev.tool ?? 'tool',
+                result: { ok, duration: ev.duration ?? 0 },
+              }),
+            )
+          } else if (ev.event === 'reasoning.available') {
+            // Surface as a synthetic "thought" so the UI's existing thoughts
+            // collapser picks it up.
+            if (ev.text) {
+              await s.write(sse('tool', { label: ev.text.slice(0, 160), status: 'done' }))
             }
-            await s.write(sse('tool_result', { id: tc.id, name: tc.name, result }))
-            messages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              name: tc.name,
-              content: JSON.stringify(result),
-            })
+          } else if (ev.event === 'run.completed') {
+            assistantFinalText = ev.output ?? ''
+            // Emit the whole final text as one token chunk. The chat-sheet UI
+            // already concatenates token events into the assistant bubble.
+            if (assistantFinalText) {
+              await s.write(sse('token', { text: assistantFinalText }))
+            }
+            break
+          } else if (ev.event === 'run.failed') {
+            await s.write(sse('error', { detail: String(ev.error ?? 'run failed') }))
+            break
+          } else if (ev.event === 'run.cancelled') {
+            await s.write(sse('error', { detail: 'run cancelled' }))
+            break
           }
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : 'unknown'
         await s.write(sse('error', { detail }))
+      } finally {
+        c.req.raw.signal?.removeEventListener('abort', onAbort)
       }
 
+      // Persist assistant message + emit done.
       try {
         const rec = await withPb((pb) =>
           pb.collection('chat_messages').create({
@@ -570,7 +233,10 @@ chat.post(
             thread,
             role: 'assistant',
             content: assistantFinalText,
-            toolEvent: { actor: principal.label ?? principal.token.slice(0, 12) },
+            toolEvent: {
+              actor: principal.label ?? principal.token.slice(0, 12),
+              runId,
+            },
           }),
         )
         await s.write(sse('done', { messageId: (rec as { id: string }).id }))
@@ -582,12 +248,10 @@ chat.post(
   },
 )
 
-// ── Thread history fetch ────────────────────────────────────────────────────
-
+// Thread history fetch — unchanged.
 chat.get('/clients/:slug/chat/messages', requireScope(), requireRole('dash', 'admin'), async (c) => {
   const slug = c.req.param('slug')
   const thread = c.req.query('thread') ?? 'default'
-  // PB v0.38 base collections have no auto `created` — sort on id.
   const items = await withPb((pb) =>
     pb.collection('chat_messages').getList(1, 50, {
       filter: `slug="${slug}" && thread="${thread}"`,

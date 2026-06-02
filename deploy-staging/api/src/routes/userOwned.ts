@@ -110,6 +110,40 @@ for (const res of ['brief', 'plan', 'goals', 'learnings'] as const) {
   )
 }
 
+// PATCH /clients/:slug/branding — shallow merge into brief.branding without
+// touching the rest of the brief. Lets the chatbot (or any client) update
+// colors / typography / logos / tone in isolation.
+userOwned.patch(
+  '/clients/:slug/branding',
+  requireScope(),
+  requireRole('dash', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    let body: Record<string, unknown>
+    try {
+      body = await c.req.json()
+    } catch {
+      return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
+    }
+    const current = ((await loadFromPbOrDisk('brief', slug)) as
+      | { branding?: Record<string, unknown> }
+      | null) ?? {}
+    const nextBranding = { ...(current.branding ?? {}), ...body }
+    const nextBrief = { ...current, branding: nextBranding }
+    const { before, after } = await upsertInPb('brief', slug, nextBrief)
+    await audit(c.get('principal'), {
+      action: 'branding.update',
+      slug,
+      before:
+        typeof before === 'object' && before !== null
+          ? (before as { branding?: unknown }).branding
+          : null,
+      after: nextBranding,
+    })
+    return c.json({ data: nextBranding })
+  },
+)
+
 // POST /clients/:slug/learnings/entries — append one entry to the items list.
 userOwned.post(
   '/clients/:slug/learnings/entries',

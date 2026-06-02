@@ -15,6 +15,9 @@ interface FieldSpec {
   min?: number
   values?: string[]
   maxSize?: number
+  // file-field options
+  maxSelect?: number
+  mimeTypes?: string[]
 }
 
 interface CollectionSpec {
@@ -91,6 +94,43 @@ const collections: CollectionSpec[] = [
     ],
     indexes: [
       'CREATE UNIQUE INDEX `idx_suggestion_states_slug_id` ON `suggestion_states` (`slug`, `suggestionId`)',
+    ],
+  },
+  {
+    // Per-client inspiration assets uploaded from the dashboard (drag-drop).
+    // Stored in PB because the API mounts clients/ read-only and can't write
+    // image files to disk. Served back via /clients/:slug/inspiration/:id/file.
+    name: 'inspiration_assets',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'note', type: 'text', max: 500 },
+      {
+        name: 'file',
+        type: 'file',
+        required: true,
+        maxSelect: 1,
+        maxSize: 15_000_000,
+        mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+      },
+      { name: 'actor', type: 'text', max: 100 },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: ['CREATE INDEX `idx_inspiration_slug` ON `inspiration_assets` (`slug`)'],
+  },
+  {
+    // Dashboard- and chat-created posts. Viktor's disk JSON is the authoritative
+    // source for posts he wrote; this collection holds posts originated from
+    // the staging dashboard/chat. Reads merge both. `data` is the full post JSON.
+    name: 'posts_created',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postId', type: 'text', required: true, max: 100 },
+      { name: 'data', type: 'json', maxSize: 5_000_000 },
+      { name: 'ts', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_posts_created_slug_post` ON `posts_created` (`slug`, `postId`)',
     ],
   },
   {

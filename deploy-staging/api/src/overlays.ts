@@ -8,6 +8,31 @@
 
 import { withPb } from './pb.js'
 
+interface PostCreatedRow {
+  postId: string
+  data: Record<string, unknown>
+  ts: string
+  actor?: string
+}
+
+export async function loadCreatedPosts(slug: string): Promise<Map<string, Record<string, unknown>>> {
+  const map = new Map<string, Record<string, unknown>>()
+  try {
+    const rows = await withPb((pb) =>
+      pb.collection('posts_created').getFullList<PostCreatedRow>({
+        filter: `slug="${slug}"`,
+        sort: 'ts',
+      }),
+    )
+    for (const r of rows) {
+      map.set(r.postId, { ...(r.data ?? {}), id: r.postId })
+    }
+  } catch {
+    /* collection missing or empty */
+  }
+  return map
+}
+
 interface PostPatchRow {
   postId: string
   patch: Record<string, unknown>

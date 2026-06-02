@@ -56,5 +56,14 @@ export interface Brief {
     drive_folder_url: string | null
     examples: string[]
   }
+  branding?: {
+    colors: Array<{ name: string; hex: string }>
+    typography: {
+      headingFont: string
+      bodyFont: string
+    }
+    logos: Array<{ variant: string; url: string }>
+    toneKeywords: string[]
+  }
   expectations: string
 }

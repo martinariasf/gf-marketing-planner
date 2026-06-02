@@ -292,6 +292,56 @@ export async function apiPatchPost(
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
 }
 
+// ── Inspiration assets (drag-drop image library) ────────────────────────────
+
+export interface InspirationItem {
+  id: string
+  note: string
+  filename: string
+  url: string
+  createdAt?: string
+}
+
+export async function apiListInspiration(slug: string): Promise<InspirationItem[]> {
+  try {
+    const r = await apiGet<{ items: InspirationItem[] }>(`/clients/${slug}/inspiration`)
+    return r.items.map((it) => ({ ...it, url: absoluteUrl(it.url) }))
+  } catch {
+    return []
+  }
+}
+
+export async function apiUploadInspiration(
+  slug: string,
+  file: File,
+  note = '',
+): Promise<InspirationItem> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('note', note)
+  const res = await authedFetch(`/clients/${slug}/inspiration`, { method: 'POST', body: form })
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+  const it = (await res.json()) as InspirationItem
+  return { ...it, url: absoluteUrl(it.url) }
+}
+
+export async function apiDeleteInspiration(slug: string, id: string): Promise<void> {
+  const res = await authedFetch(`/clients/${slug}/inspiration/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
+}
+
+// The API returns same-origin absolute paths (/api/v1/...). When the SPA runs
+// against a remote API_BASE in dev, prefix it; in prod they're same-origin.
+function absoluteUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) return path
+  if (!API_BASE) return path
+  try {
+    return new URL(path, new URL(API_BASE)).toString()
+  } catch {
+    return path
+  }
+}
+
 // ── Phase 6: chat streaming ──────────────────────────────────────────────────
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string }
@@ -305,7 +355,27 @@ export type ChatStreamEvent =
   | { type: 'done'; messageId: string | null }
   | { type: 'error'; detail: string }
 
-const WRITE_TOOLS = new Set(['set_approval', 'patch_post', 'patch_suggestion'])
+// Tool names that should trigger a dashboard refetch on completion.
+// First group: the legacy in-process tool names (kept for backward compat in
+// case any stale code paths still emit them). Second group: the Hermes tool
+// names emitted by the new chat proxy — `terminal` is how Hermes runs curl
+// against our own API, so we treat any successful terminal/file write as a
+// hint that something user-visible may have changed. False positives just
+// trigger a no-op refetch.
+const WRITE_TOOLS = new Set([
+  'set_approval',
+  'patch_post',
+  'patch_suggestion',
+  'create_post',
+  'delete_post',
+  'patch_brief',
+  'patch_plan',
+  'patch_goals',
+  'patch_learnings',
+  'terminal',
+  'write_file',
+  'patch',
+])
 export function isWriteTool(name: string): boolean {
   return WRITE_TOOLS.has(name)
 }

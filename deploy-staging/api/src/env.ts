@@ -27,10 +27,11 @@ export const env = {
   //   agent_xxx:agent:staging-demo,dash_yyy:admin:*
   bootstrapTokens: process.env.BOOTSTRAP_TOKENS ?? '',
 
-  // Phase 6 chat — in-process implementation lives in routes/chat.ts and
-  // talks to OpenRouter directly. No Hermes image fork required.
-  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
-  chatModel: process.env.CHAT_MODEL ?? 'anthropic/claude-sonnet-4.5',
+  // Chat — proxied to hermes-marketing-staging's built-in OpenAI-compatible
+  // api_server platform. Same agent, same tools, same prompt as Telegram.
+  // The previous in-process OpenRouter loop is retired.
+  hermesBaseUrl: process.env.HERMES_BASE_URL ?? 'http://hermes-marketing-staging:8642',
+  hermesApiKey: process.env.HERMES_API_KEY ?? '',
 
   // Misc
   logLevel: process.env.LOG_LEVEL ?? 'info',

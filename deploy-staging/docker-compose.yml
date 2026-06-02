@@ -36,9 +36,12 @@ services:
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
       BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
-      # Phase 6 chat — talks directly to OpenRouter from inside the api.
-      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
-      CHAT_MODEL: "${CHAT_MODEL:-anthropic/claude-sonnet-4.5}"
+      # Chat is proxied to hermes-marketing-staging's built-in OpenAI gateway
+      # (api_server platform). Same agent + tools as Telegram, single source
+      # of truth for chat behaviour. HERMES_API_KEY must match the value set
+      # in /opt/agents/staging-demo/config.yaml under platforms.api_server.extra.key
+      HERMES_BASE_URL: "${HERMES_BASE_URL:-http://hermes-marketing-staging:8642}"
+      HERMES_API_KEY: "${HERMES_API_KEY:-}"
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:

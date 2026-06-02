@@ -20,6 +20,8 @@ import { auditRoute } from './routes/audit.js'
 import { chat } from './routes/chat.js'
 import { authExchange } from './routes/authExchange.js'
 import { integration } from './routes/integration.js'
+import { assetFiles } from './routes/assetFiles.js'
+import { inspiration } from './routes/inspiration.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { problem } from './problem.js'
@@ -69,10 +71,14 @@ app.get(
 // subapps register `use('*', requireAuth)` which would otherwise intercept
 // /auth/exchange and 401 it before our handler runs.
 app.route('/api/v1', health)
+// Public image serving — mounted before the auth-gated subapps so <img> tags
+// can load generated assets without a bearer token.
+app.route('/api/v1', assetFiles)
 app.route('/api/v1', authExchange)
 app.route('/api/v1', clients)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
+app.route('/api/v1', inspiration)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', chat)
 app.route('/api/v1', integration)
