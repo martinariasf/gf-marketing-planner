@@ -6,7 +6,6 @@ import {
   Trash2,
   ChevronDown,
   Pencil,
-  Eye,
   Check,
   Loader2,
 } from 'lucide-react'
@@ -234,7 +233,7 @@ export function EditBar({
             >
               {editMode ? (
                 <>
-                  <Eye className="h-3.5 w-3.5 mr-1.5" /> {t('common.preview')}
+                  <Save className="h-3.5 w-3.5 mr-1.5" /> {t('common.save')}
                 </>
               ) : (
                 <>
@@ -282,7 +281,7 @@ export function EditBar({
                   title={editMode ? t('header.exitEdit') : t('editBar.enterEditMode')}
                 >
                   {editMode ? (
-                    <Eye className="h-3.5 w-3.5" />
+                    <Save className="h-3.5 w-3.5" />
                   ) : (
                     <Pencil className="h-3.5 w-3.5" />
                   )}

@@ -11,7 +11,7 @@ import {
   Area,
   AreaChart,
 } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -368,39 +368,6 @@ export default function PerformanceView() {
         </Card>
       </section>
 
-      {/* Weekly summary recap */}
-      {performance.weeklySummary && (
-        <>
-          <Separator />
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">
-              {t('performance.weekRetro', { n: performance.weeklySummary.week })}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SummaryColumn
-                title={t('performance.wins')}
-                items={performance.weeklySummary.wins}
-                tone="green"
-              />
-              <SummaryColumn
-                title={t('performance.losses')}
-                items={performance.weeklySummary.losses}
-                tone="red"
-              />
-              <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-blue">{t('performance.nextTest')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed">
-                    {performance.weeklySummary.nextTest}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-        </>
-      )}
     </div>
   )
 }
@@ -418,38 +385,3 @@ function MetricCell({ value, highlight = false }: { value: number; highlight?: b
   )
 }
 
-function SummaryColumn({
-  title,
-  items,
-  tone,
-}: {
-  title: string
-  items: string[]
-  tone: 'green' | 'red'
-}) {
-  return (
-    <Card
-      className={cn(
-        tone === 'green' ? 'border-brand-green-200/60' : 'border-rose-200/60',
-      )}
-    >
-      <CardHeader className="pb-2">
-        <CardTitle
-          className={cn(
-            'text-sm',
-            tone === 'green' ? 'text-brand-green-600' : 'text-rose-700',
-          )}
-        >
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="text-sm space-y-2">
-          {items.map((x, i) => (
-            <li key={i}>&middot; {x}</li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  )
-}

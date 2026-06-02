@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Calendar, Star, ArrowRight } from 'lucide-react'
+import { Calendar, Star } from 'lucide-react'
 import { fmtDateShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
 import { useT } from '@/lib/i18n'
@@ -193,47 +193,6 @@ export default function StrategyView() {
             </div>
           </CardContent>
         </Card>
-      </section>
-
-      <Separator />
-
-      {/* Monthly focus */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t('strategy.monthlyFocus')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {plan.monthlyFocus.map((m) => (
-            <Card key={m.month}>
-              <CardHeader className="pb-2">
-                <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                  {m.month}
-                </p>
-                <CardTitle className="text-base">{m.theme}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-ink-muted">{m.intent}</p>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    {t('strategy.priorities')}
-                  </p>
-                  <ul className="text-sm space-y-1">
-                    {m.priorities.map((p) => (
-                      <li key={p} className="flex gap-1.5">
-                        <ArrowRight className="h-3 w-3 mt-1 shrink-0 text-brand-blue" />
-                        <span>{p}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    {t('strategy.watch')}
-                  </p>
-                  <p className="text-sm">{m.watch}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </section>
 
       <Separator />

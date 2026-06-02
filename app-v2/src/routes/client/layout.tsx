@@ -24,7 +24,7 @@ import {
   ChevronLeft,
   HelpCircle,
   Pencil,
-  Eye,
+  Save,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
@@ -278,8 +278,8 @@ export default function ClientLayout() {
             >
               {editMode ? (
                 <>
-                  <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden md:inline">{t('common.preview')}</span>
+                  <Save className="h-3.5 w-3.5 sm:mr-1.5" />
+                  <span className="hidden md:inline">{t('common.save')}</span>
                 </>
               ) : (
                 <>
@@ -299,7 +299,7 @@ export default function ClientLayout() {
                 editMode && 'bg-amber-500 hover:bg-amber-600 text-white',
               )}
             >
-              {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+              {editMode ? <Save className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             </Button>
             <button
               type="button"

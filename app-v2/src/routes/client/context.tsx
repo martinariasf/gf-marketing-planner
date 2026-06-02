@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react'
 import { useParams, useOutletContext } from 'react-router'
+import { toast } from 'sonner'
 import {
   Card,
   CardContent,
@@ -7,10 +9,12 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Check, X, Palette, Plus, Trash2 } from 'lucide-react'
+import { Check, X, Palette, Plus, Trash2, Upload, Loader2 } from 'lucide-react'
 import type { ClientBundle } from '@/lib/client-data'
+import { isApiEnabled, apiUploadInspiration } from '@/lib/api-client'
 import { useEdit } from '@/lib/edit-store'
 import { useT } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { EditableText } from '@/components/editable/editable-text'
 import { EditableTextarea } from '@/components/editable/editable-textarea'
 import { EditablePills } from '@/components/editable/editable-pills'
@@ -373,32 +377,8 @@ export default function ContextView() {
 
       <Separator />
 
-      <Section title={t('context.successTitle')}>
-        <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
-          <CardContent className="p-5">
-            <EditableTextarea
-              value={brief.expectations}
-              onChange={(v) => set(['expectations'], v)}
-              placeholder={t('context.successPlaceholder')}
-              rows={4}
-              className="text-sm leading-relaxed"
-            />
-          </CardContent>
-        </Card>
-      </Section>
-
-      <Section title={t('context.metricsTitle')}>
-        <EditablePills
-          items={brief.metricsThatMatter}
-          onChange={(v) => set(['metricsThatMatter'], v)}
-          tone="blue"
-          placeholder={t('context.addMetric')}
-        />
-      </Section>
-
-      <Separator />
-
       <BrandingSection
+        slug={slug}
         branding={brief.branding}
         set={(path, value) => set(['branding', ...path], value)}
       />
@@ -416,9 +396,11 @@ const DEFAULT_BRANDING = {
 }
 
 function BrandingSection({
+  slug,
   branding,
   set,
 }: {
+  slug: string
   branding: NonNullable<ClientBundle['brief']['branding']> | undefined
   set: (path: (string | number)[], value: unknown) => void
 }) {
@@ -427,6 +409,34 @@ function BrandingSection({
   const b = { ...DEFAULT_BRANDING, ...(branding ?? {}) }
   const colors = b.colors
   const logos = b.logos
+
+  // Drag-drop logo upload. Files are stored via the same per-client asset
+  // endpoint the Inspiration board uses, then appended as logo entries so they
+  // render immediately. Only available in edit mode against the live API.
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoDragOver, setLogoDragOver] = useState(false)
+  const logoFileRef = useRef<HTMLInputElement | null>(null)
+
+  const uploadLogos = async (files: FileList | File[]) => {
+    const images = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) {
+      toast.error(t('inspiration.imagesOnly'))
+      return
+    }
+    setLogoUploading(true)
+    try {
+      const uploaded: Array<{ variant: string; url: string }> = []
+      for (const file of images) {
+        const item = await apiUploadInspiration(slug, file, 'logo')
+        uploaded.push({ variant: '', url: item.url })
+      }
+      set(['logos'], [...logos, ...uploaded])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('inspiration.uploadFailed'))
+    } finally {
+      setLogoUploading(false)
+    }
+  }
 
   return (
     <Section
@@ -583,6 +593,49 @@ function BrandingSection({
               )}
             </div>
           ))}
+          {editMode && isApiEnabled && (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault()
+                setLogoDragOver(true)
+              }}
+              onDragLeave={() => setLogoDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setLogoDragOver(false)
+                if (e.dataTransfer.files?.length) void uploadLogos(e.dataTransfer.files)
+              }}
+              onClick={() => logoFileRef.current?.click()}
+              className={cn(
+                'rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors',
+                logoDragOver
+                  ? 'border-brand-blue bg-brand-blue-50/50'
+                  : 'border-border-subtle hover:border-brand-blue/50 hover:bg-paper-muted/50',
+              )}
+            >
+              <input
+                ref={logoFileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) void uploadLogos(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              <div className="flex flex-col items-center gap-1 text-ink-muted">
+                {logoUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-brand-blue" />
+                ) : (
+                  <Upload className="h-5 w-5" />
+                )}
+                <p className="text-xs">
+                  <span className="text-brand-blue font-medium">{t('inspiration.dragDrop')}</span>{t('context.logoDropHint')}
+                </p>
+              </div>
+            </div>
+          )}
           {editMode && (
             <button
               type="button"
