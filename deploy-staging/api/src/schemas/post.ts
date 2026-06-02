@@ -57,6 +57,17 @@ const publishingShape = z
   })
   .passthrough()
 
+// CAR1 carousel slides. A post becomes a carousel when it has a `slides` array
+// (2–10; IG's cap). `image` stays the cover (= slides[0].image). Strict on the
+// slide object so a typo'd key (e.g. `url` instead of `image`) 422s instead of
+// silently dropping. caption = optional per-slide design-brief, not a body.
+const slideShape = z
+  .object({
+    image: z.string().min(1, 'must be the asset URL returned by the image step'),
+    caption: z.string().optional(),
+  })
+  .strict()
+
 // All KNOWN post fields. `.strict()` then rejects anything else (typos).
 const postFields = {
   id: z.string().min(1).optional(),
@@ -67,6 +78,7 @@ const postFields = {
   campaign: z.string().optional(),
   title: z.string().min(1, 'must not be empty'),
   image: z.string().optional(),
+  slides: z.array(slideShape).max(10, 'a carousel can have at most 10 slides').optional(),
   copy: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
   cta: z.string().optional(),
@@ -140,6 +152,23 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
   if (typeof p.cta !== 'string') p.cta = ''
   if (typeof p.date !== 'string') p.date = ''
   if (!Array.isArray(p.hashtags)) p.hashtags = []
+  // CAR1: if slides are present, keep only well-formed {image, caption?} entries
+  // and default the cover `image` to slides[0].image when missing. If absent,
+  // leave single-image behaviour untouched.
+  if (Array.isArray(p.slides)) {
+    const slides = (p.slides as unknown[])
+      .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
+      .filter((s) => typeof s.image === 'string' && s.image.length > 0)
+      .map((s) => ({
+        image: s.image as string,
+        ...(typeof s.caption === 'string' ? { caption: s.caption } : {}),
+      }))
+    p.slides = slides
+    const cover = slides[0]
+    if (cover && (typeof p.image !== 'string' || p.image.length === 0)) {
+      p.image = cover.image
+    }
+  }
   if (typeof p.approval !== 'object' || p.approval === null) {
     p.approval = { ...DEFAULT_APPROVAL, status: p.status }
   } else {

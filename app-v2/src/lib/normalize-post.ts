@@ -32,6 +32,18 @@ export function normalizePost(raw: unknown): Post {
   const publishingRaw =
     p.publishing && typeof p.publishing === 'object' ? (p.publishing as Record<string, unknown>) : {}
 
+  // CAR1: keep only well-formed slides; the cover image falls back to slides[0].
+  const slides = Array.isArray(p.slides)
+    ? (p.slides as unknown[])
+        .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
+        .filter((s) => typeof s.image === 'string' && (s.image as string).length > 0)
+        .map((s) => ({
+          image: s.image as string,
+          ...(typeof s.caption === 'string' ? { caption: s.caption as string } : {}),
+        }))
+    : undefined
+  const coverFromSlides = slides && slides.length > 0 ? slides[0].image : undefined
+
   return {
     id: typeof p.id === 'string' ? p.id : '',
     date: typeof p.date === 'string' ? p.date : '',
@@ -40,7 +52,8 @@ export function normalizePost(raw: unknown): Post {
     pillar: typeof p.pillar === 'string' ? p.pillar : '',
     campaign: typeof p.campaign === 'string' ? p.campaign : undefined,
     title: typeof p.title === 'string' ? p.title : '',
-    image: typeof p.image === 'string' ? p.image : undefined,
+    image: typeof p.image === 'string' && p.image.length > 0 ? p.image : coverFromSlides,
+    ...(slides && slides.length > 0 ? { slides } : {}),
     copy: typeof p.copy === 'string' ? p.copy : '',
     hashtags: Array.isArray(p.hashtags) ? p.hashtags.filter((h): h is string => typeof h === 'string') : [],
     cta: typeof p.cta === 'string' ? p.cta : '',

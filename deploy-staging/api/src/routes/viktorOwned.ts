@@ -63,6 +63,14 @@ async function buildPost(slug: string, id: string): Promise<PostBase | null> {
   const approval = approvals.get(id)
   const next: PostBase = { ...base, ...patch, id }
   if ('image' in next) next.image = normalizeImageUrl(slug, next.image)
+  // CAR1: normalize each carousel slide image the same way the cover is, so the
+  // agent can PATCH bare filenames and the dashboard still gets full asset URLs.
+  if (Array.isArray((next as Record<string, unknown>).slides)) {
+    const slides = (next as Record<string, unknown>).slides as Array<Record<string, unknown>>
+    ;(next as Record<string, unknown>).slides = slides.map((s) =>
+      s && typeof s === 'object' ? { ...s, image: normalizeImageUrl(slug, s.image) } : s,
+    )
+  }
   if (approval) {
     next.approval = {
       ...(base.approval ?? {}),
