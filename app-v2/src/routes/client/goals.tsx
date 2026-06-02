@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
   Tooltip,
+  ReferenceLine,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,8 +18,10 @@ import { fmtCompact, fmtDate } from '@/lib/format'
 import { BRAND, PACE_COLORS } from '@/lib/brand'
 import { Clock, Pencil, Lock } from 'lucide-react'
 import { useEdit } from '@/lib/edit-store'
-import { useT } from '@/lib/i18n'
+import { useT, useI18n, type Lang } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
+
+const LOCALE: Record<Lang, string> = { en: 'en-US', de: 'de-DE', es: 'es-ES' }
 
 interface ChartTooltipPayload {
   dataKey: string
@@ -123,9 +126,20 @@ function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
 
 export default function GoalsView() {
   const t = useT()
+  const { lang } = useI18n()
   const { goals, performance } = useOutletContext<ClientBundle>()
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode } = useEdit()
+
+  // GV1 — anchor the dashboard to "now". The chart's X axis uses English month
+  // names (e.g. "June"), so the TODAY reference line is placed at the English
+  // month; the section subheader is localised per the active language.
+  const now = new Date()
+  const todayMonthEn = now.toLocaleString('en-US', { month: 'long' })
+  const periodHeader = t('goals.periodHeader', {
+    month: now.toLocaleString(LOCALE[lang], { month: 'long', year: 'numeric' }),
+    n: Math.ceil(now.getDate() / 7),
+  })
 
   const monthlyReachData = goals.monthly.map((m) => {
     const reachGoal = m.goals.find((g) => g.ref === 'g_reach')
@@ -265,7 +279,12 @@ export default function GoalsView() {
       <Separator />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t('goals.monthlyTitle')}</h2>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="text-lg font-semibold">{t('goals.monthlyTitle')}</h2>
+          <span className="text-xs font-medium text-brand-blue bg-brand-blue-50/70 border border-brand-blue-200/60 rounded px-2 py-0.5">
+            {periodHeader}
+          </span>
+        </div>
         <Card>
           <CardContent className="p-5">
             <div className="h-64">
@@ -286,6 +305,21 @@ export default function GoalsView() {
                     tickFormatter={(v: number) => fmtCompact(v)}
                   />
                   <Tooltip content={<MonthlyTooltip />} cursor={{ fill: BRAND.paperMuted }} />
+                  {monthlyReachData.some((d) => d.month === todayMonthEn) && (
+                    <ReferenceLine
+                      x={todayMonthEn}
+                      stroke={BRAND.blue}
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      label={{
+                        value: t('goals.todayMarker'),
+                        position: 'top',
+                        fill: BRAND.blue,
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    />
+                  )}
                   <Bar dataKey="target" radius={[6, 6, 0, 0]} fill={BRAND.blue + '40'} />
                   <Bar dataKey="actual" radius={[6, 6, 0, 0]}>
                     {monthlyReachData.map((entry) => {
