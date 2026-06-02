@@ -17,6 +17,14 @@ import {
   latestApprovalByPost,
 } from '../overlays.js'
 import { problem } from '../problem.js'
+import {
+  postCreateSchema,
+  postPatchSchema,
+  suggestionPatchSchema,
+  approvalCreateSchema,
+  coalescePost,
+  zodDetail,
+} from '../schemas/post.js'
 
 type PostBase = {
   id: string
@@ -62,7 +70,9 @@ async function buildPost(slug: string, id: string): Promise<PostBase | null> {
       status: approval.decision,
     }
   }
-  return next
+  // Repair partial / legacy rows so the dashboard never throws on a missing
+  // field (the June white-screen). Defensive last step — never invents content.
+  return coalescePost(next)
 }
 
 export const viktorOwned = new OpenAPIHono<AppEnv>()
@@ -103,12 +113,18 @@ viktorOwned.post(
   requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
-    let body: Record<string, unknown>
+    let raw: unknown
     try {
-      body = await c.req.json()
+      raw = await c.req.json()
     } catch {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
     }
+    const parsed = postCreateSchema.safeParse(raw)
+    if (!parsed.success) {
+      const { detail, errors } = zodDetail(parsed.error)
+      return problem(c, { title: 'Unprocessable Entity', status: 422, detail, errors })
+    }
+    const body = parsed.data as Record<string, unknown>
     const principal = c.get('principal')
     const id =
       typeof body.id === 'string' && body.id.trim()
@@ -178,12 +194,18 @@ viktorOwned.patch(
   async (c) => {
     const slug = c.req.param('slug')
     const postId = c.req.param('id')
-    let patch: Record<string, unknown>
+    let rawPatch: unknown
     try {
-      patch = await c.req.json()
+      rawPatch = await c.req.json()
     } catch {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
     }
+    const parsedPatch = postPatchSchema.safeParse(rawPatch)
+    if (!parsedPatch.success) {
+      const { detail, errors } = zodDetail(parsedPatch.error)
+      return problem(c, { title: 'Unprocessable Entity', status: 422, detail, errors })
+    }
+    const patch = parsedPatch.data as Record<string, unknown>
     const principal = c.get('principal')
     await withPb((pb) =>
       pb.collection('posts_patches').create({
@@ -233,12 +255,18 @@ viktorOwned.patch(
   async (c) => {
     const slug = c.req.param('slug')
     const suggestionId = c.req.param('id')
-    let body: { status?: string; priority?: number; reason?: string }
+    let rawSug: unknown
     try {
-      body = await c.req.json()
+      rawSug = await c.req.json()
     } catch {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
     }
+    const parsedSug = suggestionPatchSchema.safeParse(rawSug)
+    if (!parsedSug.success) {
+      const { detail, errors } = zodDetail(parsedSug.error)
+      return problem(c, { title: 'Unprocessable Entity', status: 422, detail, errors })
+    }
+    const body = parsedSug.data
     const principal = c.get('principal')
     const payload = {
       slug,
@@ -335,20 +363,18 @@ viktorOwned.post(
   requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
-    let body: { postId?: string; decision?: string; note?: string }
+    let rawApproval: unknown
     try {
-      body = await c.req.json()
+      rawApproval = await c.req.json()
     } catch {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
     }
-    const allowed = new Set(['in_review', 'approved', 'scheduled', 'rejected'])
-    if (!body.postId || !body.decision || !allowed.has(body.decision)) {
-      return problem(c, {
-        title: 'Bad Request',
-        status: 400,
-        detail: 'postId + decision (in_review|approved|scheduled|rejected) required',
-      })
+    const parsedApproval = approvalCreateSchema.safeParse(rawApproval)
+    if (!parsedApproval.success) {
+      const { detail, errors } = zodDetail(parsedApproval.error)
+      return problem(c, { title: 'Unprocessable Entity', status: 422, detail, errors })
     }
+    const body = parsedApproval.data
     const principal = c.get('principal')
     const row = {
       slug,

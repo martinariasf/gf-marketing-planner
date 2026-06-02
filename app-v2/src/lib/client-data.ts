@@ -26,6 +26,7 @@ import type {
   Suggestions,
 } from '@/types'
 import { parseApprovalLog } from '@/types'
+import { normalizePost } from '@/lib/normalize-post'
 import {
   isPocketBaseEnabled,
   pbLoadBrief,
@@ -111,10 +112,10 @@ export async function loadPosts(slug: string): Promise<Post[]> {
     )
     const posts = await Promise.all(
       index.posts.map((id) =>
-        fetchJson<Post>(clientPath(slug, `posts/${id}.json`)),
+        fetchJson<unknown>(clientPath(slug, `posts/${id}.json`)),
       ),
     )
-    return posts
+    return posts.map(normalizePost)
   } catch {
     return []
   }

@@ -21,6 +21,7 @@ import type {
   AssetsManifest,
   Suggestions,
 } from '@/types'
+import { normalizePost } from '@/lib/normalize-post'
 
 const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
 // Build-time fallback for local dev / CI smoke tests. In production it's empty
@@ -210,8 +211,8 @@ export async function apiLoadPerformance(slug: string): Promise<Performance | nu
 
 export async function apiLoadPosts(slug: string): Promise<Post[]> {
   try {
-    const r = await apiGet<{ items: Post[] }>(`/clients/${slug}/posts`)
-    return r.items
+    const r = await apiGet<{ items: unknown[] }>(`/clients/${slug}/posts`)
+    return (r.items ?? []).map(normalizePost)
   } catch {
     return []
   }
