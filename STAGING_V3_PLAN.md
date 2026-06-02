@@ -132,12 +132,74 @@ Audited against live code on `experimental` (2026-06-02). Legend: ✅ done · �
 | **LE1** | Filtros fecha/confianza Learnings | 🟡 | Confidence filter exists (`learnings.tsx` tabs). **Missing:** period selector; "marcar como aplicado". (BAJA) |
 | **LE2** | Ciclo hipótesis→resultado→aprendizaje | 🟡 | Learnings show whatHappened / lesson / behaviorChange. **Missing:** explicit Hipótesis→Qué pasó→Aprendizaje→Cambio framing; "nueva hipótesis generada" field; Víktor auto-proposing learnings from Performance. |
 
+### New capability — CAR1 · Carousel posts (agent-generated, multi-slide) `Prioridad: ALTA`
+
+Today a post carries a single `image`. Carousels (Instagram/LinkedIn multi-slide posts,
+2–10 images swiped left/right) are the most-requested missing content type. This is a
+cross-cutting capability: agent + API + dashboard preview. Designed here; built in Phase C.
+
+**Data model (backward-compatible — does not break the Part 1 hardened contract).**
+A post becomes a carousel when it has a `slides` array; `image` stays as the **cover**
+(= `slides[0].image`) so every existing thumbnail / calendar / performance / mockup path
+that reads `post.image` keeps working untouched.
+
+```ts
+interface Slide { image: string; caption?: string }   // image = full asset URL; caption = optional per-slide note / on-image text brief
+interface Post {
+  // …existing fields…
+  image?: string        // cover = slides[0].image (kept for thumbnails)
+  slides?: Slide[]      // present with length > 1 ⇒ carousel
+  format: string        // set to "carousel" when slides are used
+}
+```
+Carousel detection in the UI: `post.slides && post.slides.length > 1`.
+
+**API impact.** Extend the hardened post schema (`schemas/post.ts`): add
+`slides: z.array(z.object({ image: z.string(), caption: z.string().optional() }).strict()).max(10).optional()`
+(IG's 10-slide cap). `coalescePost()` / `normalizePost()`: if `slides` present, ensure it's an
+array of `{image,caption}` and default the cover `image` to `slides[0].image` when missing; if
+absent, leave single-image behavior. **No new endpoint needed** — slides are set via the normal
+`PATCH /posts/:id`. (Without this schema change a carousel PATCH would 422 under Part 1 — that's
+the one required hook.)
+
+**Agent impact (config.yaml system_prompt + publishing.md).** New "Carousel-Workflow":
+1. **Ask first** (never guess): how many slides (2–10)? channel (IG / LinkedIn)? aspect ratio
+   (1:1 square or 4:5 portrait)? one consistent visual style? topic/goal of the carousel?
+2. **Propose a slide-by-slide outline** before generating: slide 1 = hook, slides 2…n‑1 =
+   content beats, slide n = CTA. Get confirmation.
+3. **Warn on cost/time** — N images × the image-gen call (premium model ≈ 3 min each; see
+   [[staging-chat-pipeline-fixes]] for the fast-model option). Generate slide 1 first as a
+   preview if the user wants a check before committing to all N.
+4. **Generate → assets → PATCH**: for each slide, image-gen → copy into
+   `/opt/marketing-planner/client/assets/` → append a manifest entry (same flow as a single
+   image) → build the `slides[]` array in order → `PATCH /posts/:id` with
+   `{ format:"carousel", slides:[…], image:<slides[0].url> }` → `GET` to confirm.
+5. **Telegram:** send the slides as an album so the user sees the set in chat too.
+   The whole post shares one caption (`copy`); per-slide `caption` is metadata/design-brief,
+   not a second body.
+
+**Dashboard preview ("previewed on the side").** The calendar right-pane is already the side
+preview (Picture / Preview toggle + lightbox). Extend it for carousels (read-only in V3):
+- `PicturePane` → a slide viewer: cover + left/right arrows + dots + an "i / N" counter, with a
+  small thumbnail filmstrip of all slides below. Single-image posts render exactly as today.
+- `ChannelMockup` (instagram/linkedin) → render carousel dots / the platform's multi-image
+  affordance so the social preview matches reality.
+- Lightbox → swipe through all slides at full size.
+- Assets tab already lists each slide image individually (they're normal manifest entries),
+  grouped by `usedInPosts`.
+
+**Open (sensible defaults chosen; revisit when building):** (a) per-slide on-image text is
+produced by image-gen from the slide brief, not overlaid by the dashboard; (b) V3 is
+**preview-only** — reordering/deleting slides from the dashboard is a later increment; (c) default
+aspect ratio 4:5 (best IG/LinkedIn feed real-estate) unless the user says square.
+
 ### V3 phasing (build order for follow-up sessions)
 
 **Phase C — ALTA (highest value, build first):**
 - **GV1** — "TODAY" reference line + "Mes · Semana N" header on Monthly Reach *(small, self-contained)*.
 - **CC1** — "Canales activos" block in Company Context with selectable network icons + clickable profile links; feed selection into Weekly Focus/Calendar context.
 - **CAL2** — direct user image **upload** on a post (reuse the Inspiration/branding upload endpoint + `PATCH /posts/:id {image}`).
+- **CAR1** — carousel posts (agent generates 2–10 slides; `slides[]` on the post; swipeable side preview in the calendar). One required API hook (add `slides` to the post schema) + agent Carousel-Workflow + preview UI. See the dedicated section above.
 - **CAL1** — calendar week/month/quarter toggle + quarterly overview grid.
 - **GV4** — Weekly Focus restructured to channel/message/audience + numeric KPI, editable inline, auto-pushed to Víktor weekly.
 - **ST1** — make Strategy blocks inline-editable + "Revisar con Víktor" + last-modified.
