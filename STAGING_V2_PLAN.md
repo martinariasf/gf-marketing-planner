@@ -276,3 +276,50 @@ Each phase is its own PR against `experimental`, deployable independently.
 - No dark mode, no brand-color refactor.
 - No public-publish path from the dashboard — even on staging, posts never leave PB.
 - No production API yet — staging is the proving ground; production cutover gets its own plan.
+
+---
+
+## 13. Shipped log — June 2026 (chatbot parity + dashboard polish)
+
+This pass delivered the "make the chatbot actually *do* things, like Telegram" goal plus a batch of dashboard UX requests. All on `experimental`, deployed to `staging.marketing.gfinnov.com`.
+
+### Chatbot ↔ Hermes unification (the headline change)
+- The in-app chat is no longer a separate OpenRouter loop. `mp-staging-api`'s `routes/chat.ts` is now a **thin SSE proxy** to the Hermes agent's built-in OpenAI gateway, so Telegram and the dashboard chat are the *same agent* — one model, one system prompt, one tool set, one audit trail.
+- **Step A (on the box):** enabled the `api_server` platform inside `hermes-marketing-staging`. Added to `/opt/agents/staging-demo/config.yaml`:
+  ```yaml
+  platforms:
+    api_server:
+      enabled: true
+      extra: { host: 0.0.0.0, port: 8642, key: <HERMES_API_KEY> }
+  platform_toolsets:
+    api_server: [terminal, file, web, vision, image_gen, todo]
+  ```
+  Reachable only on the internal `marketing-planner_default` network as `http://hermes-marketing-staging:8642`. Health/`/v1/runs`/`/v1/runs/:id/events` verified. **Gotcha:** `host`/`port`/`key` must live under `extra:` (not as siblings of `enabled:`), and the platform needs explicit `enabled: true`.
+- **Step B (API):** `chat.ts` POSTs to `/v1/runs` then streams `/v1/runs/:id/events`, translating Hermes lifecycle events (`tool.started` / `tool.completed` / `reasoning.available` / `run.completed` / `run.failed`) into the existing SSE wire shape (`tool_call` / `tool_result` / `token` / `done`) so the SPA chat-sheet was unchanged. `OPENROUTER_API_KEY`/`CHAT_MODEL` dropped from `mp-staging-api`; new env `HERMES_BASE_URL` + `HERMES_API_KEY`.
+
+### New agent capabilities (reachable from both Telegram and dashboard chat)
+- API: `POST /clients/:slug/posts` (create) + `DELETE /clients/:slug/posts/:id` (soft-delete via a `posts_patches` `{status:'deleted'}` row; list filters it unless `?includeDeleted=true`). New `posts_created` PB collection + `loadCreatedPosts` overlay; `buildPost` falls back to it. The `agent` role is now allowed to create/patch/delete posts and set approvals (still confined per-slug by `requireScope`); strategy-doc PUTs stay dash/admin-only.
+- API: `PATCH /clients/:slug/branding` — shallow-merge into `brief.branding`, audited as `branding.update`.
+- Hermes system prompt extended (German) with branding schema + a tightened image checklist.
+
+### Image generation pipeline (1b)
+- Hermes already ships `generate_image` (OpenRouter `openai/gpt-5.4-image-2`). It saves to the container cache; the new piece is getting it onto posts/assets.
+- New **public** serve route `GET /api/v1/clients/:slug/assets/files/:name` (in `routes/assetFiles.ts`) streams images from the read-only `clients/` mount — no bearer needed so `<img>` works. Strict filename regex blocks traversal.
+- Flow: Hermes generates → copies into its writable `clients/<slug>/assets/` mount → appends `manifest.json` → links via `PATCH /posts/:id {image}` (the field is `image`, a URL — **not** `assetIds`). `viktorOwned.buildPost` now `normalizeImageUrl`s any relative/bare/absolute-container path the agent writes back to the public route. Verified end-to-end: real 1.2 MB PNG generated, served, attached to p001.
+
+### Dashboard UX
+- **Content Calendar redesign** (`routes/client/calendar.tsx`): editable title/copy (autosave via `PATCH /posts/:id`), full picture on the right with click-to-zoom lightbox, **"Change picture"** button that dispatches a `mp:open-chat` window event → layout opens the chat sheet pre-filled. Social mockup kept behind a Picture/Preview toggle. `chat-sheet.tsx` gained an `initialMessage` prop; `layout.tsx` listens for `mp:open-chat`.
+- **Approvals blank page** — two bugs: (1) `ACTION_ICON[entry.action]` crashed on the PB approval states (`approved`/`rejected`/`scheduled`/`in_review`) vs the legacy log verbs — fixed with an extended map + fallback; (2) the real reason it looked unfixed → the **SPA deploy was serving stale files** (see below).
+- **Goals vs Actuals** (`routes/client/goals.tsx`): new "Goal targets" table — target cells are tinted/blue with pencil-on-hover (editable via the edit-store), actuals shown with a lock icon (synced, read-only).
+- **Company Context → Branding** (`routes/client/context.tsx`): brand colors (picker + add/remove), typography, logo variants, tone keywords. Type `Brief.branding?` added (optional, back-compatible).
+- **Assets → Inspiration board** (`routes/client/assets.tsx`): per-client drag-drop image library. Stored in PocketBase (`inspiration_assets` collection) because the API mounts `clients/` read-only; served back publicly via `GET /clients/:slug/inspiration/:id/file`. Routes in `routes/inspiration.ts`. **Gotcha:** pass a fresh `Blob` (not Hono's `File`) to the PB SDK, and sort the list on our own `createdAt` text field (PB v0.38 base collections have no `created`).
+- **Integration tab** wording: explicit "this page is for a person, the bot doesn't read it" banner + "pictures are not required" note.
+- **i18n**: in-platform EN/DE/ES language switcher (`@/lib/i18n`, `useT`) threaded through the dashboard.
+
+### Infra fix — SPA deploy was silently broken
+- The old deploy did `mv app-dist app-dist.old && mv app-dist.new app-dist`. Docker bind mounts resolve to the directory **inode** at container start, so moving the folder left `mp-staging-caddy` serving the *old* renamed dir until restarted — every SPA deploy since the branding work was invisible until a caddy restart.
+- Fix: `/opt/marketing-planner-staging/deploy-spa.sh` now `rsync -a --delete`s into the existing dir in place (inode preserved), verifies served==disk hash, and restarts caddy only if they diverge.
+
+### Known follow-ups
+- The agent (Gemini-3-Flash) sometimes over-explores before acting; prompts tightened, but a stronger model would help.
+- Visual QA of this batch is pending a human with the staging basicauth session (the automated browser lost its session mid-deploy; server health confirmed via curl + Caddy logs + served-bundle string checks).
