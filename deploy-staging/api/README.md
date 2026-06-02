@@ -22,6 +22,39 @@ Every request needs `Authorization: Bearer <token>`. Two token kinds:
 Tokens live in PocketBase `api_tokens`. For local bootstrap before the
 collection is seeded, set `BOOTSTRAP_TOKENS=<token>:<role>:<slug>,...`.
 
+## Write contract (validated, returns 422 on bad input)
+
+All write endpoints validate the body with `zod` (`src/schemas/post.ts`). A wrong
+field name or value returns **HTTP 422** `application/problem+json` whose `detail`
+names the exact failing field (and an `errors[]` array), so a client/agent can fix
+that one field and retry. Unknown top-level keys are rejected (`.strict()`) — this
+is deliberate: a typo'd field name surfaces as an error instead of silently doing
+nothing. Reads (`buildPost` → `coalescePost`) also repair partial/legacy rows to a
+complete shape so the dashboard never throws on a missing field (the June 2026
+white-screen). The SPA mirrors this with `normalizePost()`.
+
+**`POST /clients/:slug/posts` (create)** — `date` (ISO; `2026-06-15` or full
+datetime) and `title` (non-empty) required; others optional:
+
+| field | rule |
+|-------|------|
+| `channel` | `instagram` \| `linkedin` \| `tiktok` \| `x` \| `facebook` |
+| `status` | `idea` \| `drafting` \| `in_review` \| `needs_revision` \| `approved` \| `scheduled` \| `published` \| `rejected` |
+| `hashtags` | `string[]` (not a single string) |
+| `image` | string URL — field is `image`, not `imageUrl`/`assetIds` |
+| `copy`, `cta`, `pillar`, `format`, `campaign` | strings, optional |
+
+**`PATCH /clients/:slug/posts/:id`** — any subset of the same fields; each present
+field must be the right type.
+
+**`POST /clients/:slug/approvals`** — `{ postId, decision }`, `decision` ∈
+`in_review|approved|scheduled|rejected`, optional `note`.
+
+**`PATCH /clients/:slug/suggestions/:id`** — `{ status?, priority?, reason? }`,
+`status` ∈ `open|accepted|dismissed`.
+
+The agent-side mirror of this contract is `deploy/viktor-skills/publishing.md`.
+
 ## Local development
 
 ```bash
