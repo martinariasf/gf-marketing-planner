@@ -349,6 +349,12 @@ const en: Dict = {
 
   // Calendar page
   'calendar.eyebrow':         'Content calendar',
+  'calendar.viewWeek':        'Week',
+  'calendar.viewMonth':       'Month',
+  'calendar.viewQuarter':     'Quarter',
+  'calendar.weekN':           'Week {n}',
+  'calendar.noPostsShort':    'No posts',
+  'calendar.postsCount':      '{n} posts',
   'calendar.noPosts':         'No posts scheduled for {month} yet.',
   'calendar.postOf':          'Post {n} of {total} in {month}',
   'calendar.useArrows':       'Use ← → to navigate',
@@ -872,6 +878,12 @@ const de: Dict = {
   'confidence.low':    'niedrig',
 
   'calendar.eyebrow':         'Content-Kalender',
+  'calendar.viewWeek':        'Woche',
+  'calendar.viewMonth':       'Monat',
+  'calendar.viewQuarter':     'Quartal',
+  'calendar.weekN':           'Woche {n}',
+  'calendar.noPostsShort':    'Keine Posts',
+  'calendar.postsCount':      '{n} Posts',
   'calendar.noPosts':         'Noch keine Posts für {month} geplant.',
   'calendar.postOf':          'Post {n} von {total} in {month}',
   'calendar.useArrows':       '← → zum Navigieren',
@@ -1386,6 +1398,12 @@ const es: Dict = {
   'confidence.low':    'baja',
 
   'calendar.eyebrow':         'Calendario de contenido',
+  'calendar.viewWeek':        'Semana',
+  'calendar.viewMonth':       'Mes',
+  'calendar.viewQuarter':     'Trimestre',
+  'calendar.weekN':           'Semana {n}',
+  'calendar.noPostsShort':    'Sin posts',
+  'calendar.postsCount':      '{n} posts',
   'calendar.noPosts':         'Aún no hay posts programados para {month}.',
   'calendar.postOf':          'Post {n} de {total} en {month}',
   'calendar.useArrows':       'Usa ← → para navegar',

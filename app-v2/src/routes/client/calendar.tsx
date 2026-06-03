@@ -16,6 +16,7 @@ import { apiPatchPost, apiUploadInspiration, isApiEnabled } from '@/lib/api-clie
 import { toast } from 'sonner'
 import {
   CalendarDays,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   Tag,
@@ -26,6 +27,9 @@ import {
   Loader2,
   Eye,
   Upload,
+  LayoutGrid,
+  Rows3,
+  Images,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -51,6 +55,11 @@ function monthKey(iso: string) {
 /** A post is a carousel when it carries more than one slide. */
 function isCarousel(post: Post): post is Post & { slides: Slide[] } {
   return Array.isArray(post.slides) && post.slides.length > 1
+}
+
+/** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
+function weekOfMonth(iso: string) {
+  return Math.ceil(new Date(iso).getDate() / 7)
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -86,6 +95,8 @@ export default function CalendarView() {
     return m
   }, [posts, months])
 
+  // CAL1 — overview mode. 'month' = the original single-post carousel viewer.
+  const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
   const [activeMonth, setActiveMonth] = useState(months[0])
   const [slideIndex, setSlideIndex] = useState(0)
   const [direction, setDirection] = useState(0)
@@ -160,6 +171,17 @@ export default function CalendarView() {
     setDirection(0)
   }
 
+  // CAL1 — from a compact card (Week/Quarter) jump into the Month viewer
+  // focused on that exact post.
+  const jumpToPost = (post: Post) => {
+    const m = monthKey(post.date)
+    const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
+    setActiveMonth(m)
+    setSlideIndex(idx < 0 ? 0 : idx)
+    setDirection(0)
+    setViewMode('month')
+  }
+
   return (
     <div className="space-y-6">
       {/* Hero */}
@@ -173,7 +195,31 @@ export default function CalendarView() {
         </h1>
       </div>
 
-      {/* Month tabs */}
+      {/* View-mode toggle (Week · Month · Quarter) */}
+      <div className="inline-flex rounded-full border border-border-subtle bg-paper-muted/50 p-1 text-sm">
+        {([
+          { mode: 'week' as const,    label: t('calendar.viewWeek'),    Icon: Rows3 },
+          { mode: 'month' as const,   label: t('calendar.viewMonth'),   Icon: CalendarDays },
+          { mode: 'quarter' as const, label: t('calendar.viewQuarter'), Icon: LayoutGrid },
+        ]).map(({ mode, label, Icon }) => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-medium transition-colors',
+              viewMode === mode
+                ? 'bg-brand-blue text-white shadow-sm'
+                : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Month tabs — shown in Week + Month modes (Quarter shows all months). */}
+      {viewMode !== 'quarter' && (
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
         {months.map((m) => {
           const count = postsByMonth[m]?.length ?? 0
@@ -211,9 +257,81 @@ export default function CalendarView() {
           )
         })}
       </div>
+      )}
 
-      {/* Slide */}
-      {monthPosts.length === 0 ? (
+      {/* CAL1 — Quarter overview: one column per month, compact cards. */}
+      {viewMode === 'quarter' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {months.map((m) => {
+            const list = postsByMonth[m] ?? []
+            return (
+              <div key={m} className="space-y-3">
+                <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+                  <h3 className="text-sm font-semibold text-brand-blue">{m}</h3>
+                  <span className="text-[11px] text-ink-muted">
+                    {t('calendar.postsCount', { n: list.length })}
+                  </span>
+                </div>
+                {list.length === 0 ? (
+                  <p className="text-xs text-ink-muted py-4 text-center">
+                    {t('calendar.noPostsShort')}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {list.map((p) => (
+                      <CompactPostCard key={p.id} post={p} onSelect={() => jumpToPost(p)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* CAL1 — Week overview: active month's posts grouped by week-of-month. */}
+      {viewMode === 'week' && (
+        monthPosts.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center text-ink-muted text-sm">
+              <CalendarRange className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              {t('calendar.noPosts', { month: activeMonth })}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {Array.from(
+              monthPosts.reduce((map, p) => {
+                const w = weekOfMonth(p.date)
+                ;(map.get(w) ?? map.set(w, []).get(w)!).push(p)
+                return map
+              }, new Map<number, Post[]>()),
+            )
+              .sort((a, b) => a[0] - b[0])
+              .map(([week, list]) => (
+                <div key={week} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarRange className="h-4 w-4 text-brand-blue" />
+                    <h3 className="text-sm font-semibold text-brand-blue">
+                      {t('calendar.weekN', { n: week })}
+                    </h3>
+                    <span className="text-[11px] text-ink-muted">
+                      {t('calendar.postsCount', { n: list.length })}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {list.map((p) => (
+                      <CompactPostCard key={p.id} post={p} onSelect={() => jumpToPost(p)} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )
+      )}
+
+      {/* Slide (Month view) */}
+      {viewMode === 'month' && (monthPosts.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-ink-muted text-sm">
             <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -467,8 +585,49 @@ export default function CalendarView() {
             </DialogContent>
           </Dialog>
         </>
-      ) : null}
+      ) : null)}
     </div>
+  )
+}
+
+/**
+ * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
+ * date · channel, line-clamped title, status badge. Click jumps to Month view.
+ */
+function CompactPostCard({ post, onSelect }: { post: Post; onSelect: () => void }) {
+  const slideCount = isCarousel(post) ? post.slides.length : 0
+  return (
+    <button
+      onClick={onSelect}
+      className="group w-full text-left flex gap-3 rounded-lg border border-border-subtle bg-paper p-2 hover:border-brand-blue hover:shadow-sm transition-all"
+    >
+      <div className="relative shrink-0 h-16 w-16 rounded-md overflow-hidden bg-paper-muted">
+        {post.image ? (
+          <img src={post.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-ink-muted">
+            <ImageIcon className="h-5 w-5 opacity-40" />
+          </div>
+        )}
+        {slideCount > 1 && (
+          <span className="absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-full bg-black/55 text-white text-[9px] font-medium px-1.5 py-0.5">
+            <Images className="h-2.5 w-2.5" />
+            {slideCount}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="text-[10px] text-ink-muted truncate">
+          {fmtDate(post.date)} · {post.channel}
+        </p>
+        <p className="text-xs font-medium leading-tight line-clamp-2 group-hover:text-brand-blue transition-colors">
+          {post.title}
+        </p>
+        <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES[post.status])}>
+          {post.status.replace('_', ' ')}
+        </Badge>
+      </div>
+    </button>
   )
 }
 
