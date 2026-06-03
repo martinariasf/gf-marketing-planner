@@ -19,7 +19,19 @@ import {
 } from '@/components/ui/tabs'
 import { Pillar } from '@/components/pillar'
 import { fmtDate } from '@/lib/format'
-import { ImageOff, Check, AlertCircle, Sparkles, User, Briefcase, Upload, Trash2, Loader2, Lightbulb } from 'lucide-react'
+import {
+  ImageOff,
+  Sparkles,
+  User,
+  Briefcase,
+  Upload,
+  Trash2,
+  Loader2,
+  Lightbulb,
+  Search,
+  FolderOpen,
+  Palette,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   isApiEnabled,
@@ -71,13 +83,27 @@ function sourceMeta(source: AssetSource, t: (k: string) => string): { Icon: type
 // as AI for the filter chips.
 const isAiSource = (s: AssetSource) => s !== 'unsplash' && s !== 'canva' && s !== 'internal'
 
-type Filter = 'all' | 'approved' | 'draft' | 'ai' | 'stock'
+type Folder = 'viktor' | 'uploads' | 'references' | 'brandkit'
+
+function matchesSearch(item: AssetItem, q: string): boolean {
+  if (!q) return true
+  const lower = q.toLowerCase()
+  return (
+    item.filename.toLowerCase().includes(lower) ||
+    (item.designBrief?.toLowerCase().includes(lower) ?? false) ||
+    item.owner.toLowerCase().includes(lower) ||
+    item.usedInPosts.some((p) => p.toLowerCase().includes(lower)) ||
+    (item.tags?.some((tag) => tag.toLowerCase().includes(lower)) ?? false)
+  )
+}
 
 export default function AssetsView() {
   const t = useT()
-  const { assets, posts, plan, slug } = useOutletContext<ClientBundle>()
+  const { assets, posts, plan, slug, brief } = useOutletContext<ClientBundle>()
   const { slug: routeSlug = slug } = useParams<{ slug: string }>()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [folder, setFolder] = useState<Folder>('viktor')
+  const [search, setSearch] = useState('')
+  const [activeTag, setActiveTag] = useState<string | null>(null)
   const [selected, setSelected] = useState<AssetItem | null>(null)
 
   const pillarByPost = useMemo(() => {
@@ -94,37 +120,53 @@ export default function AssetsView() {
 
   const items = assets?.items ?? []
 
-  const filtered = useMemo(() => {
-    switch (filter) {
-      case 'approved': return items.filter((i) => i.finalApproved)
-      case 'draft':    return items.filter((i) => !i.finalApproved)
-      case 'ai':       return items.filter((i) => isAiSource(i.source))
-      case 'stock':    return items.filter((i) => i.source === 'unsplash')
-      default:         return items
-    }
-  }, [items, filter])
+  // Partition manifest items into two folders
+  const viktorItems = useMemo(
+    () => items.filter((i) => isAiSource(i.source) || i.owner.toLowerCase().includes('viktor')),
+    [items],
+  )
+  const uploadItems = useMemo(
+    () => items.filter((i) => !isAiSource(i.source) && !i.owner.toLowerCase().includes('viktor')),
+    [items],
+  )
 
-  if (!assets || items.length === 0) {
-    return (
-      <div className="space-y-8">
-        {isApiEnabled && <InspirationBoard slug={routeSlug} />}
-        <Card>
-          <CardContent className="p-10 text-center text-ink-muted">
-            <ImageOff className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">
-              {t('assets.emptyManifest')}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  // Determine the default folder: first non-empty manifest folder, else viktor
+  useEffect(() => {
+    if (viktorItems.length > 0) setFolder('viktor')
+    else if (uploadItems.length > 0) setFolder('uploads')
+    else setFolder('viktor')
+  // Only run on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Tags collected from current folder's items
+  const folderItems: AssetItem[] = folder === 'viktor' ? viktorItems : uploadItems
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    folderItems.forEach((i) => i.tags?.forEach((tag) => set.add(tag)))
+    return Array.from(set).sort()
+  }, [folderItems])
+
+  const filteredItems = useMemo(() => {
+    let result = folderItems
+    if (search) result = result.filter((i) => matchesSearch(i, search))
+    if (activeTag) result = result.filter((i) => i.tags?.includes(activeTag))
+    return result
+  }, [folderItems, search, activeTag])
+
+  const brandLogos = brief?.branding?.logos ?? []
+  const brandColors = brief?.branding?.colors ?? []
+
+  const folderCounts: Record<Folder, number> = {
+    viktor: viktorItems.length,
+    uploads: uploadItems.length,
+    references: 0, // references board has its own count
+    brandkit: brandLogos.length,
   }
 
   return (
     <div className="space-y-8">
-      {isApiEnabled && <InspirationBoard slug={routeSlug} />}
       <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
             {t('assets.eyebrow')}
@@ -141,151 +183,341 @@ export default function AssetsView() {
           </p>
         </div>
 
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-          <TabsList>
-            <TabsTrigger value="all">{t('assets.tabAll', { n: items.length })}</TabsTrigger>
-            <TabsTrigger value="approved">
-              <Check className="h-3 w-3 mr-1" />
-              {t('assets.tabApproved')}
+        {/* Folder selector */}
+        <Tabs value={folder} onValueChange={(v) => { setFolder(v as Folder); setSearch(''); setActiveTag(null) }}>
+          <TabsList className="flex-wrap h-auto gap-1">
+            <TabsTrigger value="viktor" className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              {t('assets.folderViktor')}
+              {folderCounts.viktor > 0 && (
+                <span className="ml-1 text-[10px] opacity-60">({folderCounts.viktor})</span>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="draft">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              {t('assets.tabDraft')}
+            <TabsTrigger value="uploads" className="flex items-center gap-1.5">
+              <Upload className="h-3.5 w-3.5" />
+              {t('assets.folderUploads')}
+              {folderCounts.uploads > 0 && (
+                <span className="ml-1 text-[10px] opacity-60">({folderCounts.uploads})</span>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="ai">
-              <Sparkles className="h-3 w-3 mr-1" />
-              {t('assets.tabAi')}
+            <TabsTrigger value="references" className="flex items-center gap-1.5">
+              <Lightbulb className="h-3.5 w-3.5" />
+              {t('assets.folderReferences')}
             </TabsTrigger>
-            <TabsTrigger value="stock">{t('assets.tabStock')}</TabsTrigger>
+            <TabsTrigger value="brandkit" className="flex items-center gap-1.5">
+              <Palette className="h-3.5 w-3.5" />
+              {t('assets.folderBrandKit')}
+              {folderCounts.brandkit > 0 && (
+                <span className="ml-1 text-[10px] opacity-60">({folderCounts.brandkit})</span>
+              )}
+            </TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filtered.map((item, idx) => (
-          <motion.button
-            key={item.id}
-            onClick={() => setSelected(item)}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: idx * 0.03 }}
-            whileHover={{ y: -3 }}
-            className="text-left group focus:outline-none focus:ring-2 focus:ring-brand-blue rounded-xl"
-          >
-            <Card className="overflow-hidden h-full flex flex-col">
-              <div className="aspect-square bg-paper-muted relative overflow-hidden">
-                <img
-                  src={item.url}
-                  alt={item.filename}
-                  loading="lazy"
-                  className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                {!item.finalApproved && (
-                  <div className="absolute top-2 left-2">
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px] uppercase">
-                      {t('common.draft')}
-                    </Badge>
+        {/* References folder — InspirationBoard */}
+        {folder === 'references' && (
+          <>
+            {isApiEnabled ? (
+              <InspirationBoard slug={routeSlug} />
+            ) : (
+              <Card>
+                <CardContent className="p-10 text-center text-ink-muted">
+                  <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">{t('references.apiRequired')}</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* Brand Kit folder */}
+        {folder === 'brandkit' && (
+          <BrandKitFolder logos={brandLogos} colors={brandColors} />
+        )}
+
+        {/* Manifest folders: viktor + uploads */}
+        {(folder === 'viktor' || folder === 'uploads') && (
+          <div className="space-y-4">
+            {/* Search box */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setActiveTag(null) }}
+                placeholder={t('assets.searchPlaceholder')}
+                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+              />
+            </div>
+
+            {/* Tag filter chips */}
+            {allTags.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('assets.tags')}:</span>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                    className={cn(
+                      'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
+                      activeTag === tag
+                        ? 'bg-brand-blue text-white border-brand-blue'
+                        : 'bg-paper border-border-subtle text-ink-muted hover:border-brand-blue/50',
+                    )}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Asset grid */}
+            {filteredItems.length === 0 ? (
+              <Card>
+                <CardContent className="p-10 text-center text-ink-muted">
+                  <ImageOff className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">
+                    {items.length === 0
+                      ? t('assets.emptyManifest')
+                      : t('assets.emptyManifest')}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredItems.map((item, idx) => (
+                  <motion.button
+                    key={item.id}
+                    onClick={() => setSelected(item)}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: idx * 0.03 }}
+                    whileHover={{ y: -3 }}
+                    className="text-left group focus:outline-none focus:ring-2 focus:ring-brand-blue rounded-xl"
+                  >
+                    <Card className="overflow-hidden h-full flex flex-col">
+                      <div className="aspect-square bg-paper-muted relative overflow-hidden">
+                        <img
+                          src={item.url}
+                          alt={item.filename}
+                          loading="lazy"
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {!item.finalApproved && (
+                          <div className="absolute top-2 left-2">
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-[10px] uppercase">
+                              {t('common.draft')}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2">
+                          <SourceBadge source={item.source} />
+                        </div>
+                      </div>
+                      <CardContent className="p-3 space-y-1.5">
+                        <p className="text-sm font-medium truncate" title={item.filename}>
+                          {item.filename}
+                        </p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {item.usedInPosts.length === 0 ? (
+                            <span className="text-[11px] text-ink-muted">{t('assets.unused')}</span>
+                          ) : (
+                            item.usedInPosts.slice(0, 2).map((postId) => {
+                              const pillar = pillarByPost[postId]
+                              return pillar ? (
+                                <Pillar
+                                  key={postId}
+                                  name={postId}
+                                  color={pillarColor[pillar]}
+                                  className="!text-[10px]"
+                                />
+                              ) : null
+                            })
+                          )}
+                        </div>
+                        {item.tags && item.tags.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {item.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-[10px] px-1.5 py-0.5 rounded-full bg-paper-muted text-ink-muted border border-border-subtle"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Asset detail Dialog — preserved */}
+        <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+          <DialogContent className="sm:max-w-2xl">
+            {selected && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {selected.filename}
+                    {selected.finalApproved ? (
+                      <Badge className="bg-emerald-100 text-emerald-700">{t('common.approved')}</Badge>
+                    ) : (
+                      <Badge className="bg-amber-100 text-amber-800">{t('common.draft')}</Badge>
+                    )}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {sourceMeta(selected.source, t).label} · {selected.owner} ·{' '}
+                    {fmtDate(selected.createdAt)}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="rounded-lg overflow-hidden bg-paper-muted">
+                  <img
+                    src={selected.url}
+                    alt={selected.filename}
+                    className="w-full max-h-[60vh] object-contain"
+                  />
+                </div>
+
+                {selected.designBrief && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('assets.designBrief')}
+                    </p>
+                    <p className="text-sm">{selected.designBrief}</p>
                   </div>
                 )}
-                <div className="absolute top-2 right-2">
-                  <SourceBadge source={item.source} />
-                </div>
-              </div>
-              <CardContent className="p-3 space-y-1.5">
-                <p className="text-sm font-medium truncate" title={item.filename}>
-                  {item.filename}
-                </p>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {item.usedInPosts.length === 0 ? (
-                    <span className="text-[11px] text-ink-muted">{t('assets.unused')}</span>
-                  ) : (
-                    item.usedInPosts.slice(0, 2).map((postId) => {
-                      const pillar = pillarByPost[postId]
-                      return pillar ? (
-                        <Pillar
-                          key={postId}
-                          name={postId}
-                          color={pillarColor[pillar]}
-                          className="!text-[10px]"
-                        />
-                      ) : null
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.button>
-        ))}
-      </div>
 
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          {selected && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selected.filename}
-                  {selected.finalApproved ? (
-                    <Badge className="bg-emerald-100 text-emerald-700">{t('common.approved')}</Badge>
-                  ) : (
-                    <Badge className="bg-amber-100 text-amber-800">{t('common.draft')}</Badge>
-                  )}
-                </DialogTitle>
-                <DialogDescription>
-                  {sourceMeta(selected.source, t).label} · {selected.owner} ·{' '}
-                  {fmtDate(selected.createdAt)}
-                </DialogDescription>
-              </DialogHeader>
+                {selected.tags && selected.tags.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('assets.tags')}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {selected.tags.map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <div className="rounded-lg overflow-hidden bg-paper-muted">
-                <img
-                  src={selected.url}
-                  alt={selected.filename}
-                  className="w-full max-h-[60vh] object-contain"
-                />
-              </div>
-
-              {selected.designBrief && (
                 <div className="space-y-1">
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                    {t('assets.designBrief')}
+                    {t('assets.usedInPosts')}
                   </p>
-                  <p className="text-sm">{selected.designBrief}</p>
+                  {selected.usedInPosts.length === 0 ? (
+                    <p className="text-sm text-ink-muted">{t('assets.notAttached')}</p>
+                  ) : (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {selected.usedInPosts.map((postId) => (
+                        <Badge key={postId} variant="outline" className="font-mono text-xs">
+                          {postId}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
 
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                  {t('assets.usedInPosts')}
-                </p>
-                {selected.usedInPosts.length === 0 ? (
-                  <p className="text-sm text-ink-muted">{t('assets.notAttached')}</p>
-                ) : (
-                  <div className="flex gap-1.5 flex-wrap">
-                    {selected.usedInPosts.map((postId) => (
-                      <Badge key={postId} variant="outline" className="font-mono text-xs">
-                        {postId}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
-                <p className="text-[10px] text-ink-muted font-mono">
-                  {t('assets.assetId', { id: selected.id })}
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <a href={selected.url} target="_blank" rel="noreferrer">
-                    {t('assets.openFullSize')}
-                  </a>
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+                <div className="flex justify-between items-center pt-2">
+                  <p className="text-[10px] text-ink-muted font-mono">
+                    {t('assets.assetId', { id: selected.id })}
+                  </p>
+                  <Button asChild size="sm" variant="outline">
+                    <a href={selected.url} target="_blank" rel="noreferrer">
+                      {t('assets.openFullSize')}
+                    </a>
+                  </Button>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
+    </div>
+  )
+}
+
+// ── Brand Kit folder ─────────────────────────────────────────────────────────
+
+interface BrandKitFolderProps {
+  logos: Array<{ variant: string; url: string }>
+  colors: Array<{ name: string; hex: string }>
+}
+
+function BrandKitFolder({ logos, colors }: BrandKitFolderProps) {
+  const t = useT()
+
+  if (logos.length === 0 && colors.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-10 text-center text-ink-muted">
+          <Palette className="h-8 w-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">{t('assets.noBrandAssets')}</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {logos.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs uppercase tracking-wider text-ink-muted">{t('assets.logos')}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {logos.map((logo, idx) => (
+              <a
+                key={idx}
+                href={logo.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group"
+              >
+                <Card className="overflow-hidden h-full flex flex-col hover:border-brand-blue/40 transition-colors">
+                  <div className="aspect-square bg-paper-muted relative overflow-hidden p-4 flex items-center justify-center">
+                    <img
+                      src={logo.url}
+                      alt={logo.variant}
+                      loading="lazy"
+                      className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <CardContent className="p-3">
+                    <p className="text-sm font-medium truncate text-ink-muted" title={logo.variant}>
+                      {logo.variant}
+                    </p>
+                  </CardContent>
+                </Card>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {colors.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs uppercase tracking-wider text-ink-muted">{t('assets.colorSwatches')}</p>
+          <div className="flex gap-3 flex-wrap">
+            {colors.map((color, idx) => (
+              <div key={idx} className="flex flex-col items-center gap-1.5">
+                <div
+                  className="h-12 w-12 rounded-lg border border-border-subtle shadow-sm"
+                  style={{ backgroundColor: color.hex }}
+                  title={color.hex}
+                />
+                <p className="text-[11px] text-ink-muted text-center max-w-[60px] truncate">{color.name}</p>
+                <p className="text-[10px] font-mono text-ink-muted">{color.hex}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

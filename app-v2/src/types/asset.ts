@@ -16,6 +16,7 @@ export interface AssetItem {
   owner: string
   finalApproved: boolean
   createdAt: string
+  tags?: string[]
 }
 
 export interface AssetsManifest {
