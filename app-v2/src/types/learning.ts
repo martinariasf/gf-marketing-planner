@@ -9,6 +9,12 @@ export interface Learning {
   recommendedBehaviorChange: string
   confidence: 'low' | 'medium' | 'high'
   createdAt: string
+  // LE2 — hypothesis cycle
+  hypothesis?: string
+  newHypothesis?: string
+  // LE1 — applied tracking
+  applied?: boolean
+  appliedAt?: string
 }
 
 export interface Learnings {

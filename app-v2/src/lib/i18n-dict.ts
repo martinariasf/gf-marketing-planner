@@ -582,6 +582,26 @@ const en: Dict = {
   'learnings.whatHappened':  'What happened',
   'learnings.lesson':        'Lesson',
   'learnings.behaviorChange':'Behavior change going forward',
+  // LE1 — period / applied filters
+  'learnings.filterAll':     'All',
+  'learnings.filterPending': 'Pending',
+  'learnings.filterApplied': 'Applied ({n})',
+  'learnings.applied':       'Applied',
+  'learnings.markApplied':   'Mark applied',
+  'learnings.noResults':     'No learnings match the current filters.',
+  // LE2 — hypothesis cycle
+  'learnings.hypothesis':              'Hypothesis',
+  'learnings.hypothesisPlaceholder':   'What bet were we making going in?',
+  'learnings.whatHappenedPlaceholder': 'Describe what actually happened…',
+  'learnings.lessonPlaceholder':       'What did we learn from this?',
+  'learnings.behaviorChangePlaceholder':'What changes next time?',
+  'learnings.newHypothesis':           'New hypothesis',
+  'learnings.newHypothesisPlaceholder':'What is the next bet this learning suggests?',
+  // LE2 — Víktor buttons
+  'learnings.askViktor':       'Ask Víktor for a learning',
+  'learnings.askViktorPrompt': 'Based on recent performance and current learnings, propose a new learning: what hypothesis did we test, what happened, what should we change next time, and what is the next hypothesis to test?',
+  'learnings.discussWithViktor':'Discuss with Víktor',
+  'learnings.discussPrefix':   'I want to discuss this learning with you',
 
   // Integration page
   'integration.eyebrow':       'Integration',
@@ -1195,6 +1215,26 @@ const de: Dict = {
   'learnings.whatHappened':  'Was passiert ist',
   'learnings.lesson':        'Lektion',
   'learnings.behaviorChange':'Verhaltensänderung ab jetzt',
+  // LE1 — Zeitraum- / Angewendet-Filter
+  'learnings.filterAll':     'Alle',
+  'learnings.filterPending': 'Ausstehend',
+  'learnings.filterApplied': 'Angewendet ({n})',
+  'learnings.applied':       'Angewendet',
+  'learnings.markApplied':   'Als angewendet markieren',
+  'learnings.noResults':     'Keine Erkenntnisse passen zu den aktuellen Filtern.',
+  // LE2 — Hypothesen-Zyklus
+  'learnings.hypothesis':              'Hypothese',
+  'learnings.hypothesisPlaceholder':   'Welche Annahme hatten wir vorher?',
+  'learnings.whatHappenedPlaceholder': 'Beschreibe, was tatsächlich passiert ist…',
+  'learnings.lessonPlaceholder':       'Was haben wir daraus gelernt?',
+  'learnings.behaviorChangePlaceholder':'Was ändert sich nächstes Mal?',
+  'learnings.newHypothesis':           'Neue Hypothese',
+  'learnings.newHypothesisPlaceholder':'Welche nächste Annahme legt diese Erkenntnis nahe?',
+  // LE2 — Víktor-Buttons
+  'learnings.askViktor':       'Víktor um Erkenntnis bitten',
+  'learnings.askViktorPrompt': 'Basierend auf der aktuellen Performance und den bisherigen Erkenntnissen: Schlage eine neue Erkenntnis vor — welche Hypothese haben wir getestet, was passierte, was sollten wir nächstes Mal ändern und welche Hypothese testen wir als Nächstes?',
+  'learnings.discussWithViktor':'Mit Víktor besprechen',
+  'learnings.discussPrefix':   'Ich möchte diese Erkenntnis mit dir besprechen',
 
   'integration.eyebrow':       'Integration',
   'integration.heading':       'Wie andere Bots mit diesem Kunden sprechen',
@@ -1806,6 +1846,26 @@ const es: Dict = {
   'learnings.whatHappened':  'Qué pasó',
   'learnings.lesson':        'Lección',
   'learnings.behaviorChange':'Cambio de comportamiento a partir de ahora',
+  // LE1 — filtros de período / aplicado
+  'learnings.filterAll':     'Todos',
+  'learnings.filterPending': 'Pendiente',
+  'learnings.filterApplied': 'Aplicado ({n})',
+  'learnings.applied':       'Aplicado',
+  'learnings.markApplied':   'Marcar como aplicado',
+  'learnings.noResults':     'Ningún aprendizaje coincide con los filtros actuales.',
+  // LE2 — ciclo de hipótesis
+  'learnings.hypothesis':              'Hipótesis',
+  'learnings.hypothesisPlaceholder':   '¿Cuál era la apuesta antes de empezar?',
+  'learnings.whatHappenedPlaceholder': 'Describe lo que pasó realmente…',
+  'learnings.lessonPlaceholder':       '¿Qué aprendimos de esto?',
+  'learnings.behaviorChangePlaceholder':'¿Qué cambia la próxima vez?',
+  'learnings.newHypothesis':           'Nueva hipótesis',
+  'learnings.newHypothesisPlaceholder':'¿Qué nueva apuesta sugiere este aprendizaje?',
+  // LE2 — botones de Víktor
+  'learnings.askViktor':       'Pedir aprendizaje a Víktor',
+  'learnings.askViktorPrompt': 'Basándote en el rendimiento reciente y los aprendizajes actuales, propón un nuevo aprendizaje: ¿qué hipótesis probamos, qué pasó, qué debería cambiar la próxima vez y cuál es la próxima hipótesis a probar?',
+  'learnings.discussWithViktor':'Discutir con Víktor',
+  'learnings.discussPrefix':   'Quiero discutir contigo este aprendizaje',
 
   'integration.eyebrow':       'Integración',
   'integration.heading':       'Cómo otros bots hablan con este cliente',
