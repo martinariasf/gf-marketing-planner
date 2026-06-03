@@ -32,6 +32,31 @@ const diskFor: Record<UserResource, (slug: string) => Promise<unknown>> = {
   learnings: disk.learnings,
 }
 
+function hasObjectKey(data: Record<string, unknown>, key: string): boolean {
+  return !!data[key] && typeof data[key] === 'object'
+}
+
+function isValidUserDocument(resource: UserResource, data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  switch (resource) {
+    case 'brief':
+      return (
+        hasObjectKey(d, 'company') &&
+        hasObjectKey(d, 'business') &&
+        hasObjectKey(d, 'audience') &&
+        hasObjectKey(d, 'voice') &&
+        hasObjectKey(d, 'boundaries')
+      )
+    case 'plan':
+      return hasObjectKey(d, 'agency') && hasObjectKey(d, 'client') && hasObjectKey(d, 'quarter')
+    case 'goals':
+      return Array.isArray(d.quarterly) && Array.isArray(d.monthly) && Array.isArray(d.weekly)
+    case 'learnings':
+      return Array.isArray(d.items)
+  }
+}
+
 async function loadFromPbOrDisk(resource: UserResource, slug: string): Promise<unknown> {
   const diskData = async () => (await diskFor[resource](slug)) ?? null
   try {
@@ -40,7 +65,7 @@ async function loadFromPbOrDisk(resource: UserResource, slug: string): Promise<u
         `slug="${slug}"`,
       ),
     )
-    if (!rec.data || typeof rec.data !== 'object') {
+    if (!isValidUserDocument(resource, rec.data)) {
       return diskData()
     }
     return rec.data
