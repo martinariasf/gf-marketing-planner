@@ -577,6 +577,13 @@ const en: Dict = {
   'postDrawer.date':           'Date',
   'postDrawer.copy':           'Copy',
   'postDrawer.patchFailed':    'Patch failed',
+
+  // Sync indicator (viktor.notify audit trail)
+  'sync.sentToViktor':   'Sent to Víktor',
+  'sync.savedSummary':   'Updated {files}',
+  'sync.justNow':        'just now',
+  'sync.minAgo':         '{n} min ago',
+  'sync.hoursAgo':       '{n}h ago',
 }
 
 // ─── German ─────────────────────────────────────────────────────────────────
@@ -1116,6 +1123,13 @@ const de: Dict = {
   'postDrawer.date':           'Datum',
   'postDrawer.copy':           'Text',
   'postDrawer.patchFailed':    'Patch fehlgeschlagen',
+
+  // Sync indicator (viktor.notify audit trail)
+  'sync.sentToViktor':   'An Víktor gesendet',
+  'sync.savedSummary':   '{files} aktualisiert',
+  'sync.justNow':        'gerade eben',
+  'sync.minAgo':         'vor {n} Min.',
+  'sync.hoursAgo':       'vor {n} Std.',
 }
 
 // ─── Spanish ────────────────────────────────────────────────────────────────
@@ -1655,6 +1669,13 @@ const es: Dict = {
   'postDrawer.date':           'Fecha',
   'postDrawer.copy':           'Texto',
   'postDrawer.patchFailed':    'Patch falló',
+
+  // Sync indicator (viktor.notify audit trail)
+  'sync.sentToViktor':   'Enviado a Víktor',
+  'sync.savedSummary':   'Actualizado {files}',
+  'sync.justNow':        'ahora mismo',
+  'sync.minAgo':         'hace {n} min',
+  'sync.hoursAgo':       'hace {n} h',
 }
 
 export const translations: Record<Lang, Dict> = { en, de, es }

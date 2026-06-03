@@ -50,6 +50,7 @@ import { WorkflowStrip, type WorkflowPhase } from '@/components/workflow-strip'
 import { EditBar } from '@/components/edit-bar'
 import { ChatSheet, ChatTrigger } from '@/components/chat-sheet'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { SyncIndicator } from '@/components/sync-indicator'
 import { useT } from '@/lib/i18n'
 import { useClient } from '@/hooks/use-client'
 import { useEdit, deepMerge } from '@/lib/edit-store'
@@ -264,6 +265,7 @@ export default function ClientLayout() {
             <Badge variant="secondary" className="bg-brand-green-100 text-brand-green-600 hidden md:inline-flex">
               {t('header.viktorV2')}
             </Badge>
+            <SyncIndicator slug={slug} />
             <LanguageSwitcher />
             <ChatTrigger onClick={() => setChatOpen(true)} />
             <Button

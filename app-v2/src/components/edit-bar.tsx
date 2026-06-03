@@ -21,7 +21,7 @@ import {
 import { useEdit, deepMerge, type EditableFile } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
 import { isPocketBaseEnabled, pbSave } from '@/lib/pocketbase'
-import { isApiEnabled, apiSave } from '@/lib/api-client'
+import { isApiEnabled, apiSave, apiNotifyViktor } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 
 /**
@@ -111,20 +111,37 @@ export function EditBar({
     [slug, slugPatches],
   )
 
+  // ── Notify Viktor after save ─────────────────────────────────────────────
+  // Fire-and-forget: records a viktor.notify audit row so the sync indicator
+  // can show "enviado a Víktor · hace 2 min". Does not block the save.
+  const notifyViktor = useCallback(
+    (savedFiles: EditableFile[]) => {
+      if (!isApiEnabled || savedFiles.length === 0) return
+      const summary = t('sync.savedSummary', { files: savedFiles.join(', ') })
+      apiNotifyViktor(slug, summary)
+        .then(() => window.dispatchEvent(new CustomEvent('mp:viktor-notified')))
+        .catch(() => {/* non-fatal */})
+    },
+    [slug, t],
+  )
+
   const saveAll = useCallback(async () => {
     setSaving(true)
     setSaveError(null)
+    // Capture before saveOne calls resetFile and clears them.
+    const filesToSave = [...dirtyFiles]
     try {
-      await Promise.all(dirtyFiles.map(saveOne))
+      await Promise.all(filesToSave.map(saveOne))
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
+      notifyViktor(filesToSave)
       onSaved?.()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
     } finally {
       setSaving(false)
     }
-  }, [dirtyFiles, saveOne, onSaved, t])
+  }, [dirtyFiles, saveOne, notifyViktor, onSaved, t])
 
   const handleSaveOne = useCallback(
     async (file: EditableFile) => {
@@ -132,6 +149,7 @@ export function EditBar({
       setSaveError(null)
       try {
         await saveOne(file)
+        notifyViktor([file])
         onSaved?.()
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
@@ -139,7 +157,7 @@ export function EditBar({
         setSaving(false)
       }
     },
-    [saveOne, onSaved, t],
+    [saveOne, notifyViktor, onSaved, t],
   )
 
   // ── Phase 4: debounced autosave when API mode is on ─────────────────────
@@ -156,9 +174,12 @@ export function EditBar({
     autosaveTimer.current = setTimeout(async () => {
       setSaving(true)
       setSaveError(null)
+      // Capture before saveOne calls resetFile and clears them.
+      const filesToSave = [...dirtyFiles]
       try {
-        await Promise.all(dirtyFiles.map(saveOne))
+        await Promise.all(filesToSave.map(saveOne))
         setLastSavedAt(Date.now())
+        notifyViktor(filesToSave)
         onSaved?.()
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : t('editBar.autosaveFailed'))

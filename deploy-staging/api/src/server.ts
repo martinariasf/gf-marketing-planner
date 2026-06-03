@@ -17,6 +17,7 @@ import { clients } from './routes/clients.js'
 import { userOwned } from './routes/userOwned.js'
 import { viktorOwned } from './routes/viktorOwned.js'
 import { auditRoute } from './routes/audit.js'
+import { notifyRoute } from './routes/notify.js'
 import { chat } from './routes/chat.js'
 import { authExchange } from './routes/authExchange.js'
 import { integration } from './routes/integration.js'
@@ -80,6 +81,7 @@ app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)
 app.route('/api/v1', auditRoute)
+app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)
 app.route('/api/v1', integration)
 

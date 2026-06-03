@@ -448,6 +448,38 @@ export async function apiLoadIntegration(slug: string): Promise<IntegrationInfo>
   return apiGet<IntegrationInfo>(`/clients/${slug}/integration`)
 }
 
+// ── Sync / notify-viktor ─────────────────────────────────────────────────────
+
+/**
+ * Records a "platform changed" sync event that the dashboard's sync indicator
+ * reads back via apiLoadSyncLog. Fire-and-forget — callers catch internally.
+ */
+export async function apiNotifyViktor(slug: string, summary: string, kind?: string): Promise<void> {
+  await apiSend<{ ok: boolean; ts: string }>(
+    'POST',
+    `/clients/${slug}/notify-viktor`,
+    { summary, kind },
+  )
+}
+
+export interface SyncEvent {
+  ts: string
+  note: string
+  actor?: string
+}
+
+/** Returns the most recent viktor.notify audit events for the sync indicator. */
+export async function apiLoadSyncLog(slug: string, limit = 5): Promise<SyncEvent[]> {
+  try {
+    const r = await apiGet<{ items: Array<{ ts: string; note: string; actor?: string }> }>(
+      `/clients/${slug}/audit?action=viktor.notify&limit=${limit}`,
+    )
+    return (r.items ?? []).map((row) => ({ ts: row.ts, note: row.note, actor: row.actor }))
+  } catch {
+    return []
+  }
+}
+
 export async function apiLoadChatHistory(
   slug: string,
   thread = 'default',
