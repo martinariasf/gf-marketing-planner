@@ -27,6 +27,8 @@ import {
   Save,
   PanelLeftClose,
   PanelLeftOpen,
+  Palette,
+  BookImage,
 } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -69,10 +71,12 @@ const NAV: NavItem[] = [
   { to: 'context',     labelKey: 'nav.context',     icon: Building2,     phase: 'plan'    as WorkflowPhase },
   { to: 'goals',       labelKey: 'nav.goals',       icon: Target,        phase: 'plan'    as WorkflowPhase },
   { to: 'strategy',    labelKey: 'nav.strategy',    icon: Compass,       phase: 'plan'    as WorkflowPhase },
+  { to: 'brand-kit',   labelKey: 'nav.brandKit',    icon: Palette,       phase: 'plan'    as WorkflowPhase },
   { to: 'suggestions', labelKey: 'nav.suggestions', icon: Sparkles,      phase: 'plan'    as WorkflowPhase },
   { to: 'calendar',    labelKey: 'nav.calendar',    icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
   { to: 'approvals',   labelKey: 'nav.approvals',   icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
   { to: 'assets',      labelKey: 'nav.assets',      icon: Images,        phase: 'prepare' as WorkflowPhase },
+  { to: 'references',  labelKey: 'nav.references',  icon: BookImage,     phase: 'prepare' as WorkflowPhase },
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },

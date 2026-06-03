@@ -67,6 +67,8 @@ const en: Dict = {
   'nav.performance': 'Performance',
   'nav.learnings':   'Learnings',
   'nav.integration': 'Integration',
+  'nav.brandKit':    'Brand Identity Kit',
+  'nav.references':  'References',
   'nav.soon':        'soon',
   'nav.openNav':     'Open navigation',
   'nav.allClients':  'All clients',
@@ -578,6 +580,18 @@ const en: Dict = {
   'postDrawer.copy':           'Copy',
   'postDrawer.patchFailed':    'Patch failed',
 
+  // Brand Identity Kit page
+  'brandKit.eyebrow':    'Brand Identity',
+  'brandKit.heading':    'Brand Identity Kit',
+  'brandKit.intro':      'Brand colors, typography, logos, and tone keywords — the visual and verbal DNA Viktor uses when drafting content.',
+  'brandKit.colorsDesc': 'The palette Viktor uses when generating images and copy.',
+
+  // References page
+  'references.eyebrow':      'Inspiration',
+  'references.heading':      'References',
+  'references.intro':        'Drop reference images here that capture the visual style, tone, and aesthetics you want. Viktor uses these when generating images.',
+  'references.apiRequired':  'The references board requires the live API. Open this in the staging environment to upload and manage reference images.',
+
   // Sync indicator (viktor.notify audit trail)
   'sync.sentToViktor':   'Sent to Víktor',
   'sync.savedSummary':   'Updated {files}',
@@ -638,6 +652,8 @@ const de: Dict = {
   'nav.performance': 'Performance',
   'nav.learnings':   'Erkenntnisse',
   'nav.integration': 'Integration',
+  'nav.brandKit':    'Markenidentität',
+  'nav.references':  'Referenzen',
   'nav.soon':        'bald',
   'nav.openNav':     'Navigation öffnen',
   'nav.allClients':  'Alle Kunden',
@@ -1130,6 +1146,18 @@ const de: Dict = {
   'sync.justNow':        'gerade eben',
   'sync.minAgo':         'vor {n} Min.',
   'sync.hoursAgo':       'vor {n} Std.',
+
+  // Brand Identity Kit page
+  'brandKit.eyebrow':    'Markenidentität',
+  'brandKit.heading':    'Markenidentitäts-Kit',
+  'brandKit.intro':      'Markenfarben, Typografie, Logos und Tonfall-Schlüsselwörter — die visuelle und verbale DNA, die Viktor beim Erstellen von Inhalten nutzt.',
+  'brandKit.colorsDesc': 'Die Farbpalette, die Viktor beim Generieren von Bildern und Texten verwendet.',
+
+  // References page
+  'references.eyebrow':     'Inspiration',
+  'references.heading':     'Referenzen',
+  'references.intro':       'Lade hier Referenzbilder hoch, die den visuellen Stil und die Ästhetik zeigen, die du dir vorstellst. Viktor nutzt diese beim Generieren von Bildern.',
+  'references.apiRequired': 'Das Referenz-Board benötigt die Live-API. Öffne diese Seite in der Staging-Umgebung, um Referenzbilder hochzuladen und zu verwalten.',
 }
 
 // ─── Spanish ────────────────────────────────────────────────────────────────
@@ -1184,6 +1212,8 @@ const es: Dict = {
   'nav.performance': 'Rendimiento',
   'nav.learnings':   'Aprendizajes',
   'nav.integration': 'Integración',
+  'nav.brandKit':    'Identidad de marca',
+  'nav.references':  'Referencias',
   'nav.soon':        'pronto',
   'nav.openNav':     'Abrir navegación',
   'nav.allClients':  'Todos los clientes',
@@ -1676,6 +1706,18 @@ const es: Dict = {
   'sync.justNow':        'ahora mismo',
   'sync.minAgo':         'hace {n} min',
   'sync.hoursAgo':       'hace {n} h',
+
+  // Brand Identity Kit page
+  'brandKit.eyebrow':    'Identidad de marca',
+  'brandKit.heading':    'Kit de identidad de marca',
+  'brandKit.intro':      'Colores de marca, tipografía, logos y palabras clave de tono — el ADN visual y verbal que Viktor usa al crear contenido.',
+  'brandKit.colorsDesc': 'La paleta que Viktor usa al generar imágenes y textos.',
+
+  // References page
+  'references.eyebrow':     'Inspiración',
+  'references.heading':     'Referencias',
+  'references.intro':       'Sube aquí imágenes de referencia que capturen el estilo visual y la estética que buscas. Viktor las usa al generar imágenes.',
+  'references.apiRequired': 'El tablero de referencias requiere la API en vivo. Abre esta página en el entorno de staging para subir y gestionar imágenes de referencia.',
 }
 
 export const translations: Record<Lang, Dict> = { en, de, es }

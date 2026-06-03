@@ -16,6 +16,8 @@ const PerformanceView = lazy(() => import('@/routes/client/performance'))
 const LearningsView   = lazy(() => import('@/routes/client/learnings'))
 const SuggestionsView = lazy(() => import('@/routes/client/suggestions'))
 const IntegrationView = lazy(() => import('@/routes/client/integration'))
+const BrandKitView    = lazy(() => import('@/routes/client/brand-kit'))
+const ReferencesView  = lazy(() => import('@/routes/client/references'))
 
 function RouteFallback() {
   return (
@@ -45,6 +47,8 @@ export default function App() {
             <Route path="learnings"   element={<LearningsView />} />
             <Route path="suggestions" element={<SuggestionsView />} />
             <Route path="integration" element={<IntegrationView />} />
+            <Route path="brand-kit"   element={<BrandKitView />} />
+            <Route path="references"  element={<ReferencesView />} />
             <Route path="*"           element={<Navigate to="context" replace />} />
           </Route>
         </Routes>
