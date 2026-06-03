@@ -49,8 +49,9 @@ June 2026 (a malformed post the renderer couldn't handle).
 | `copy` | string (the post body) |
 | `hashtags` | **array of strings** e.g. `["#ki","#mittelstand"]` — not a single string |
 | `cta` | string |
-| `image` | full URL (see Images). The field is exactly `image` — **not** `imageUrl`, **not** `assetIds`. |
-| `pillar`, `format`, `campaign` | optional strings |
+| `image` | full URL (see Images). The field is exactly `image` — **not** `imageUrl`, **not** `assetIds`. For a carousel this is the **cover** (= `slides[0].image`). |
+| `slides` | **carousel only.** Array of `{ "image": "<full url>", "caption"?: "<note>" }`, 2–10 entries (IG cap). Strict per-slide shape — a typo'd key (e.g. `url`) 422s. Presence of >1 slide makes the post a carousel; `caption` is an optional per-slide design note, **not** a second body. |
+| `pillar`, `format`, `campaign` | optional strings. Set `format` to `"carousel"` when you send `slides`. |
 
 On **PATCH**, send only the fields that change; each one still must be the right type.
 Unknown top-level keys are rejected on both create and patch.
@@ -102,6 +103,37 @@ When you generate an image for a post you MUST attach it so the dashboard shows 
 (The API also normalizes a bare filename/relative path into the correct
 `/api/v1/clients/<slug>/assets/files/<name>` URL as a safety net, but always send
 the full URL.)
+
+## Carousel-Workflow (multi-slide posts, 2–10 images)
+
+A carousel is a normal post that also carries a `slides` array. The cover
+`image` stays `slides[0].image` so every thumbnail / calendar / preview keeps
+working. **No new endpoint** — slides are set via the normal `PATCH /posts/:id`.
+
+Always work in this order — **never guess**:
+
+1. **Ask first.** How many slides (2–10)? Channel (Instagram / LinkedIn)?
+   Aspect ratio (1:1 square or 4:5 portrait — default **4:5**)? One consistent
+   visual style? Topic/goal of the carousel?
+2. **Propose a slide-by-slide outline before generating:** slide 1 = hook,
+   slides 2…n‑1 = content beats, slide n = CTA. Get the user's confirmation.
+3. **Warn on cost/time.** It's N image-gen calls (premium ≈ 3 min each; offer the
+   `fidelity="fast"` model). Offer to generate slide 1 first as a preview before
+   committing to all N.
+4. **Generate → assets → PATCH.** For EACH slide: image-gen → copy into
+   `/opt/marketing-planner/client/assets/` (`<postId>_slideN.png`) → append a
+   manifest entry (same flow as a single image). Then build the `slides[]` array
+   in order and:
+   ```
+   PATCH /posts/<id>  { "format":"carousel",
+                        "slides":[ {"image":"<url1>","caption":"hook"}, … ],
+                        "image":"<url1>" }     # cover = first slide
+   ```
+   Then `GET /posts/<id>` to confirm `slides` is set. The API normalizes bare
+   filenames in slide images too, but send full URLs.
+5. **Telegram:** send the slides as an album so the user sees the whole set in
+   chat. The post shares ONE caption (`copy`); per-slide `caption` is a design
+   note, not a second body.
 
 ## Branding — `PATCH /clients/$CLIENT_SLUG/branding`
 
