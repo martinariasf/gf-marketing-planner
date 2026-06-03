@@ -33,15 +33,19 @@ const diskFor: Record<UserResource, (slug: string) => Promise<unknown>> = {
 }
 
 async function loadFromPbOrDisk(resource: UserResource, slug: string): Promise<unknown> {
+  const diskData = async () => (await diskFor[resource](slug)) ?? null
   try {
     const rec = await withPb((pb) =>
       pb.collection(collectionFor[resource]).getFirstListItem<{ data: unknown }>(
         `slug="${slug}"`,
       ),
     )
+    if (!rec.data || typeof rec.data !== 'object') {
+      return diskData()
+    }
     return rec.data
   } catch {
-    return (await diskFor[resource](slug)) ?? null
+    return diskData()
   }
 }
 

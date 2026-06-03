@@ -154,6 +154,13 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await res.json()) as T
 }
 
+function requireObjectData<T>(data: T | null | undefined, label: string): T {
+  if (!data || typeof data !== 'object') {
+    throw new Error(`${label} returned empty data`)
+  }
+  return data
+}
+
 async function apiSend<T>(method: 'PUT' | 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
   const res = await authedFetch(path, {
@@ -169,17 +176,17 @@ async function apiSend<T>(method: 'PUT' | 'POST' | 'PATCH', path: string, body: 
 
 export async function apiLoadBrief(slug: string): Promise<Brief> {
   const r = await apiGet<{ data: Brief }>(`/clients/${slug}/brief`)
-  return r.data
+  return requireObjectData(r.data, 'brief')
 }
 
 export async function apiLoadPlan(slug: string): Promise<Plan> {
   const r = await apiGet<{ data: Plan }>(`/clients/${slug}/plan`)
-  return r.data
+  return requireObjectData(r.data, 'plan')
 }
 
 export async function apiLoadGoals(slug: string): Promise<Goals> {
   const r = await apiGet<{ data: Goals }>(`/clients/${slug}/goals`)
-  return r.data
+  return requireObjectData(r.data, 'goals')
 }
 
 export async function apiLoadLearnings(slug: string): Promise<Learnings | null> {

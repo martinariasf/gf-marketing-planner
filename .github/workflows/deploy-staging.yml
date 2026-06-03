@@ -98,6 +98,10 @@ jobs:
         run: |
           rsync -avz \
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/index.json \
+            "$USER@$HOST:/opt/marketing-planner-staging/clients/index.json"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
             clients/gf-internal/ \
             "$USER@$HOST:/opt/marketing-planner-staging/clients/gf-internal/"
 
