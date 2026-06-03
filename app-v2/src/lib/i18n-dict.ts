@@ -605,6 +605,9 @@ const en: Dict = {
   'references.intro':        'Drop reference images here that capture the visual style, tone, and aesthetics you want. Viktor uses these when generating images.',
   'references.apiRequired':  'The references board requires the live API. Open this in the staging environment to upload and manage reference images.',
 
+  // KPI card channel deep-link
+  'kpi.viewChannel':     'View {network}',
+
   // Sync indicator (viktor.notify audit trail)
   'sync.sentToViktor':   'Sent to Víktor',
   'sync.savedSummary':   'Updated {files}',
@@ -1184,6 +1187,9 @@ const de: Dict = {
   'references.heading':     'Referenzen',
   'references.intro':       'Lade hier Referenzbilder hoch, die den visuellen Stil und die Ästhetik zeigen, die du dir vorstellst. Viktor nutzt diese beim Generieren von Bildern.',
   'references.apiRequired': 'Das Referenz-Board benötigt die Live-API. Öffne diese Seite in der Staging-Umgebung, um Referenzbilder hochzuladen und zu verwalten.',
+
+  // KPI card channel deep-link
+  'kpi.viewChannel':     '{network} ansehen',
 }
 
 // ─── Spanish ────────────────────────────────────────────────────────────────
@@ -1757,6 +1763,9 @@ const es: Dict = {
   'references.heading':     'Referencias',
   'references.intro':       'Sube aquí imágenes de referencia que capturen el estilo visual y la estética que buscas. Viktor las usa al generar imágenes.',
   'references.apiRequired': 'El tablero de referencias requiere la API en vivo. Abre esta página en el entorno de staging para subir y gestionar imágenes de referencia.',
+
+  // KPI card channel deep-link
+  'kpi.viewChannel':     'Ver {network}',
 }
 
 export const translations: Record<Lang, Dict> = { en, de, es }

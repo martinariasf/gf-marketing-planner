@@ -277,7 +277,7 @@ function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
 export default function GoalsView() {
   const t = useT()
   const { lang } = useI18n()
-  const { goals, performance } = useOutletContext<ClientBundle>()
+  const { goals, performance, brief } = useOutletContext<ClientBundle>()
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode } = useEdit()
 
@@ -334,6 +334,12 @@ export default function GoalsView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.quarterly.map((g) => {
             const progress = performance?.vsGoals[g.id]
+            const profiles = brief.channels.profiles ?? []
+            const labelLower = g.label.toLowerCase()
+            const matchedProfile = profiles.find((p) =>
+              labelLower.includes(p.network.toLowerCase()) ||
+              (p.network === 'x' && (labelLower.includes(' x ') || labelLower.startsWith('x ') || labelLower.endsWith(' x') || labelLower === 'x'))
+            )
             return (
               <KpiCard
                 key={g.id}
@@ -344,6 +350,8 @@ export default function GoalsView() {
                 pace={progress?.pace}
                 deltaPct={progress?.deltaPct}
                 compact={g.target > 1000}
+                channel={matchedProfile?.network}
+                channelUrl={matchedProfile?.url}
               />
             )
           })}
