@@ -14,6 +14,10 @@ export interface WeeklyFocus {
   week: number
   focus: string
   kpi: string
+  channel?: string
+  message?: string
+  audience?: string
+  kpiTarget?: number
 }
 
 export interface Goals {

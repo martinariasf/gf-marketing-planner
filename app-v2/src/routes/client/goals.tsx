@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
 import {
   BarChart,
@@ -106,6 +106,156 @@ function EditableTargetCell({
       <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
       {fmtCompact(value)}
       {suffix}
+    </button>
+  )
+}
+
+/**
+ * Editable text (single-line input) or textarea for weekly focus fields.
+ * When editMode is off, renders plain text (or a muted dash if empty).
+ * When editMode is on, shows a tinted button affordance; clicking activates an input.
+ */
+function EditableTextField({
+  slug,
+  path,
+  value,
+  placeholder,
+  multiline = false,
+  editMode,
+}: {
+  slug: string
+  path: (string | number)[]
+  value: string | undefined
+  placeholder: string
+  multiline?: boolean
+  editMode: boolean
+}) {
+  const { setField } = useEdit()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value ?? '')
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (trimmed !== (value ?? '')) setField(slug, 'goals', path, trimmed || null)
+    setEditing(false)
+  }
+
+  if (!editMode) {
+    return value ? (
+      <span>{value}</span>
+    ) : (
+      <span className="text-ink-muted/40">—</span>
+    )
+  }
+
+  if (editing) {
+    const sharedClass =
+      'w-full rounded border border-amber-300 bg-amber-50/40 px-1.5 py-0.5 text-sm outline-none ring-2 ring-amber-200/60 focus:border-amber-400'
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !multiline) { commit(); return }
+      if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false) }
+    }
+    return multiline ? (
+      <textarea
+        autoFocus
+        rows={2}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        className={sharedClass}
+        placeholder={placeholder}
+      />
+    ) : (
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        className={sharedClass}
+        placeholder={placeholder}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(value ?? ''); setEditing(true) }}
+      className="group inline-flex items-start gap-1.5 rounded px-2 py-0.5 text-sm bg-brand-blue-50/70 border border-brand-blue-200/60 text-brand-blue hover:bg-brand-blue-50 transition-colors w-full text-left"
+    >
+      <Pencil className="h-3 w-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      {value ? (
+        <span>{value}</span>
+      ) : (
+        <span className="text-ink-muted/50 italic">{placeholder}</span>
+      )}
+    </button>
+  )
+}
+
+/**
+ * Editable number field for kpiTarget.
+ * Read-only plain text when editMode off; tinted button affordance in edit mode.
+ */
+function EditableNumberField({
+  slug,
+  path,
+  value,
+  editMode,
+}: {
+  slug: string
+  path: (string | number)[]
+  value: number | undefined
+  editMode: boolean
+}) {
+  const { setField } = useEdit()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value != null ? String(value) : '')
+
+  const commit = () => {
+    const n = draft.trim() === '' ? null : Number(draft)
+    if (n !== (value ?? null) && (n === null || !Number.isNaN(n))) {
+      setField(slug, 'goals', path, n)
+    }
+    setEditing(false)
+  }
+
+  if (!editMode) {
+    return value != null ? (
+      <span className="tabular-nums font-medium">{fmtCompact(value)}</span>
+    ) : (
+      <span className="text-ink-muted/40">—</span>
+    )
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          else if (e.key === 'Escape') { setDraft(value != null ? String(value) : ''); setEditing(false) }
+        }}
+        className="w-24 text-right tabular-nums rounded border border-amber-300 bg-amber-50/40 px-1.5 py-0.5 outline-none ring-2 ring-amber-200/60 focus:border-amber-400"
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(value != null ? String(value) : ''); setEditing(true) }}
+      className="group inline-flex items-center gap-1.5 rounded px-2 py-0.5 tabular-nums font-medium bg-brand-blue-50/70 border border-brand-blue-200/60 text-brand-blue hover:bg-brand-blue-50 transition-colors"
+    >
+      <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      {value != null ? fmtCompact(value) : <span className="text-ink-muted/50 italic font-normal">—</span>}
     </button>
   )
 }
@@ -364,21 +514,112 @@ export default function GoalsView() {
           {t('goals.weeklyFocusDesc')}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {goals.weekly.map((w) => (
-            <Card key={w.week}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  {t('goals.week', { n: w.week })}
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-normal">
-                    {w.kpi}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">{w.focus}</p>
-              </CardContent>
-            </Card>
-          ))}
+          {goals.weekly.map((w, i) => {
+            const sendToViktor = () => {
+              const parts: string[] = [`Semana ${w.week}:`]
+              if (w.channel)    parts.push(`canal ${w.channel}`)
+              if (w.message)    parts.push(`mensaje '${w.message}'`)
+              if (w.audience)   parts.push(`público ${w.audience}`)
+              if (w.focus)      parts.push(`foco ${w.focus}`)
+              if (w.kpi)        parts.push(`KPI ${w.kpi}${w.kpiTarget != null ? ` (objetivo ${fmtCompact(w.kpiTarget)})` : ''}`)
+              const message = parts.join(', ') + '. ¿Lo preparamos?'
+              window.dispatchEvent(new CustomEvent('mp:open-chat', { detail: { message } }))
+            }
+
+            return (
+              <Card key={w.week} className="flex flex-col">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between gap-2">
+                    <span>{t('goals.week', { n: w.week })}</span>
+                    <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-normal shrink-0">
+                      {w.kpi}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2.5 flex-1">
+                  {/* Channel */}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('goals.weekChannel')}
+                    </p>
+                    <EditableTextField
+                      slug={slug}
+                      path={['weekly', i, 'channel']}
+                      value={w.channel}
+                      placeholder={t('goals.weekFieldPlaceholder')}
+                      editMode={editMode}
+                    />
+                  </div>
+                  {/* Message */}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('goals.weekMessage')}
+                    </p>
+                    <EditableTextField
+                      slug={slug}
+                      path={['weekly', i, 'message']}
+                      value={w.message}
+                      placeholder={t('goals.weekFieldPlaceholder')}
+                      multiline
+                      editMode={editMode}
+                    />
+                  </div>
+                  {/* Audience */}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('goals.weekAudience')}
+                    </p>
+                    <EditableTextField
+                      slug={slug}
+                      path={['weekly', i, 'audience']}
+                      value={w.audience}
+                      placeholder={t('goals.weekFieldPlaceholder')}
+                      editMode={editMode}
+                    />
+                  </div>
+                  {/* Focus */}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('goals.weekFocus')}
+                    </p>
+                    <EditableTextField
+                      slug={slug}
+                      path={['weekly', i, 'focus']}
+                      value={w.focus}
+                      placeholder={t('goals.weekFieldPlaceholder')}
+                      multiline
+                      editMode={editMode}
+                    />
+                  </div>
+                  {/* KPI + target */}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      {t('goals.weekKpiTarget')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-ink-muted">{w.kpi}</span>
+                      <EditableNumberField
+                        slug={slug}
+                        path={['weekly', i, 'kpiTarget']}
+                        value={w.kpiTarget}
+                        editMode={editMode}
+                      />
+                    </div>
+                  </div>
+                  {/* Send to Viktor */}
+                  <div className="pt-1 mt-auto">
+                    <button
+                      type="button"
+                      onClick={sendToViktor}
+                      className="w-full text-xs font-medium rounded border border-brand-blue-200/60 bg-brand-blue-50/50 text-brand-blue px-3 py-1.5 hover:bg-brand-blue-50 transition-colors text-center"
+                    >
+                      {t('goals.sendToViktor')}
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       </section>
 
