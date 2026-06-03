@@ -322,6 +322,17 @@ const en: Dict = {
   'strategy.cadence':              'Cadence',
   'strategy.formatMix':            'Format mix',
   'strategy.keyDates':             'Key dates',
+  // Strategy edit / review additions (ST1)
+  'strategy.reviewWithViktor':        'Review with Viktor',
+  'strategy.editedOn':               'Edited {date}',
+  'strategy.headlinePlaceholder':     'Add a headline…',
+  'strategy.strategyPlaceholder':     'Add a strategy intro…',
+  'strategy.positioningPlaceholder':  'Add a positioning statement…',
+  'strategy.priorityLabelPlaceholder':'Priority label…',
+  'strategy.priorityDescPlaceholder': 'Describe this priority…',
+  'strategy.pillarDescPlaceholder':   'Describe this pillar…',
+  'strategy.rationalePlaceholder':    'Why this platform…',
+  'strategy.cadencePlaceholder':      'e.g. 3× per week',
 
   // Suggestions page
   'suggestions.eyebrow':         'AI suggestions',
@@ -863,6 +874,17 @@ const de: Dict = {
   'strategy.cadence':              'Frequenz',
   'strategy.formatMix':            'Format-Mix',
   'strategy.keyDates':             'Wichtige Termine',
+  // Strategy edit / review additions (ST1)
+  'strategy.reviewWithViktor':        'Mit Viktor besprechen',
+  'strategy.editedOn':               'Bearbeitet {date}',
+  'strategy.headlinePlaceholder':     'Schlagzeile hinzufügen…',
+  'strategy.strategyPlaceholder':     'Strategie-Einleitung hinzufügen…',
+  'strategy.positioningPlaceholder':  'Positionierungsaussage hinzufügen…',
+  'strategy.priorityLabelPlaceholder':'Priorität benennen…',
+  'strategy.priorityDescPlaceholder': 'Diese Priorität beschreiben…',
+  'strategy.pillarDescPlaceholder':   'Diese Säule beschreiben…',
+  'strategy.rationalePlaceholder':    'Warum diese Plattform…',
+  'strategy.cadencePlaceholder':      'z. B. 3× pro Woche',
 
   'suggestions.eyebrow':         'KI-Vorschläge',
   'suggestions.heading':         'Was sollte Viktor laut Viktor als Nächstes tun?',
@@ -1391,6 +1413,17 @@ const es: Dict = {
   'strategy.cadence':              'Cadencia',
   'strategy.formatMix':            'Mix de formatos',
   'strategy.keyDates':             'Fechas clave',
+  // Strategy edit / review additions (ST1)
+  'strategy.reviewWithViktor':        'Revisar con Víktor',
+  'strategy.editedOn':               'Editado {date}',
+  'strategy.headlinePlaceholder':     'Añadir titular…',
+  'strategy.strategyPlaceholder':     'Añadir introducción de estrategia…',
+  'strategy.positioningPlaceholder':  'Añadir declaración de posicionamiento…',
+  'strategy.priorityLabelPlaceholder':'Nombre de la prioridad…',
+  'strategy.priorityDescPlaceholder': 'Describir esta prioridad…',
+  'strategy.pillarDescPlaceholder':   'Describir este pilar…',
+  'strategy.rationalePlaceholder':    'Por qué esta plataforma…',
+  'strategy.cadencePlaceholder':      'p. ej. 3× por semana',
 
   'suggestions.eyebrow':         'Sugerencias IA',
   'suggestions.heading':         '¿Qué piensa Viktor que deberías hacer?',
