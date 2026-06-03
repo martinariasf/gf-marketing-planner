@@ -33,6 +33,28 @@ function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
+// Chronologically-sortable PocketBase record id (15 chars, [a-z0-9]).
+// PocketBase's default ids are random, so `getList(sort: 'id')` returned the
+// chat transcript in essentially random order — a just-sent message could
+// surface anywhere (or fall past the page limit), making the conversation look
+// scrambled or "deleted" on every reload. A fixed-width base36 millisecond
+// prefix makes lexical id order match insertion order; a per-ms counter + a few
+// random chars disambiguate messages created in the same millisecond.
+let _midLastTs = 0
+let _midSeq = 0
+function mkMsgId(): string {
+  const now = Date.now()
+  if (now === _midLastTs) _midSeq++
+  else {
+    _midLastTs = now
+    _midSeq = 0
+  }
+  const ts = now.toString(36).padStart(9, '0').slice(-9) // 9 chars (sortable past year ~5000)
+  const seq = _midSeq.toString(36).padStart(2, '0').slice(-2) // 2 chars
+  const rnd = Math.random().toString(36).slice(2, 6).padEnd(4, '0') // 4 chars
+  return (ts + seq + rnd).slice(0, 15)
+}
+
 interface HermesRunEvent {
   event: string
   run_id?: string
@@ -129,6 +151,7 @@ chat.post(
     // the run errors mid-flight.
     withPb((pb) =>
       pb.collection('chat_messages').create({
+        id: mkMsgId(),
         slug,
         thread,
         role: 'user',
@@ -145,12 +168,38 @@ chat.post(
       // Start the run on Hermes.
       let runId: string | null = null
       let assistantFinalText = ''
+      let sawRunCompleted = false
+      let sawToolActivity = false
       const toolIds = new Map<string, string>() // tool name -> synthetic id for matching started→completed
       let toolCounter = 0
       const ac = new AbortController()
-      // If the client disconnects we want the Hermes event stream to close too.
-      const onAbort = () => ac.abort()
-      c.req.raw.signal?.addEventListener('abort', onAbort, { once: true })
+      // Persistence resilience: we intentionally do NOT abort the Hermes run when
+      // the browser disconnects. The run keeps executing server-side on Hermes,
+      // so we keep consuming its events until completion and save the assistant
+      // reply to chat_messages even if the user navigated away mid-run. Image
+      // generation can take ~3 min on the premium model, so a reload during that
+      // window used to drop the reply and the turn looked "lost" on return.
+      // Writes to the now-closed SSE are swallowed by safeWrite. A hard timeout
+      // still bounds a genuinely stuck run so the handler can't linger forever.
+      const HARD_TIMEOUT_MS = 6 * 60_000
+      const hardTimeout = setTimeout(() => ac.abort(), HARD_TIMEOUT_MS)
+      const clientGone = () => c.req.raw.signal?.aborted === true
+      const safeWrite = async (data: string) => {
+        if (clientGone()) return
+        try {
+          await s.write(data)
+        } catch {
+          /* client went away mid-write; keep consuming so we can still persist. */
+        }
+      }
+      // Heartbeat. The premium image model can run ~3 min, during which Hermes
+      // emits no JSON events — leaving the SSE connection idle long enough for an
+      // intermediary (caddy/LB/browser) to drop it, which surfaced as a spurious
+      // "Network error" in the chat. A comment frame (": hb") every 15s keeps the
+      // pipe warm; the client parser ignores frames with no event/data.
+      const heartbeat = setInterval(() => {
+        void safeWrite(': hb\n\n')
+      }, 15_000)
 
       try {
         const runRes = await fetch(`${env.hermesBaseUrl}/v1/runs`, {
@@ -177,9 +226,10 @@ chat.post(
 
         for await (const ev of hermesRunEvents(runId, ac.signal)) {
           if (ev.event === 'tool.started') {
+            sawToolActivity = true
             const id = `t${++toolCounter}`
             toolIds.set(ev.tool ?? `tool-${toolCounter}`, id)
-            await s.write(
+            await safeWrite(
               sse('tool_call', {
                 id,
                 name: ev.tool ?? 'tool',
@@ -187,9 +237,10 @@ chat.post(
               }),
             )
           } else if (ev.event === 'tool.completed') {
+            sawToolActivity = true
             const id = toolIds.get(ev.tool ?? '') ?? `t${++toolCounter}`
             const ok = !ev.error
-            await s.write(
+            await safeWrite(
               sse('tool_result', {
                 id,
                 name: ev.tool ?? 'tool',
@@ -200,49 +251,69 @@ chat.post(
             // Surface as a synthetic "thought" so the UI's existing thoughts
             // collapser picks it up.
             if (ev.text) {
-              await s.write(sse('tool', { label: ev.text.slice(0, 160), status: 'done' }))
+              await safeWrite(sse('tool', { label: ev.text.slice(0, 160), status: 'done' }))
             }
           } else if (ev.event === 'run.completed') {
+            sawRunCompleted = true
             assistantFinalText = ev.output ?? ''
+            if (!assistantFinalText.trim() && sawToolActivity) {
+              assistantFinalText =
+                'I finished the tool work, but Hermes did not send a final text reply. Refresh the dashboard if you do not see the update yet.'
+            }
             // Emit the whole final text as one token chunk. The chat-sheet UI
             // already concatenates token events into the assistant bubble.
             if (assistantFinalText) {
-              await s.write(sse('token', { text: assistantFinalText }))
+              await safeWrite(sse('token', { text: assistantFinalText }))
             }
             break
           } else if (ev.event === 'run.failed') {
-            await s.write(sse('error', { detail: String(ev.error ?? 'run failed') }))
+            await safeWrite(sse('error', { detail: String(ev.error ?? 'run failed') }))
             break
           } else if (ev.event === 'run.cancelled') {
-            await s.write(sse('error', { detail: 'run cancelled' }))
+            await safeWrite(sse('error', { detail: 'run cancelled' }))
             break
           }
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : 'unknown'
-        await s.write(sse('error', { detail }))
+        await safeWrite(sse('error', { detail }))
       } finally {
-        c.req.raw.signal?.removeEventListener('abort', onAbort)
+        clearTimeout(hardTimeout)
+        clearInterval(heartbeat)
       }
 
-      // Persist assistant message + emit done.
+      if (!assistantFinalText.trim() && runId && sawToolActivity && !sawRunCompleted) {
+        assistantFinalText =
+          'I saw tool activity for this request, but the Hermes event stream ended before a final reply arrived. Refresh the dashboard if you do not see the update yet.'
+        await safeWrite(sse('token', { text: assistantFinalText }))
+      }
+
+      // Persist assistant message + emit done. Skip empty replies (a failed or
+      // cancelled run, or a hard-timeout) so a reload doesn't surface a blank
+      // assistant bubble. A reply that finished server-side after the client
+      // left still lands here because we kept consuming events above.
       try {
-        const rec = await withPb((pb) =>
-          pb.collection('chat_messages').create({
-            slug,
-            thread,
-            role: 'assistant',
-            content: assistantFinalText,
-            toolEvent: {
-              actor: principal.label ?? principal.token.slice(0, 12),
-              runId,
-            },
-          }),
-        )
-        await s.write(sse('done', { messageId: (rec as { id: string }).id }))
+        let messageId: string | null = null
+        if (assistantFinalText.trim()) {
+          const rec = await withPb((pb) =>
+            pb.collection('chat_messages').create({
+              id: mkMsgId(),
+              slug,
+              thread,
+              role: 'assistant',
+              content: assistantFinalText,
+              toolEvent: {
+                actor: principal.label ?? principal.token.slice(0, 12),
+                runId,
+              },
+            }),
+          )
+          messageId = (rec as { id: string }).id
+        }
+        await safeWrite(sse('done', { messageId }))
       } catch (err) {
         console.warn('[chat] persist assistant msg failed', err)
-        await s.write(sse('done', { messageId: null }))
+        await safeWrite(sse('done', { messageId: null }))
       }
     })
   },
@@ -253,7 +324,10 @@ chat.get('/clients/:slug/chat/messages', requireScope(), requireRole('dash', 'ad
   const slug = c.req.param('slug')
   const thread = c.req.query('thread') ?? 'default'
   const items = await withPb((pb) =>
-    pb.collection('chat_messages').getList(1, 50, {
+    // sort:'id' is chronological because we mint time-sortable ids (mkMsgId).
+    // 200 keeps a long demo conversation fully visible (was 50, which dropped
+    // older turns once a thread grew past the page limit).
+    pb.collection('chat_messages').getList(1, 200, {
       filter: `slug="${slug}" && thread="${thread}"`,
       sort: 'id',
     }),

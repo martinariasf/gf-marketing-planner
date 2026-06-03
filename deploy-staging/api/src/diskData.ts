@@ -51,7 +51,9 @@ export const disk = {
     readJson<{ posts: string[] }>('clients', slug, 'posts', 'index.json'),
   post: (slug: string, id: string) => readJson<unknown>('clients', slug, 'posts', `${id}.json`),
   approvalsLog: (slug: string) => readText('clients', slug, 'approvals.log'),
-  clientIndex: () => readJson<{ clients: unknown[] }>('index.json'),
+  clientIndex: async () =>
+    (await readJson<{ clients: unknown[] }>('clients', 'index.json')) ??
+    readJson<{ clients: unknown[] }>('index.json'),
   listPostFiles: async (slug: string): Promise<string[]> => {
     try {
       const files = await readdir(join(ROOT, 'clients', slug, 'posts'))

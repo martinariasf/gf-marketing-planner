@@ -90,6 +90,17 @@ jobs:
             deploy-staging/api/ \
             "$USER@$HOST:/opt/marketing-planner-staging/api/"
 
+      - name: Sync GF internal client seed data
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        working-directory: .
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/gf-internal/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/clients/gf-internal/"
+
       - name: Build + start staging api & caddy
         env:
           HOST: ${{ secrets.HETZNER_HOST }}

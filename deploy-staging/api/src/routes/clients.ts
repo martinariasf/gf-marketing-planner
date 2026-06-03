@@ -49,11 +49,16 @@ type ClientRecord = {
 }
 
 async function clientList(): Promise<ClientRecord[]> {
+  const idx = await disk.clientIndex()
+  const diskRecords = ((idx?.clients ?? []) as ClientRecord[]).filter((r) => r.slug)
   try {
-    return await withPb((pb) => pb.collection('clients').getFullList<ClientRecord>())
+    const pbRecords = await withPb((pb) => pb.collection('clients').getFullList<ClientRecord>())
+    const bySlug = new Map<string, ClientRecord>()
+    for (const record of diskRecords) bySlug.set(record.slug, record)
+    for (const record of pbRecords) bySlug.set(record.slug, record)
+    return Array.from(bySlug.values())
   } catch {
-    const idx = await disk.clientIndex()
-    return (idx?.clients ?? []) as ClientRecord[]
+    return diskRecords
   }
 }
 
