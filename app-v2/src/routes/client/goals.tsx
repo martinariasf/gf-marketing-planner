@@ -329,7 +329,7 @@ export default function GoalsView() {
         </Card>
       )}
 
-      <section className="space-y-3">
+      <section id="quarterly-kpis" className="space-y-3">
         <h2 className="text-lg font-semibold">{t('goals.quarterlyKpis')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.quarterly.map((g) => {
@@ -424,6 +424,166 @@ export default function GoalsView() {
           <Lock className="h-3 w-3 inline mr-1 -mt-0.5" />
           {t('goals.actualsHint')}
         </p>
+      </section>
+
+      <Separator />
+
+      {/* ── Objetivos del trimestre ── */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">{t('goals.quarterlyObjectives')}</h2>
+        <div className="space-y-3">
+          {goals.quarterly.map((g, i) => {
+            const current = g.current ?? 0
+            const pct = g.target > 0 ? Math.min(100, Math.round((current / g.target) * 100)) : 0
+            const suffix = g.unit && g.unit !== 'count' ? ` ${g.unit}` : ''
+
+            // Due date helpers
+            let dueBadge: React.ReactNode = null
+            if (g.dueDate) {
+              const due = new Date(g.dueDate)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              const dateStr = fmtDate(g.dueDate)
+              let label: string
+              let cls: string
+              if (diffDays < 0) {
+                label = t('goals.objOverdue')
+                cls = 'bg-rose-50 border-rose-200 text-rose-700'
+              } else if (diffDays === 0) {
+                label = t('goals.objToday')
+                cls = 'bg-amber-50 border-amber-300 text-amber-700'
+              } else if (diffDays <= 30) {
+                label = t('goals.objInDays', { n: diffDays })
+                cls = 'bg-amber-50 border-amber-200 text-amber-700'
+              } else {
+                label = dateStr
+                cls = 'bg-ink-muted/5 border-border-subtle text-ink-muted'
+              }
+              dueBadge = (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium border rounded px-2 py-0.5 ${cls}`} title={dateStr}>
+                  {t('goals.objDue')}: {label}
+                </span>
+              )
+            }
+
+            // KPI ref chip — scrolls to the quarterly KPIs section (id="quarterly-kpis")
+            const kpiChip = g.kpiRef ? (
+              <button
+                type="button"
+                onClick={() => document.getElementById('quarterly-kpis')?.scrollIntoView({ behavior: 'smooth' })}
+                className="inline-flex items-center gap-1 text-[11px] font-medium border border-brand-blue-200/60 bg-brand-blue-50/60 text-brand-blue rounded px-2 py-0.5 hover:bg-brand-blue-50 transition-colors"
+              >
+                {t('goals.objScrollToKpi', { kpi: g.kpiRef })}
+              </button>
+            ) : null
+
+            return (
+              <Card key={g.id}>
+                <CardContent className="p-4 space-y-3">
+                  {/* Label row */}
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="font-medium text-sm flex-1 min-w-0">
+                      {editMode ? (
+                        <EditableTextField
+                          slug={slug}
+                          path={['quarterly', i, 'label']}
+                          value={g.label}
+                          placeholder={t('goals.objLabelPlaceholder')}
+                          editMode={editMode}
+                        />
+                      ) : (
+                        <span>{g.label}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      {/* Due date badge (or editable in edit mode) */}
+                      {editMode ? (
+                        <span className="text-[11px] text-ink-muted flex items-center gap-1">
+                          {t('goals.objDue')}:
+                          <EditableTextField
+                            slug={slug}
+                            path={['quarterly', i, 'dueDate']}
+                            value={g.dueDate}
+                            placeholder={t('goals.objDueDatePlaceholder')}
+                            editMode={editMode}
+                          />
+                        </span>
+                      ) : dueBadge}
+                      {/* KPI ref chip (or editable in edit mode) */}
+                      {editMode ? (
+                        <span className="text-[11px] text-ink-muted flex items-center gap-1">
+                          {t('goals.objKpiRef')}:
+                          <EditableTextField
+                            slug={slug}
+                            path={['quarterly', i, 'kpiRef']}
+                            value={g.kpiRef}
+                            placeholder={t('goals.objKpiRefPlaceholder')}
+                            editMode={editMode}
+                          />
+                        </span>
+                      ) : kpiChip}
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs text-ink-muted">
+                      <span>{t('goals.objProgress')}</span>
+                      <span className="tabular-nums">
+                        {g.current != null ? (
+                          <>
+                            {editMode ? (
+                              <EditableNumberField
+                                slug={slug}
+                                path={['quarterly', i, 'current']}
+                                value={g.current}
+                                editMode={editMode}
+                              />
+                            ) : (
+                              <span>{fmtCompact(current)}</span>
+                            )}
+                            {' '}/{' '}
+                            <EditableTargetCell
+                              slug={slug}
+                              path={['quarterly', i, 'target']}
+                              value={g.target}
+                              unit={g.unit}
+                              editMode={editMode}
+                            />
+                            {suffix && !editMode ? '' : null}
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-ink-muted/50">—</span>
+                            {' '}/ {' '}
+                            <EditableTargetCell
+                              slug={slug}
+                              path={['quarterly', i, 'target']}
+                              value={g.target}
+                              unit={g.unit}
+                              editMode={editMode}
+                            />
+                          </>
+                        )}
+                        {' '}
+                        <span className={`font-semibold ${pct >= 100 ? 'text-brand-green-600' : pct >= 70 ? 'text-brand-blue' : 'text-ink-muted'}`}>
+                          ({pct}%)
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-ink-muted/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-brand-green-500' : pct >= 70 ? 'bg-brand-blue' : pct > 0 ? 'bg-amber-400' : 'bg-ink-muted/20'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
       </section>
 
       <Separator />
