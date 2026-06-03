@@ -36,6 +36,37 @@ import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, PostMetrics } from '@/types'
 
+// GV2 — period filter
+type PeriodKey = 'all' | 'last4w' | 'thisMonth' | 'thisQuarter'
+
+const PERIOD_KEYS: PeriodKey[] = ['all', 'last4w', 'thisMonth', 'thisQuarter']
+
+function periodBounds(key: PeriodKey): { from: Date; to: Date } | null {
+  if (key === 'all') return null
+  const now = new Date()
+  if (key === 'last4w') {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 28)
+    return { from, to: now }
+  }
+  if (key === 'thisMonth') {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { from, to: now }
+  }
+  if (key === 'thisQuarter') {
+    const q = Math.floor(now.getMonth() / 3)
+    const from = new Date(now.getFullYear(), q * 3, 1)
+    return { from, to: now }
+  }
+  return null
+}
+
+function isInPeriod(isoDate: string, bounds: { from: Date; to: Date } | null): boolean {
+  if (!bounds) return true
+  const d = new Date(isoDate)
+  return d >= bounds.from && d <= bounds.to
+}
+
 type MetricKey = keyof PostMetrics
 
 const METRIC_META: Record<MetricKey, { labelKey: string; Icon: typeof Eye }> = {
@@ -143,6 +174,9 @@ export default function PerformanceView() {
   const { performance, posts, plan, brief, slug } = useOutletContext<ClientBundle>()
   const [sortBy, setSortBy] = useState<MetricKey>('reach')
 
+  // GV2 — period filter
+  const [period, setPeriod] = useState<PeriodKey>('all')
+
   // PF1 — customizable KPI summary row (persisted per slug in localStorage)
   const [kpiSelection, setKpiSelection] = useState<MetricKey[]>(() => loadKpiSelection(slug))
   useEffect(() => {
@@ -193,10 +227,13 @@ export default function PerformanceView() {
     )
   }
 
+  // GV2 — compute period bounds once; filter measured posts
+  const periodBoundsValue = periodBounds(period)
+
   const measuredPostIds = Object.keys(performance.posts)
   const measuredPosts = measuredPostIds
     .map((id) => ({ post: postById[id], metrics: performance.posts[id] }))
-    .filter((x): x is { post: Post; metrics: PostMetrics } => !!x.post)
+    .filter((x): x is { post: Post; metrics: PostMetrics } => !!x.post && isInPeriod(x.post.date, periodBoundsValue))
 
   const sorted = [...measuredPosts].sort(
     (a, b) => b.metrics[sortBy] - a.metrics[sortBy],
@@ -248,9 +285,21 @@ export default function PerformanceView() {
             {t('performance.heading')}
           </h1>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-ink-muted">
-          <Clock className="h-3.5 w-3.5" />
-          {fmtDate(performance.lastSyncedAt)} &middot; {t('performance.from')} {performance.source}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* GV2 — period filter */}
+          <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+            <TabsList>
+              {PERIOD_KEYS.map((k) => (
+                <TabsTrigger key={k} value={k}>
+                  {t(`period.${k}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <div className="flex items-center gap-1.5 text-xs text-ink-muted">
+            <Clock className="h-3.5 w-3.5" />
+            {fmtDate(performance.lastSyncedAt)} &middot; {t('performance.from')} {performance.source}
+          </div>
         </div>
       </div>
 
@@ -292,7 +341,8 @@ export default function PerformanceView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {kpiSelection.map((key) => {
             const goal = performance.vsGoals[key]
-            const current = goal ? goal.current : totals[key] ?? 0
+            // GV2: when period != 'all' use filtered totals so the cards reflect the selected range
+            const current = period === 'all' && goal ? goal.current : (totals[key] ?? 0)
             return (
               <KpiCard
                 key={key}
@@ -300,8 +350,8 @@ export default function PerformanceView() {
                 current={current}
                 target={goal ? goal.target : current}
                 unit=""
-                pace={goal?.pace}
-                deltaPct={goal?.deltaPct}
+                pace={period === 'all' ? goal?.pace : undefined}
+                deltaPct={period === 'all' ? goal?.deltaPct : undefined}
               />
             )
           })}

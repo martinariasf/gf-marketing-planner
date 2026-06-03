@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KpiCard } from '@/components/kpi-card'
 import { fmtCompact, fmtDate } from '@/lib/format'
 import { BRAND, PACE_COLORS } from '@/lib/brand'
@@ -20,6 +21,38 @@ import { Clock, Pencil, Lock } from 'lucide-react'
 import { useEdit } from '@/lib/edit-store'
 import { useT, useI18n, type Lang } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
+
+// GV2 — period filter types + helpers (mirrors performance.tsx)
+type PeriodKey = 'all' | 'last4w' | 'thisMonth' | 'thisQuarter'
+const PERIOD_KEYS: PeriodKey[] = ['all', 'last4w', 'thisMonth', 'thisQuarter']
+
+// English month name → Date object for the 1st of that month in current year
+function monthNameToDate(monthEn: string, year: number): Date {
+  const idx = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    .indexOf(monthEn)
+  return new Date(year, idx < 0 ? 0 : idx, 1)
+}
+
+function isMonthInPeriod(monthEn: string, key: PeriodKey): boolean {
+  if (key === 'all') return true
+  const now = new Date()
+  const d = monthNameToDate(monthEn, now.getFullYear())
+  if (key === 'last4w') {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 28)
+    // include if the month contains any day in the last 28 days
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return monthEnd >= from && d <= now
+  }
+  if (key === 'thisMonth') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+  }
+  if (key === 'thisQuarter') {
+    const q = Math.floor(now.getMonth() / 3)
+    return d.getFullYear() === now.getFullYear() && Math.floor(d.getMonth() / 3) === q
+  }
+  return true
+}
 
 const LOCALE: Record<Lang, string> = { en: 'en-US', de: 'de-DE', es: 'es-ES' }
 
@@ -281,6 +314,9 @@ export default function GoalsView() {
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode } = useEdit()
 
+  // GV2 — period filter
+  const [period, setPeriod] = useState<PeriodKey>('all')
+
   // GV1 — anchor the dashboard to "now". The chart's X axis uses English month
   // names (e.g. "June"), so the TODAY reference line is placed at the English
   // month; the section subheader is localised per the active language.
@@ -291,7 +327,7 @@ export default function GoalsView() {
     n: Math.ceil(now.getDate() / 7),
   })
 
-  const monthlyReachData = goals.monthly.map((m) => {
+  const allMonthlyReachData = goals.monthly.map((m) => {
     const reachGoal = m.goals.find((g) => g.ref === 'g_reach')
     const reachActual = performance?.aggregates.monthly[m.month]?.reach ?? 0
     return {
@@ -300,6 +336,50 @@ export default function GoalsView() {
       actual: reachActual,
     }
   })
+
+  // GV2 — filter monthly chart by selected period
+  const monthlyReachData = allMonthlyReachData.filter((d) => isMonthInPeriod(d.month, period))
+
+  // GV2 — which week numbers fall inside the selected period?
+  const filteredWeekNumbers: Set<number> = new Set(
+    period === 'all'
+      ? goals.weekly.map((w) => w.week)
+      : (() => {
+          const filtered: number[] = []
+          const now2 = new Date()
+          for (const w of goals.weekly) {
+            // Map week.week (1-based ISO week number) to a rough date in current year
+            // by using Jan 4 + (week-1)*7 as an anchor (ISO week 1 contains Jan 4)
+            const jan4 = new Date(now2.getFullYear(), 0, 4)
+            const dayOfWeek = (jan4.getUTCDay() + 6) % 7
+            const week1Mon = new Date(jan4)
+            week1Mon.setDate(jan4.getDate() - dayOfWeek)
+            const weekStart = new Date(week1Mon)
+            weekStart.setDate(week1Mon.getDate() + (w.week - 1) * 7)
+            const weekEnd = new Date(weekStart)
+            weekEnd.setDate(weekStart.getDate() + 6)
+            // Check if this week overlaps the selected period
+            const bounds = (() => {
+              if (period === 'last4w') {
+                const from = new Date(now2); from.setDate(from.getDate() - 28)
+                return { from, to: now2 }
+              }
+              if (period === 'thisMonth') {
+                return { from: new Date(now2.getFullYear(), now2.getMonth(), 1), to: now2 }
+              }
+              if (period === 'thisQuarter') {
+                const q = Math.floor(now2.getMonth() / 3)
+                return { from: new Date(now2.getFullYear(), q * 3, 1), to: now2 }
+              }
+              return null
+            })()
+            if (!bounds || (weekEnd >= bounds.from && weekStart <= bounds.to)) {
+              filtered.push(w.week)
+            }
+          }
+          return filtered
+        })()
+  )
 
   return (
     <div className="space-y-8">
@@ -312,13 +392,25 @@ export default function GoalsView() {
             {t('goals.heading')}
           </h1>
         </div>
-        {performance?.lastSyncedAt && (
-          <div className="flex items-center gap-1.5 text-xs text-ink-muted">
-            <Clock className="h-3.5 w-3.5" />
-            {t('goals.lastSync')} {fmtDate(performance.lastSyncedAt)}
-            <span className="ml-1 text-ink-muted/70">({performance.source})</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* GV2 — period filter */}
+          <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+            <TabsList>
+              {PERIOD_KEYS.map((k) => (
+                <TabsTrigger key={k} value={k}>
+                  {t(`period.${k}`)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {performance?.lastSyncedAt && (
+            <div className="flex items-center gap-1.5 text-xs text-ink-muted">
+              <Clock className="h-3.5 w-3.5" />
+              {t('goals.lastSync')} {fmtDate(performance.lastSyncedAt)}
+              <span className="ml-1 text-ink-muted/70">({performance.source})</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {!performance && (
@@ -683,6 +775,7 @@ export default function GoalsView() {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {goals.weekly.map((w, i) => {
+            const inPeriod = filteredWeekNumbers.has(w.week)
             const sendToViktor = () => {
               const parts: string[] = [`Semana ${w.week}:`]
               if (w.channel)    parts.push(`canal ${w.channel}`)
@@ -695,7 +788,7 @@ export default function GoalsView() {
             }
 
             return (
-              <Card key={w.week} className="flex flex-col">
+              <Card key={w.week} className={`flex flex-col transition-opacity ${inPeriod ? '' : 'opacity-30'}`}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center justify-between gap-2">
                     <span>{t('goals.week', { n: w.week })}</span>

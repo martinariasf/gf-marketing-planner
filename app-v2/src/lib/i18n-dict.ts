@@ -500,6 +500,13 @@ const en: Dict = {
   'inspiration.couldNotRemove':'Could not remove',
   'inspiration.removeFromBoard':'Remove from inspiration',
 
+  // GV2 — period filter (shared between Goals + Performance pages)
+  'period.all':          'All time',
+  'period.last4w':       'Last 4 weeks',
+  'period.thisMonth':    'This month',
+  'period.thisQuarter':  'This quarter',
+  'period.filterLabel':  'Period',
+
   // Performance page
   'performance.eyebrow':         'Performance',
   'performance.heading':         "What's actually working?",
@@ -1108,6 +1115,13 @@ const de: Dict = {
   'inspiration.couldNotRemove':'Konnte nicht entfernt werden',
   'inspiration.removeFromBoard':'Aus Inspiration entfernen',
 
+  // GV2 — period filter
+  'period.all':          'Gesamter Zeitraum',
+  'period.last4w':       'Letzte 4 Wochen',
+  'period.thisMonth':    'Dieser Monat',
+  'period.thisQuarter':  'Dieses Quartal',
+  'period.filterLabel':  'Zeitraum',
+
   'performance.eyebrow':         'Performance',
   'performance.heading':         'Was funktioniert wirklich?',
   'performance.from':            'von',
@@ -1711,6 +1725,13 @@ const es: Dict = {
   'inspiration.uploadFailed':  'Error al subir',
   'inspiration.couldNotRemove':'No se pudo eliminar',
   'inspiration.removeFromBoard':'Eliminar de inspiración',
+
+  // GV2 — filtro de período
+  'period.all':          'Todo el tiempo',
+  'period.last4w':       'Últimas 4 semanas',
+  'period.thisMonth':    'Este mes',
+  'period.thisQuarter':  'Este trimestre',
+  'period.filterLabel':  'Período',
 
   'performance.eyebrow':         'Rendimiento',
   'performance.heading':         '¿Qué funciona de verdad?',
