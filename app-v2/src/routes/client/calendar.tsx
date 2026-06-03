@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useOutletContext, useParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import {
 import { ChannelMockup } from '@/components/channel-mockup'
 import { Pillar } from '@/components/pillar'
 import { fmtDate } from '@/lib/format'
-import { apiPatchPost, isApiEnabled } from '@/lib/api-client'
+import { apiPatchPost, apiUploadInspiration, isApiEnabled } from '@/lib/api-client'
 import { toast } from 'sonner'
 import {
   CalendarDays,
@@ -25,6 +25,7 @@ import {
   Save,
   Loader2,
   Eye,
+  Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -93,9 +94,34 @@ export default function CalendarView() {
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
+  // CAL2 — direct user image upload on a post.
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const monthPosts = postsByMonth[activeMonth] ?? []
   const activePost = monthPosts[slideIndex]
+
+  // CAL2 — upload an image straight onto the active post (no Viktor needed).
+  // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
+  // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
+  const onUploadImage = useCallback(
+    async (file: File | null | undefined) => {
+      if (!file || !activePost) return
+      setUploading(true)
+      try {
+        const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
+        await apiPatchPost(slug, activePost.id, { image: item.url })
+        toast(t('calendar.imageUploaded'), { duration: 1600 })
+        refetch()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
+      } finally {
+        setUploading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    },
+    [activePost, slug, t, refetch],
+  )
 
   // Reset the image-slide cursor whenever the active post changes.
   useEffect(() => {
@@ -279,7 +305,7 @@ export default function CalendarView() {
                     </div>
 
                     {rightView === 'picture' && (
-                      <div className="mt-4 flex items-center justify-center">
+                      <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                         <Button
                           variant="outline"
                           size="sm"
@@ -289,6 +315,33 @@ export default function CalendarView() {
                           <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
                           {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
                         </Button>
+                        {/* CAL2 — direct upload (single-image posts only; carousels
+                            are preview-only in V3 so the cover isn't replaced here). */}
+                        {isApiEnabled && !isCarousel(activePost) && (
+                          <>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              className="hidden"
+                              onChange={(e) => onUploadImage(e.target.files?.[0])}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={uploading}
+                              onClick={() => fileInputRef.current?.click()}
+                              className="gap-1.5"
+                            >
+                              {uploading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="h-3.5 w-3.5 text-brand-blue" />
+                              )}
+                              {t('calendar.uploadImage')}
+                            </Button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
