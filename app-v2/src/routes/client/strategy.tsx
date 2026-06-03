@@ -4,13 +4,101 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Calendar, Star, Pencil, MessageSquare } from 'lucide-react'
+import {
+  Calendar,
+  Star,
+  Pencil,
+  MessageSquare,
+  Target,
+  LayoutGrid,
+  MessageCircle,
+  Monitor,
+  MapPin,
+} from 'lucide-react'
 import { fmtDateShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
 import { useT } from '@/lib/i18n'
 import { useEdit } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
 import type { KeyDate } from '@/types'
+
+// ─── Strategic content type → accent color + icon ────────────────────────────
+// Each section of the strategy page has a distinct hue so blocks are visually
+// distinguishable at a glance. Colors use existing Tailwind tokens.
+
+type SectionType = 'positioning' | 'priorities' | 'pillars' | 'roadmap' | 'platforms' | 'keyDates'
+
+const SECTION_META: Record<
+  SectionType,
+  { icon: React.ElementType; border: string; bg: string; iconCls: string; labelCls: string }
+> = {
+  positioning: {
+    icon: Target,
+    border:   'border-l-brand-blue',
+    bg:       'bg-brand-blue-50/40',
+    iconCls:  'text-brand-blue',
+    labelCls: 'text-brand-blue',
+  },
+  priorities: {
+    icon: LayoutGrid,
+    border:   'border-l-violet-400',
+    bg:       'bg-violet-50/40',
+    iconCls:  'text-violet-600',
+    labelCls: 'text-violet-700',
+  },
+  pillars: {
+    icon: MessageCircle,
+    border:   'border-l-amber-400',
+    bg:       'bg-amber-50/40',
+    iconCls:  'text-amber-600',
+    labelCls: 'text-amber-700',
+  },
+  roadmap: {
+    icon: MapPin,
+    border:   'border-l-teal-400',
+    bg:       'bg-teal-50/30',
+    iconCls:  'text-teal-600',
+    labelCls: 'text-teal-700',
+  },
+  platforms: {
+    icon: Monitor,
+    border:   'border-l-rose-400',
+    bg:       'bg-rose-50/30',
+    iconCls:  'text-rose-600',
+    labelCls: 'text-rose-700',
+  },
+  keyDates: {
+    icon: Calendar,
+    border:   'border-l-brand-green-600',
+    bg:       'bg-brand-green-100/40',
+    iconCls:  'text-brand-green-600',
+    labelCls: 'text-brand-green-600',
+  },
+}
+
+/** Section heading row: type-coloured icon chip + title. */
+function SectionHeading({
+  type,
+  children,
+  right,
+}: {
+  type: SectionType
+  children: React.ReactNode
+  right?: React.ReactNode
+}) {
+  const { icon: Icon, iconCls, bg, border } = SECTION_META[type]
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex items-center justify-center h-7 w-7 rounded-md ${bg} border-l-2 ${border}`}>
+          <Icon className={`h-3.5 w-3.5 ${iconCls}`} />
+        </span>
+        <h2 className="text-lg font-semibold">{children}</h2>
+      </div>
+      {right && <div className="flex items-center gap-2">{right}</div>}
+    </div>
+  )
+}
 
 const RELEVANCE_RING: Record<KeyDate['relevance'], string> = {
   high: 'ring-2 ring-brand-blue',
@@ -284,12 +372,15 @@ export default function StrategyView() {
 
       {/* Positioning statement */}
       {(plan.positioningStatement || editMode) && (
-        <Card className="border-l-4 border-l-brand-blue">
+        <Card className={`border-l-4 ${SECTION_META.positioning.border} ${SECTION_META.positioning.bg}`}>
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-3 mb-2">
-              <p className="text-xs uppercase tracking-wider text-ink-muted">
-                {t('strategy.positioning')}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <SECTION_META.positioning.icon className={`h-4 w-4 ${SECTION_META.positioning.iconCls}`} />
+                <p className={`text-xs uppercase tracking-wider font-medium ${SECTION_META.positioning.labelCls}`}>
+                  {t('strategy.positioning')}
+                </p>
+              </div>
               <ReviewButton
                 message={`Revisemos la declaración de posicionamiento: "${plan.positioningStatement ?? ''}". ¿Qué ajustarías?`}
               />
@@ -321,25 +412,29 @@ export default function StrategyView() {
 
       {/* Strategic priorities */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{t('strategy.strategicPriorities')}</h2>
-          <div className="flex items-center gap-2">
-            {lm['priorities'] && (
-              <p className="text-[10px] text-ink-muted/50">
-                {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['priorities']))}
-              </p>
-            )}
-            <ReviewButton
-              message={`Revisemos las prioridades estratégicas: ${plan.strategicPriorities.map((p, i) => `${i + 1}. ${p.label}`).join(', ')}. ¿Cuál reordenarías o cambiarías?`}
-            />
-          </div>
-        </div>
+        <SectionHeading
+          type="priorities"
+          right={
+            <>
+              {lm['priorities'] && (
+                <p className="text-[10px] text-ink-muted/50">
+                  {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['priorities']))}
+                </p>
+              )}
+              <ReviewButton
+                message={`Revisemos las prioridades estratégicas: ${plan.strategicPriorities.map((p, i) => `${i + 1}. ${p.label}`).join(', ')}. ¿Cuál reordenarías o cambiarías?`}
+              />
+            </>
+          }
+        >
+          {t('strategy.strategicPriorities')}
+        </SectionHeading>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {plan.strategicPriorities.map((p, i) => (
-            <Card key={p.label + i}>
+            <Card key={p.label + i} className={`border-l-4 ${SECTION_META.priorities.border}`}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-3">
-                  <div className="h-8 w-8 rounded-full bg-brand-blue text-white flex items-center justify-center text-sm font-bold shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold shrink-0 border border-violet-200">
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -382,19 +477,23 @@ export default function StrategyView() {
 
       {/* Content pillars */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{t('strategy.contentPillars')}</h2>
-          <div className="flex items-center gap-2">
-            {lm['pillars'] && (
-              <p className="text-[10px] text-ink-muted/50">
-                {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['pillars']))}
-              </p>
-            )}
-            <ReviewButton
-              message={`Revisemos los pilares de contenido: ${plan.pillars.map((p) => `${p.name} (${p.weight}%)`).join(', ')}. ¿Cambiarías el peso de alguno?`}
-            />
-          </div>
-        </div>
+        <SectionHeading
+          type="pillars"
+          right={
+            <>
+              {lm['pillars'] && (
+                <p className="text-[10px] text-ink-muted/50">
+                  {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['pillars']))}
+                </p>
+              )}
+              <ReviewButton
+                message={`Revisemos los pilares de contenido: ${plan.pillars.map((p) => `${p.name} (${p.weight}%)`).join(', ')}. ¿Cambiarías el peso de alguno?`}
+              />
+            </>
+          }
+        >
+          {t('strategy.contentPillars')}
+        </SectionHeading>
         <p className="text-sm text-ink-muted">
           {t('strategy.pillarsDesc')}
         </p>
@@ -436,7 +535,7 @@ export default function StrategyView() {
 
       {/* Campaign timeline */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t('strategy.campaignRoadmap')}</h2>
+        <SectionHeading type="roadmap">{t('strategy.campaignRoadmap')}</SectionHeading>
         <Card>
           <CardContent className="p-5">
             <div className="space-y-2">
@@ -505,24 +604,31 @@ export default function StrategyView() {
 
       {/* Platforms */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{t('strategy.platforms')}</h2>
-          <div className="flex items-center gap-2">
-            {lm['platforms'] && (
-              <p className="text-[10px] text-ink-muted/50">
-                {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['platforms']))}
-              </p>
-            )}
-            <ReviewButton
-              message={`Revisemos la estrategia de plataformas: ${plan.platforms.map((p) => p.name).join(', ')}. ¿Ajustarías la cadencia o el rol de alguna?`}
-            />
-          </div>
-        </div>
+        <SectionHeading
+          type="platforms"
+          right={
+            <>
+              {lm['platforms'] && (
+                <p className="text-[10px] text-ink-muted/50">
+                  {t('strategy.editedOn').replace('{date}', fmtDateShort(lm['platforms']))}
+                </p>
+              )}
+              <ReviewButton
+                message={`Revisemos la estrategia de plataformas: ${plan.platforms.map((p) => p.name).join(', ')}. ¿Ajustarías la cadencia o el rol de alguna?`}
+              />
+            </>
+          }
+        >
+          {t('strategy.platforms')}
+        </SectionHeading>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {plan.platforms.map((p, i) => (
-            <Card key={p.channelKey}>
+            <Card key={p.channelKey} className={`border-l-4 ${SECTION_META.platforms.border}`}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{p.name}</CardTitle>
+                <div className="flex items-center gap-1.5">
+                  <Monitor className={`h-4 w-4 ${SECTION_META.platforms.iconCls} shrink-0`} />
+                  <CardTitle className="text-base">{p.name}</CardTitle>
+                </div>
                 <p className="text-xs text-ink-muted">{p.role}</p>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -590,10 +696,7 @@ export default function StrategyView() {
 
       {/* Key dates */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          {t('strategy.keyDates')}
-        </h2>
+        <SectionHeading type="keyDates">{t('strategy.keyDates')}</SectionHeading>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {plan.keyDates.map((d) => (
             <Card key={d.date + d.title} className={RELEVANCE_RING[d.relevance]}>
