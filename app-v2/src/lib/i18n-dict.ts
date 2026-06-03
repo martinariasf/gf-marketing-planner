@@ -372,6 +372,11 @@ const en: Dict = {
   'calendar.noPictureYet':    'No picture yet',
   'calendar.viewLarger':      'Click to view larger',
   'calendar.changePicturePrompt': 'Change the image for post {id} ("{title}"). Describe here what the new picture should show: ',
+  'calendar.slideCounter':    '{n} / {total}',
+  'calendar.previousSlide':   'Previous slide',
+  'calendar.nextSlide':       'Next slide',
+  'calendar.goToSlide':       'Go to slide {n}',
+  'calendar.carousel':        'Carousel · {total} slides',
 
   // Pipeline page
   'pipeline.eyebrow':           'Pipeline',
@@ -887,6 +892,11 @@ const de: Dict = {
   'calendar.noPictureYet':    'Noch kein Bild',
   'calendar.viewLarger':      'Klicken für größere Ansicht',
   'calendar.changePicturePrompt': 'Ändere das Bild für Post {id} ("{title}"). Beschreibe hier, was das neue Bild zeigen soll: ',
+  'calendar.slideCounter':    '{n} / {total}',
+  'calendar.previousSlide':   'Vorheriges Bild',
+  'calendar.nextSlide':       'Nächstes Bild',
+  'calendar.goToSlide':       'Zu Bild {n}',
+  'calendar.carousel':        'Karussell · {total} Bilder',
 
   'pipeline.eyebrow':         'Pipeline',
   'pipeline.heading':         'Wo steht jeder Post?',
@@ -1393,6 +1403,11 @@ const es: Dict = {
   'calendar.noPictureYet':    'Aún sin imagen',
   'calendar.viewLarger':      'Clic para ver más grande',
   'calendar.changePicturePrompt': 'Cambia la imagen del post {id} ("{title}"). Describe aquí qué debe mostrar la nueva imagen: ',
+  'calendar.slideCounter':    '{n} / {total}',
+  'calendar.previousSlide':   'Diapositiva anterior',
+  'calendar.nextSlide':       'Diapositiva siguiente',
+  'calendar.goToSlide':       'Ir a la diapositiva {n}',
+  'calendar.carousel':        'Carrusel · {total} diapositivas',
 
   'pipeline.eyebrow':         'Pipeline',
   'pipeline.heading':         '¿Dónde está cada post?',

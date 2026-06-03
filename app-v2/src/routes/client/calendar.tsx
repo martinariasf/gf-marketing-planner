@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post } from '@/types'
+import type { Slide } from '@/types/post'
 
 const STATUS_STYLES: Record<string, string> = {
   idea:           'bg-neutral-100 text-neutral-700',
@@ -44,6 +45,11 @@ const STATUS_STYLES: Record<string, string> = {
 
 function monthKey(iso: string) {
   return new Date(iso).toLocaleString('en-US', { month: 'long' })
+}
+
+/** A post is a carousel when it carries more than one slide. */
+function isCarousel(post: Post): post is Post & { slides: Slide[] } {
+  return Array.isArray(post.slides) && post.slides.length > 1
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -85,9 +91,16 @@ export default function CalendarView() {
   // Right-pane mode: the full picture (default) or the social-platform mockup.
   const [rightView, setRightView] = useState<'picture' | 'preview'>('picture')
   const [zoomOpen, setZoomOpen] = useState(false)
+  // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
+  const [imageSlide, setImageSlide] = useState(0)
 
   const monthPosts = postsByMonth[activeMonth] ?? []
   const activePost = monthPosts[slideIndex]
+
+  // Reset the image-slide cursor whenever the active post changes.
+  useEffect(() => {
+    setImageSlide(0)
+  }, [activePost?.id])
 
   const goTo = useCallback(
     (next: number) => {
@@ -254,7 +267,12 @@ export default function CalendarView() {
                               subtitle={brief.company.industry}
                             />
                           ) : (
-                            <PicturePane post={activePost} onZoom={() => setZoomOpen(true)} />
+                            <PicturePane
+                              post={activePost}
+                              slideIndex={imageSlide}
+                              onSlideChange={setImageSlide}
+                              onZoom={() => setZoomOpen(true)}
+                            />
                           )}
                         </motion.div>
                       </AnimatePresence>
@@ -376,7 +394,13 @@ export default function CalendarView() {
           <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
             <DialogContent className="sm:max-w-4xl p-2 bg-black/95 border-none">
               <DialogTitle className="sr-only">{activePost.title}</DialogTitle>
-              {activePost.image ? (
+              {isCarousel(activePost) ? (
+                <LightboxCarousel
+                  post={activePost}
+                  slideIndex={imageSlide}
+                  onSlideChange={setImageSlide}
+                />
+              ) : activePost.image ? (
                 <img
                   src={activePost.image}
                   alt={activePost.title}
@@ -561,9 +585,119 @@ function CopyPane({
   )
 }
 
-/** Right pane picture: full image, click to zoom; placeholder when absent. */
-function PicturePane({ post, onZoom }: { post: Post; onZoom: () => void }) {
+/**
+ * Right pane picture. Single-image posts render exactly as before (full image,
+ * click to zoom; placeholder when absent). Carousel posts add a slide viewer
+ * with arrows, an "i / N" counter, dots and a thumbnail filmstrip. The active
+ * slide index is lifted to the parent so the lightbox opens on the same slide.
+ */
+function PicturePane({
+  post,
+  slideIndex,
+  onSlideChange,
+  onZoom,
+}: {
+  post: Post
+  slideIndex: number
+  onSlideChange: (i: number) => void
+  onZoom: () => void
+}) {
   const t = useT()
+
+  // Carousel viewer.
+  if (isCarousel(post)) {
+    const slides = post.slides
+    const total = slides.length
+    const idx = Math.min(Math.max(slideIndex, 0), total - 1)
+    const slide = slides[idx]
+    const go = (next: number) => onSlideChange((next + total) % total)
+
+    return (
+      <div className="w-full max-w-sm flex flex-col gap-3">
+        <div className="relative">
+          <button
+            onClick={onZoom}
+            className="group relative block w-full rounded-xl overflow-hidden border border-border-subtle focus:outline-none focus:ring-2 focus:ring-brand-blue"
+            title={t('calendar.viewLarger')}
+          >
+            <img
+              src={slide.image}
+              alt={slide.caption || post.title}
+              className="w-full object-contain max-h-[60vh] bg-paper"
+            />
+            {slide.caption && (
+              <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[11px] leading-snug px-2.5 py-1.5 text-left">
+                {slide.caption}
+              </span>
+            )}
+            <span className="absolute top-2 left-2 rounded-full bg-black/55 text-white text-[10px] font-medium px-2 py-0.5">
+              {t('calendar.slideCounter', { n: idx + 1, total })}
+            </span>
+            <span className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Maximize2 className="h-3.5 w-3.5" />
+            </span>
+          </button>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => go(idx - 1)}
+            aria-label={t('calendar.previousSlide')}
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => go(idx + 1)}
+            aria-label={t('calendar.nextSlide')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Dots */}
+        <div className="flex items-center justify-center gap-1.5">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => onSlideChange(i)}
+              aria-label={t('calendar.goToSlide', { n: i + 1 })}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                i === idx ? 'w-6 bg-brand-blue' : 'w-1.5 bg-border-subtle hover:bg-ink-muted',
+              )}
+            />
+          ))}
+        </div>
+
+        {/* Thumbnail filmstrip */}
+        <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+          <div className="flex gap-2 pb-1 justify-center">
+            {slides.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => onSlideChange(i)}
+                aria-label={t('calendar.goToSlide', { n: i + 1 })}
+                className={cn(
+                  'shrink-0 h-14 w-14 rounded-md overflow-hidden border transition-all',
+                  i === idx
+                    ? 'border-brand-blue shadow-sm'
+                    : 'border-border-subtle opacity-70 hover:opacity-100',
+                )}
+              >
+                <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Single-image (or no image) — unchanged behaviour.
   if (!post.image) {
     return (
       <div className="w-full max-w-sm aspect-square rounded-xl border-2 border-dashed border-border-subtle flex flex-col items-center justify-center text-ink-muted gap-2">
@@ -587,5 +721,74 @@ function PicturePane({ post, onZoom }: { post: Post; onZoom: () => void }) {
         <Maximize2 className="h-3.5 w-3.5" />
       </span>
     </button>
+  )
+}
+
+/** Full-size carousel viewer inside the lightbox. Opens on `slideIndex`. */
+function LightboxCarousel({
+  post,
+  slideIndex,
+  onSlideChange,
+}: {
+  post: Post & { slides: Slide[] }
+  slideIndex: number
+  onSlideChange: (i: number) => void
+}) {
+  const t = useT()
+  const slides = post.slides
+  const total = slides.length
+  const idx = Math.min(Math.max(slideIndex, 0), total - 1)
+  const slide = slides[idx]
+  const go = (next: number) => onSlideChange((next + total) % total)
+
+  return (
+    <div className="relative flex flex-col items-center gap-3">
+      <div className="relative w-full flex items-center justify-center">
+        <img
+          src={slide.image}
+          alt={slide.caption || post.title}
+          className="w-full max-h-[78vh] object-contain rounded"
+        />
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => go(idx - 1)}
+          aria-label={t('calendar.previousSlide')}
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => go(idx + 1)}
+          aria-label={t('calendar.nextSlide')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+        <span className="absolute top-2 left-2 rounded-full bg-black/55 text-white text-xs font-medium px-2.5 py-1">
+          {t('calendar.slideCounter', { n: idx + 1, total })}
+        </span>
+      </div>
+
+      {slide.caption && (
+        <p className="text-white/80 text-xs text-center max-w-prose px-2">{slide.caption}</p>
+      )}
+
+      <div className="flex items-center justify-center gap-1.5 pb-1">
+        {slides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => onSlideChange(i)}
+            aria-label={t('calendar.goToSlide', { n: i + 1 })}
+            className={cn(
+              'h-1.5 rounded-full transition-all',
+              i === idx ? 'w-6 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70',
+            )}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
