@@ -142,10 +142,16 @@ for (const res of ['brief', 'plan', 'goals', 'learnings'] as const) {
 // PATCH /clients/:slug/branding — shallow merge into brief.branding without
 // touching the rest of the brief. Lets the chatbot (or any client) update
 // colors / typography / logos / tone in isolation.
+//
+// NOTE: this is the ONE user-owned (brief) field the 'agent' role may write.
+// The full brief/plan/goals/learnings PUT stays dash/admin-only on purpose, but
+// branding is narrow, low-risk visual config and is exactly what Viktor needs
+// to keep posts on-brand — so the in-app chat agent is allowed here. requireScope()
+// still confines the agent to its own client slug.
 userOwned.patch(
   '/clients/:slug/branding',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     let body: Record<string, unknown>

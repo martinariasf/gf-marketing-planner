@@ -11,16 +11,86 @@ this service is the only thing that talks to it.
 
 ## Auth
 
-Every request needs `Authorization: Bearer <token>`. Two token kinds:
+Every request needs `Authorization: Bearer <token>`. Three roles:
 
 | Prefix    | Role  | Scope                    | Can write user-owned data? | Can write Viktor-owned data? |
 | --------- | ----- | ------------------------ | -------------------------- | ---------------------------- |
-| `agent_*` | agent | one client slug          | no                         | yes                          |
+| `agent_*` | agent | one client slug          | **branding only** (see note) | yes                          |
 | `dash_*`  | dash  | one client slug          | yes                        | yes (staging only)           |
 | (any)     | admin | `*` (all slugs)          | yes                        | yes                          |
 
+> **User-owned vs Viktor-owned.** "User-owned" data is the strategy set a human
+> defines: the full `brief` (company/business/audience/voice/boundaries), `plan`,
+> `goals`, `learnings`. The `agent` role is **read-only** on these — Viktor reads
+> them to stay on-brand but cannot rewrite a client's strategy.
+> **One exception:** `PATCH /clients/:slug/branding` (colors / typography / logo /
+> tone) **is** writable by `agent`, because keeping posts visually on-brand is
+> part of Viktor's job and the change is narrow + low-risk.
+> "Viktor-owned" data (`posts`, `suggestions`, `approvals`, `performance`) is
+> read+write for `agent`.
+>
+> If Viktor gets `403 Role "agent" cannot access this endpoint`, it tried to write
+> a user-owned resource other than branding — that's expected; route the user to
+> the dashboard for those edits.
+
 Tokens live in PocketBase `api_tokens`. For local bootstrap before the
 collection is seeded, set `BOOTSTRAP_TOKENS=<token>:<role>:<slug>,...`.
+
+### Scope (which client)
+
+`agent_*` and `dash_*` tokens are pinned to **one** client slug. Calling any
+`/clients/:slug/*` route with a slug that doesn't match the token returns
+`403 Token scoped to "<x>", refused access to "<y>"`. The staging Viktor token
+is scoped to `staging-demo`, so it can only ever read/write the `staging-demo`
+client — regardless of which dashboard URL opened the chat.
+
+## Endpoint reference (what an agent may call)
+
+`:slug` must equal the token's scope. Base path is `/api/v1` on staging
+(`/v1` locally). Role column = minimum role required.
+
+| Method & path | Role | Purpose |
+|---|---|---|
+| `GET /clients` | any | List clients the token can see (agent sees only its own). |
+| `GET /clients/:slug` | any (scoped) | One-shot bundle: summary + brief/plan/goals/learnings/suggestions/performance/manifest. |
+| `GET /clients/:slug/brief` | any (scoped) | Read the brief (incl. `branding`). |
+| `GET /clients/:slug/plan` · `/goals` · `/learnings` | any (scoped) | Read strategy docs. |
+| `PUT /clients/:slug/brief` · `/plan` · `/goals` · `/learnings` | dash/admin | Replace the whole doc. **Agent: 403.** |
+| `PATCH /clients/:slug/branding` | **agent**/dash/admin | Shallow-merge brand fields. **Agent allowed.** |
+| `POST /clients/:slug/learnings/entries` | dash/admin | Append one learning. **Agent: 403.** |
+| `GET /clients/:slug/posts` | any (scoped) | List posts. Filters: `?status=`, `?pillar=`, `?includeDeleted=true`. |
+| `GET /clients/:slug/posts/:id` | any (scoped) | Read one post. |
+| `POST /clients/:slug/posts` | agent/dash/admin | Create a post (validated, 422). |
+| `PATCH /clients/:slug/posts/:id` | agent/dash/admin | Edit a post (validated, 422). |
+| `DELETE /clients/:slug/posts/:id` | agent/dash/admin | Soft-delete (status→`deleted`; recover via PATCH). |
+| `GET /clients/:slug/suggestions` | any (scoped) | List suggestions (priority-sorted). |
+| `PATCH /clients/:slug/suggestions/:id` | agent/dash/admin | `{ status?, priority?, reason? }`. |
+| `GET /clients/:slug/approvals` | any (scoped) | Approval activity feed (log + overlay). |
+| `POST /clients/:slug/approvals` | agent/dash/admin | Record an approval decision. |
+| `GET /clients/:slug/performance` | any (scoped) | Read performance JSON. |
+| `GET /clients/:slug/assets/manifest` | any (scoped) | Read the asset manifest. |
+| `GET /clients/:slug/assets/files/:name` | **none** (public) | Stream a generated image. Use this URL form in `post.image`. |
+| `GET /clients/:slug/inspiration/:id/file` | **none** (public) | Stream an uploaded inspiration image. |
+
+**Branding body** (`PATCH /clients/:slug/branding`) — top-level fields
+shallow-merge into `brief.branding`; the dashboard's Brand Identity Kit reads
+these keys (all optional, send only what changes):
+
+```jsonc
+{
+  "colors":       [ { "name": "Primary", "hex": "#1e40af" } ],
+  "typography":   { "headingFont": "Inter", "bodyFont": "Inter" },
+  "logos":        [ { "variant": "Primary", "url": "https://staging.marketing.gfinnov.com/api/v1/clients/staging-demo/assets/files/logo.png" } ],
+  "toneKeywords": ["precise", "technical", "warm"]
+}
+```
+
+Returns `{ data: <merged branding> }`. **The merge is shallow:** a PATCH replaces
+the ENTIRE `colors` (or `logos`) array — there is no per-element merge. To change
+one color, `GET /brief` first, edit the array, then PATCH it back whole.
+Generate/upload a logo image first (copy it into the client's `assets/` dir) and
+reference it by its `/api/v1/clients/:slug/assets/files/<name>` URL — never a bare
+filename.
 
 ## Write contract (validated, returns 422 on bad input)
 
