@@ -1,6 +1,17 @@
 # Marketing Planner — Architecture
 
-> Last updated: 2026-05-26
+> Last updated: 2026-06-04
+>
+> **Before changing or deploying anything, read [`AGENTS.md`](./AGENTS.md)** —
+> the change & deployment guidelines (source-only edits, commit everything,
+> CI-only deploys, the `VITE_API_BASE` file-mode trap). It exists because not
+> following it took staging down on 2026-06-04.
+>
+> ⚠️ **Staging backend has changed since the 2026-05 sections below.** The
+> "Backend Architecture (Staging)" and parts of "Deployment" that describe the
+> SPA talking to PocketBase directly via `/api/*` are **historical**. The
+> current truth is the **`/api/v1/*` REST API** described immediately below
+> (§ "Current Staging Architecture"). When in doubt, that section wins.
 
 ## Overview
 
@@ -14,6 +25,91 @@ There are two environments:
 | Branch | `main` | `experimental` |
 | Data backend | Static JSON on disk | PocketBase (SQLite) |
 | Auth | HTTP basic auth (per-client passwords) | HTTP basic auth (single staging password) |
+
+---
+
+## Current Staging Architecture (2026-06)
+
+> This section supersedes the older "Backend Architecture (Staging)" details
+> further down. Production is still file-based; **staging** now runs a real REST
+> API in front of the dashboard.
+
+### Request path (staging)
+
+```
+Browser
+  │  HTTPS, edge basicauth (staging:****)
+  ▼
+marketing-planner-caddy   (OUTER / production caddy, owns :80/:443)
+  ├── /api/v1/auth/exchange → basicauth → inject X-Forwarded-User → mp-staging-caddy
+  ├── /api/v1/*  (bearer-auth, no basicauth) ───────────────────┐
+  ├── /chat/*    (bearer-auth) ────────────────────────────────┤
+  └── /*  (basicauth) ─────────────────────────────────────────┤
+                                                                ▼
+                                              mp-staging-caddy   (INNER caddy)
+                                                ├── /api/v1/* → mp-staging-api:8080  (Hono REST API)
+                                                ├── /_/*      → mp-staging-pb:8090   (PocketBase admin)
+                                                └── /*        → staging SPA (app-dist)
+                                                                       │
+                                  mp-staging-api ──► mp-staging-pb (PocketBase: chat, planning config, etc.)
+                                  mp-staging-api ──► /data (disk: clients/*.json — brief/plan/posts/assets)
+                                  mp-staging-api ──► hermes-marketing-staging:8642  (Ask Viktor chat, SSE)
+```
+
+### The REST API — `mp-staging-api` (Hono + TypeScript, `deploy-staging/api/`)
+
+The dashboard no longer hits PocketBase directly. It calls `/api/v1/*`, served by
+the `mp-staging-api` container (listens on `:8080`). Routes live in
+`deploy-staging/api/src/routes/`:
+
+| Route file | Surface |
+|---|---|
+| `authExchange.ts` | `GET /auth/exchange` — trades edge basicauth (via `X-Forwarded-User`) for a short-lived `dash_*` bearer token (in-memory, 24h) |
+| `clients.ts` | `GET /clients` (picker), `GET /clients/:slug` (bundle) |
+| `userOwned.ts` | `PUT /clients/:slug/{brief,plan,goals,learnings}` (dash/admin only) |
+| `viktorOwned.ts` | posts/suggestions/approvals/branding writes (dash/admin/**agent**) |
+| `assetFiles.ts`, `inspiration.ts` | asset + inspiration-board files |
+| `chat.ts` | `POST /clients/:slug/chat/stream` — **Ask Viktor**: SSE proxy to Hermes (`hermes-marketing-staging`), persists transcript to PB `chat_messages` |
+| `notify.ts`, `audit.ts`, `integration.ts`, `health.ts` | sync log, audit, agent integration info, health |
+| `planningConfig.ts` *(in-flight feature)* | calendar/strategy month-range config per client (new; see recovery work) |
+
+**Auth model:** `requireAuth` (bearer) + `requireScope()` (confines a token to its
+client) + `requireRole(...)`. Dashboard users get a `dash_*`/`admin` token via
+`/auth/exchange`; Viktor uses an `agent_*` token scoped to one client.
+
+### Frontend modes — and the file-mode trap
+
+`app-v2` is built in one of two modes, chosen **at build time**:
+
+- `isApiEnabled = !!import.meta.env.VITE_API_BASE` → **API mode** (current
+  staging): the SPA calls `/api/v1/*`.
+- `isPocketBaseEnabled = !!import.meta.env.VITE_PB_URL` → legacy PB mode.
+- Neither set → **file mode**: reads static `/data/*.json` (production).
+
+⚠️ **Staging MUST be built with `VITE_API_BASE` set** (the CI workflow does this;
+a plain local `pnpm build` does not). A staging build without it falls back to
+file mode, reads `/data/index.json`, gets caddy's SPA HTML fallback, and shows
+**"No clients yet"** with a dead chat. Verify a build is API mode by grepping the
+**`api-client-*.js` chunk** (not `index-*.js`) for `api/v1`. See `AGENTS.md` §4.
+
+### Staging containers
+
+| Container | Purpose |
+|---|---|
+| `marketing-planner-caddy` | OUTER caddy — TLS, edge basicauth, routes staging host (owns :80/:443) |
+| `mp-staging-caddy` | INNER caddy — fans out `/api/v1`→api, `/_/`→pb, `/`→SPA |
+| `mp-staging-api` | Hono REST API (`:8080`) — the `/api/v1/*` surface |
+| `mp-staging-pb` | PocketBase — chat_messages, planning config, user-owned docs |
+| `hermes-marketing-staging` | Viktor's brain for the in-app chat (Hermes agent gateway, `:8642`) |
+| `hermes-marketing-demo` | **Production Viktor — NEVER restart/remove** |
+
+### Deploy (staging)
+
+Push to `experimental` (or run `deploy-staging.yml`). CI builds `app-v2` **with
+`VITE_API_BASE` set**, rsyncs `dist/` → `/opt/marketing-planner-staging/app-dist`,
+and rebuilds the `mp-staging-api` + `mp-staging-caddy` containers from
+`deploy-staging/`. **Never** hand-build + rsync, and **never** edit the compiled
+`app-dist`. Full rules in `AGENTS.md`.
 
 ---
 
