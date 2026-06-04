@@ -17,6 +17,7 @@ import { isApiEnabled, apiUploadInspiration } from '@/lib/api-client'
 import { useEdit } from '@/lib/edit-store'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { SECTION_ACCENT, type AppSection } from '@/lib/section-accent'
 import { EditableText } from '@/components/editable/editable-text'
 import { EditableTextarea } from '@/components/editable/editable-textarea'
 import { EditablePills } from '@/components/editable/editable-pills'
@@ -25,17 +26,35 @@ import { EditableList } from '@/components/editable/editable-list'
 function Section({
   title,
   description,
+  accent,
   children,
 }: {
   title: string
   description?: string
+  /** Per-section accent key — drives the type-coloured icon chip (matches ST2). */
+  accent?: AppSection
   children: React.ReactNode
 }) {
+  const a = accent ? SECTION_ACCENT[accent] : undefined
+  const Icon = a?.icon
   return (
     <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {description && <p className="text-sm text-ink-muted">{description}</p>}
+      <div className="flex items-start gap-2">
+        {a && Icon && (
+          <span
+            className={cn(
+              'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-l-2',
+              a.bg,
+              a.border,
+            )}
+          >
+            <Icon className={cn('h-3.5 w-3.5', a.iconCls)} />
+          </span>
+        )}
+        <div>
+          <h2 className={cn('text-lg font-semibold', a?.labelCls)}>{title}</h2>
+          {description && <p className="text-sm text-ink-muted">{description}</p>}
+        </div>
       </div>
       {children}
     </section>
@@ -93,7 +112,7 @@ export default function ContextView() {
         </p>
       </div>
 
-      <Section title={t('context.businessTitle')} description={t('context.businessDesc')}>
+      <Section title={t('context.businessTitle')} description={t('context.businessDesc')} accent="business">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -163,7 +182,7 @@ export default function ContextView() {
 
       <Separator />
 
-      <Section title={t('context.audienceTitle')} description={t('context.audienceDesc')}>
+      <Section title={t('context.audienceTitle')} description={t('context.audienceDesc')} accent="audience">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {brief.audience.segments.map((s, i) => (
             <Card key={`${s.name}-${i}`}>
@@ -244,7 +263,7 @@ export default function ContextView() {
 
       <Separator />
 
-      <Section title={t('context.voiceTitle')} description={t('context.voiceDesc')}>
+      <Section title={t('context.voiceTitle')} description={t('context.voiceDesc')} accent="voice">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -322,6 +341,7 @@ export default function ContextView() {
       <Section
         title={t('context.boundariesTitle')}
         description={t('context.boundariesDesc')}
+        accent="boundaries"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="border-brand-green-200/60 bg-brand-green-50/30">
@@ -446,6 +466,7 @@ function ActiveChannelsSection({
     <Section
       title={t('context.activeChannels')}
       description={t('context.activeChannelsDesc')}
+      accent="channels"
     >
       <Card>
         <CardContent className="pt-4 space-y-3">
@@ -594,6 +615,7 @@ function BrandingSection({
     <Section
       title={t('context.brandingTitle')}
       description={t('context.brandingDesc')}
+      accent="branding"
     >
       {/* Colors */}
       <Card>
