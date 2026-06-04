@@ -23,6 +23,7 @@ import { authExchange } from './routes/authExchange.js'
 import { integration } from './routes/integration.js'
 import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
+import { planningConfig } from './routes/planningConfig.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { registerApiDocs } from './openapi-docs.js'
@@ -86,6 +87,7 @@ app.route('/api/v1', clients)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)
+app.route('/api/v1', planningConfig)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)

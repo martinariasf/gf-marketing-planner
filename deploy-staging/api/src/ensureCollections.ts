@@ -150,6 +150,35 @@ const collections: CollectionSpec[] = [
     ],
     indexes: ['CREATE INDEX `idx_approvals_v2_slug_post` ON `approvals_v2` (`slug`, `postId`)'],
   },
+  {
+    name: 'org_configs',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'calendarRange', type: 'json', maxSize: 100_000 },
+      { name: 'updatedAt', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: ['CREATE UNIQUE INDEX `idx_org_configs_slug` ON `org_configs` (`slug`)'],
+  },
+  {
+    name: 'information_sources',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'title', type: 'text', required: true, max: 300 },
+      { name: 'url', type: 'url' },
+      { name: 'sourceType', type: 'select', values: ['website', 'note', 'news', 'reference', 'other'] },
+      { name: 'summary', type: 'text', maxSize: 1_000_000 },
+      { name: 'prompt', type: 'text', maxSize: 1_000_000 },
+      { name: 'approved', type: 'bool' },
+      { name: 'approvedAt', type: 'text', max: 40 },
+      { name: 'lastImportedAt', type: 'text', max: 40 },
+      { name: 'tags', type: 'json', maxSize: 100_000 },
+      { name: 'actor', type: 'text', max: 100 },
+      { name: 'createdAt', type: 'text', max: 40 },
+      { name: 'updatedAt', type: 'text', max: 40 },
+    ],
+    indexes: ['CREATE INDEX `idx_information_sources_slug` ON `information_sources` (`slug`)'],
+  },
 ]
 
 export async function ensureCollections(): Promise<void> {
