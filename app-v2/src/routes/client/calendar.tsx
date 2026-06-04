@@ -8,11 +8,19 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
 import { Pillar } from '@/components/pillar'
 import { fmtDate } from '@/lib/format'
-import { apiPatchPost, apiUploadInspiration, isApiEnabled } from '@/lib/api-client'
+import {
+  apiLoadCalendarRange,
+  apiPatchPost,
+  apiSaveCalendarRange,
+  apiSetApproval,
+  apiUploadInspiration,
+  isApiEnabled,
+} from '@/lib/api-client'
 import { toast } from 'sonner'
 import {
   CalendarDays,
@@ -30,9 +38,21 @@ import {
   LayoutGrid,
   Rows3,
   Images,
+  Settings2,
+  Check,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
+import {
+  dateTiming,
+  defaultCalendarRange,
+  monthDiff,
+  monthKeyFromIso,
+  monthsInRange,
+  normalizeCalendarRange,
+  type CalendarRangeConfig,
+} from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post } from '@/types'
 import type { Slide } from '@/types/post'
@@ -46,10 +66,6 @@ const STATUS_STYLES: Record<string, string> = {
   scheduled:      'bg-violet-50 text-violet-700',
   published:      'bg-brand-green-100 text-brand-green-600',
   rejected:       'bg-rose-50 text-rose-700',
-}
-
-function monthKey(iso: string) {
-  return new Date(iso).toLocaleString('en-US', { month: 'long' })
 }
 
 /** A post is a carousel when it carries more than one slide. */
@@ -80,24 +96,46 @@ export default function CalendarView() {
     return m
   }, [plan.pillars])
 
-  const months = plan.quarter.months.map((m) => m.name)
+  const defaultRange = useMemo(() => defaultCalendarRange(), [])
+  const [calendarRange, setCalendarRange] = useState<CalendarRangeConfig>(defaultRange)
+  const [rangeDraft, setRangeDraft] = useState<CalendarRangeConfig>(defaultRange)
+  const [rangeOpen, setRangeOpen] = useState(false)
+  const [savingRange, setSavingRange] = useState(false)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isApiEnabled) return
+    apiLoadCalendarRange(slug).then((range) => {
+      if (cancelled) return
+      const normalized = normalizeCalendarRange(range)
+      setCalendarRange(normalized)
+      setRangeDraft(normalized)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  const rangeMonths = useMemo(() => monthsInRange(calendarRange), [calendarRange])
+  const monthKeys = useMemo(() => rangeMonths.map((m) => m.key), [rangeMonths])
 
   const postsByMonth = useMemo(() => {
     const m: Record<string, Post[]> = {}
-    months.forEach((name) => (m[name] = []))
+    monthKeys.forEach((key) => (m[key] = []))
     posts.forEach((p) => {
-      const k = monthKey(p.date)
+      const k = monthKeyFromIso(p.date)
       if (m[k]) m[k].push(p)
     })
     for (const k of Object.keys(m)) {
       m[k].sort((a, b) => a.date.localeCompare(b.date))
     }
     return m
-  }, [posts, months])
+  }, [posts, monthKeys])
 
-  // CAL1 — overview mode. 'month' = the original single-post carousel viewer.
+  // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
-  const [activeMonth, setActiveMonth] = useState(months[0])
+  const [activeMonth, setActiveMonth] = useState(rangeMonths[0]?.key ?? defaultRange.startMonth)
   const [slideIndex, setSlideIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   // Right-pane mode: the full picture (default) or the social-platform mockup.
@@ -105,14 +143,55 @@ export default function CalendarView() {
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
-  // CAL2 — direct user image upload on a post.
+  // CAL2 â€” direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const monthPosts = postsByMonth[activeMonth] ?? []
   const activePost = monthPosts[slideIndex]
+  const activeMonthLabel = rangeMonths.find((m) => m.key === activeMonth)?.name ?? activeMonth
 
-  // CAL2 — upload an image straight onto the active post (no Viktor needed).
+  useEffect(() => {
+    if (!rangeMonths.some((m) => m.key === activeMonth)) {
+      setActiveMonth(rangeMonths[0]?.key ?? defaultRange.startMonth)
+      setSlideIndex(0)
+      setDirection(0)
+    }
+  }, [activeMonth, defaultRange.startMonth, rangeMonths])
+
+  const saveRange = async () => {
+    const diff = monthDiff(rangeDraft.startMonth, rangeDraft.endMonth)
+    if (!Number.isFinite(diff) || diff < 0 || diff > 5) {
+      toast.error('Choose a range up to 6 months.')
+      return
+    }
+    const next = normalizeCalendarRange(rangeDraft)
+    setSavingRange(true)
+    try {
+      if (isApiEnabled) await apiSaveCalendarRange(slug, next)
+      setCalendarRange(next)
+      setRangeOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save calendar range')
+    } finally {
+      setSavingRange(false)
+    }
+  }
+
+  const setApproval = async (post: Post, decision: 'approved' | 'rejected') => {
+    setApprovingId(post.id)
+    try {
+      await apiSetApproval(slug, post.id, decision)
+      toast(decision === 'approved' ? `Approved ${post.id}` : `Rejected ${post.id}`, { duration: 1600 })
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update approval')
+    } finally {
+      setApprovingId(null)
+    }
+  }
+
+  // CAL2 â€” upload an image straight onto the active post (no Viktor needed).
   // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
   // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
   const onUploadImage = useCallback(
@@ -153,7 +232,7 @@ export default function CalendarView() {
   const next = useCallback(() => goTo(slideIndex + 1), [goTo, slideIndex])
   const prev = useCallback(() => goTo(slideIndex - 1), [goTo, slideIndex])
 
-  // Keyboard arrows — but never while typing in a field.
+  // Keyboard arrows â€” but never while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -171,10 +250,10 @@ export default function CalendarView() {
     setDirection(0)
   }
 
-  // CAL1 — from a compact card (Week/Quarter) jump into the Month viewer
+  // CAL1 â€” from a compact card (Week/Quarter) jump into the Month viewer
   // focused on that exact post.
   const jumpToPost = (post: Post) => {
-    const m = monthKey(post.date)
+    const m = monthKeyFromIso(post.date)
     const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
     setActiveMonth(m)
     setSlideIndex(idx < 0 ? 0 : idx)
@@ -195,7 +274,8 @@ export default function CalendarView() {
         </h1>
       </div>
 
-      {/* View-mode toggle (Week · Month · Quarter) */}
+      {/* View-mode toggle (Week Â· Month Â· Quarter) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
       <div className="inline-flex rounded-full border border-border-subtle bg-paper-muted/50 p-1 text-sm">
         {([
           { mode: 'week' as const,    label: t('calendar.viewWeek'),    Icon: Rows3 },
@@ -217,22 +297,37 @@ export default function CalendarView() {
           </button>
         ))}
       </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setRangeDraft(calendarRange)
+            setRangeOpen(true)
+          }}
+          className="gap-1.5"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          {rangeMonths[0]?.label} - {rangeMonths[rangeMonths.length - 1]?.label}
+        </Button>
+      </div>
 
-      {/* Month tabs — shown in Week + Month modes (Quarter shows all months). */}
+      {/* Month tabs â€” shown in Week + Month modes (Quarter shows all months). */}
       {viewMode !== 'quarter' && (
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-        {months.map((m) => {
-          const count = postsByMonth[m]?.length ?? 0
-          const isActive = activeMonth === m
+        {rangeMonths.map((m) => {
+          const count = postsByMonth[m.key]?.length ?? 0
+          const isActive = activeMonth === m.key
           return (
             <button
-              key={m}
-              onClick={() => switchMonth(m)}
+              key={m.key}
+              onClick={() => switchMonth(m.key)}
               className={cn(
                 'relative shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors',
                 isActive
                   ? 'text-white'
                   : 'text-ink-muted hover:text-ink hover:bg-paper-muted',
+                !isActive && m.isPast && 'opacity-70',
+                !isActive && m.isCurrent && 'ring-1 ring-brand-green-300',
               )}
             >
               {isActive && (
@@ -243,7 +338,8 @@ export default function CalendarView() {
                 />
               )}
               <span className="relative flex items-center gap-2">
-                {m}
+                {m.name}
+                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">Today</span>}
                 <span
                   className={cn(
                     'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-[10px] font-bold',
@@ -259,15 +355,18 @@ export default function CalendarView() {
       </div>
       )}
 
-      {/* CAL1 — Quarter overview: one column per month, compact cards. */}
+      {/* CAL1 â€” Quarter overview: one column per month, compact cards. */}
       {viewMode === 'quarter' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {months.map((m) => {
-            const list = postsByMonth[m] ?? []
+          {rangeMonths.map((m) => {
+            const list = postsByMonth[m.key] ?? []
             return (
-              <div key={m} className="space-y-3">
+              <div key={m.key} className={cn('space-y-3', m.isPast && 'opacity-80')}>
                 <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-                  <h3 className="text-sm font-semibold text-brand-blue">{m}</h3>
+                  <h3 className="text-sm font-semibold text-brand-blue">
+                    {m.name}
+                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
+                  </h3>
                   <span className="text-[11px] text-ink-muted">
                     {t('calendar.postsCount', { n: list.length })}
                   </span>
@@ -279,7 +378,14 @@ export default function CalendarView() {
                 ) : (
                   <div className="space-y-2">
                     {list.map((p) => (
-                      <CompactPostCard key={p.id} post={p} onSelect={() => jumpToPost(p)} />
+                      <CompactPostCard
+                        key={p.id}
+                        post={p}
+                        approving={approvingId === p.id}
+                        onApprove={() => setApproval(p, 'approved')}
+                        onReject={() => setApproval(p, 'rejected')}
+                        onSelect={() => jumpToPost(p)}
+                      />
                     ))}
                   </div>
                 )}
@@ -289,13 +395,13 @@ export default function CalendarView() {
         </div>
       )}
 
-      {/* CAL1 — Week overview: active month's posts grouped by week-of-month. */}
+      {/* CAL1 â€” Week overview: active month's posts grouped by week-of-month. */}
       {viewMode === 'week' && (
         monthPosts.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center text-ink-muted text-sm">
               <CalendarRange className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              {t('calendar.noPosts', { month: activeMonth })}
+              {t('calendar.noPosts', { month: activeMonthLabel })}
             </CardContent>
           </Card>
         ) : (
@@ -321,7 +427,14 @@ export default function CalendarView() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {list.map((p) => (
-                      <CompactPostCard key={p.id} post={p} onSelect={() => jumpToPost(p)} />
+                      <CompactPostCard
+                        key={p.id}
+                        post={p}
+                        approving={approvingId === p.id}
+                        onApprove={() => setApproval(p, 'approved')}
+                        onReject={() => setApproval(p, 'rejected')}
+                        onSelect={() => jumpToPost(p)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -335,7 +448,7 @@ export default function CalendarView() {
         <Card>
           <CardContent className="p-12 text-center text-ink-muted text-sm">
             <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            {t('calendar.noPosts', { month: activeMonth })}
+            {t('calendar.noPosts', { month: activeMonthLabel })}
           </CardContent>
         </Card>
       ) : activePost ? (
@@ -343,11 +456,11 @@ export default function CalendarView() {
           <div className="relative">
             <div className="flex items-center justify-between mb-3 text-xs text-ink-muted">
               <span>
-                {t('calendar.postOf', { n: slideIndex + 1, total: monthPosts.length, month: activeMonth })}
+                {t('calendar.postOf', { n: slideIndex + 1, total: monthPosts.length, month: activeMonthLabel })}
               </span>
               <span className="hidden sm:inline">
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">←</kbd>{' '}
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">→</kbd> {t('calendar.useArrows').replace('← → ', '')}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†</kbd>{' '}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†’</kbd> {t('calendar.useArrows').replace('â† â†’ ', '')}
               </span>
             </div>
 
@@ -361,6 +474,9 @@ export default function CalendarView() {
                     post={activePost}
                     pillarColor={pillarColor[activePost.pillar]}
                     onSaved={refetch}
+                    approving={approvingId === activePost.id}
+                    onApprove={() => setApproval(activePost, 'approved')}
+                    onReject={() => setApproval(activePost, 'rejected')}
                   />
 
                   {/* Vertical divider */}
@@ -433,7 +549,7 @@ export default function CalendarView() {
                           <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
                           {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
                         </Button>
-                        {/* CAL2 — direct upload (single-image posts only; carousels
+                        {/* CAL2 â€” direct upload (single-image posts only; carousels
                             are preview-only in V3 so the cover isn't replaced here). */}
                         {isApiEnabled && !isCarousel(activePost) && (
                           <>
@@ -548,7 +664,7 @@ export default function CalendarView() {
                       </div>
                       <div className="p-2 space-y-0.5">
                         <p className="text-[10px] text-ink-muted">
-                          {fmtDate(p.date)} · {p.channel}
+                          {fmtDate(p.date)} Â· {p.channel}
                         </p>
                         <p className="text-xs font-medium leading-tight line-clamp-2">
                           {p.title}
@@ -586,22 +702,76 @@ export default function CalendarView() {
           </Dialog>
         </>
       ) : null)}
+
+      <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
+        <DialogContent>
+          <DialogTitle>Calendar range</DialogTitle>
+          <DialogDescription>
+            Select a start and end month. The planning window can span up to 6 months.
+          </DialogDescription>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <label className="space-y-1 text-sm">
+              <span className="text-xs uppercase tracking-wider text-ink-muted">Start month</span>
+              <input
+                type="month"
+                value={rangeDraft.startMonth}
+                onChange={(e) => setRangeDraft((cur) => ({ ...cur, startMonth: e.target.value }))}
+                className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-xs uppercase tracking-wider text-ink-muted">End month</span>
+              <input
+                type="month"
+                value={rangeDraft.endMonth}
+                onChange={(e) => setRangeDraft((cur) => ({ ...cur, endMonth: e.target.value }))}
+                className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+              />
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setRangeOpen(false)} disabled={savingRange}>
+              Cancel
+            </Button>
+            <Button onClick={saveRange} disabled={savingRange}>
+              {savingRange && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              {t('common.save')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 /**
- * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
- * date · channel, line-clamped title, status badge. Click jumps to Month view.
+ * CAL1 â€” compact post card reused by Week + Quarter overviews. Small thumbnail,
+ * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
-function CompactPostCard({ post, onSelect }: { post: Post; onSelect: () => void }) {
+function CompactPostCard({
+  post,
+  onSelect,
+  onApprove,
+  onReject,
+  approving,
+}: {
+  post: Post
+  onSelect: () => void
+  onApprove: () => void
+  onReject: () => void
+  approving: boolean
+}) {
   const slideCount = isCarousel(post) ? post.slides.length : 0
+  const timing = dateTiming(post.date)
   return (
-    <button
-      onClick={onSelect}
-      className="group w-full text-left flex gap-3 rounded-lg border border-border-subtle bg-paper p-2 hover:border-brand-blue hover:shadow-sm transition-all"
+    <div
+      className={cn(
+        'group w-full text-left flex gap-3 rounded-lg border border-border-subtle bg-paper p-2 transition-all',
+        timing === 'past' && 'bg-paper-muted/40 opacity-80',
+        timing === 'today' && 'border-brand-green-300 ring-1 ring-brand-green-200',
+      )}
     >
-      <div className="relative shrink-0 h-16 w-16 rounded-md overflow-hidden bg-paper-muted">
+      <button onClick={onSelect} className="relative shrink-0 h-16 w-16 rounded-md overflow-hidden bg-paper-muted">
         {post.image ? (
           <img src={post.image} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
@@ -615,33 +785,67 @@ function CompactPostCard({ post, onSelect }: { post: Post; onSelect: () => void 
             {slideCount}
           </span>
         )}
-      </div>
+      </button>
       <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-[10px] text-ink-muted truncate">
-          {fmtDate(post.date)} · {post.channel}
-        </p>
-        <p className="text-xs font-medium leading-tight line-clamp-2 group-hover:text-brand-blue transition-colors">
-          {post.title}
-        </p>
-        <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES[post.status])}>
-          {post.status.replace('_', ' ')}
-        </Badge>
+        <button onClick={onSelect} className="block w-full text-left">
+          <p className="text-[10px] text-ink-muted truncate">
+            {fmtDate(post.date)} · {post.channel}
+            {timing === 'past' && ' · Past'}
+            {timing === 'today' && ' · Today'}
+          </p>
+          <p className="text-xs font-medium leading-tight line-clamp-2 group-hover:text-brand-blue transition-colors">
+            {post.title}
+          </p>
+        </button>
+        <StatusBadges post={post} />
+        {isApiEnabled && (
+          <div className="flex items-center gap-1 pt-0.5">
+            <Button size="sm" variant="outline" disabled={approving} onClick={onApprove} className="h-6 px-2 text-[10px]">
+              <Check className="h-3 w-3 mr-1" /> Approve
+            </Button>
+            <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="h-6 px-2 text-[10px] text-rose-700">
+              <X className="h-3 w-3 mr-1" /> Reject
+            </Button>
+          </div>
+        )}
       </div>
-    </button>
+    </div>
   )
 }
 
+function StatusBadges({ post }: { post: Post }) {
+  const approval = post.approval.status || post.status
+  const isPublished = post.status === 'published' || Boolean(post.publishing.publishedAt || post.publishing.publicUrl)
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES[approval] ?? STATUS_STYLES[post.status])}>
+        {approval.replace('_', ' ')}
+      </Badge>
+      {isPublished && (
+        <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES.published)}>
+          published
+        </Badge>
+      )}
+    </div>
+  )
+}
 /** Left pane: editable title + copy, saved into posts_patches via the API. */
 function CopyPane({
   slug,
   post,
   pillarColor,
   onSaved,
+  approving,
+  onApprove,
+  onReject,
 }: {
   slug: string
   post: Post
   pillarColor?: string
   onSaved: () => void
+  approving: boolean
+  onApprove: () => void
+  onReject: () => void
 }) {
   const t = useT()
   const initialHashtags = (post.hashtags ?? []).join(' ')
@@ -663,7 +867,7 @@ function CopyPane({
     if (title !== post.title) patch.title = title
     if (copy !== post.copy) patch.copy = copy
     if (hashtags !== initialHashtags) {
-      // Space- or newline-separated tokens → string[]; drop empties, keep as typed.
+      // Space- or newline-separated tokens â†’ string[]; drop empties, keep as typed.
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
@@ -690,15 +894,13 @@ function CopyPane({
     <div className="p-6 lg:p-8 space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <Badge variant="outline" className="font-mono text-[10px]">{post.id}</Badge>
-        <Badge variant="secondary" className={cn(STATUS_STYLES[post.status])}>
-          {post.status.replace('_', ' ')}
-        </Badge>
+        <StatusBadges post={post} />
         <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
       </div>
 
       <div>
         <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-          {fmtDate(post.date)} · {post.channel} · {post.format}
+          {fmtDate(post.date)} Â· {post.channel} Â· {post.format}
         </p>
         {isApiEnabled ? (
           <input
@@ -744,7 +946,7 @@ function CopyPane({
             value={hashtags}
             onChange={(e) => setHashtags(e.target.value)}
             rows={2}
-            placeholder="#hashtag1 #hashtag2 …"
+            placeholder="#hashtag1 #hashtag2 â€¦"
             className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
           />
         </div>
@@ -763,7 +965,7 @@ function CopyPane({
           <input
             value={cta}
             onChange={(e) => setCta(e.target.value)}
-            placeholder="Call to action…"
+            placeholder="Call to actionâ€¦"
             className="w-full text-sm font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
         </div>
@@ -790,6 +992,18 @@ function CopyPane({
           </Button>
           <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
             {t('common.discard')}
+          </Button>
+        </div>
+      )}
+      {isApiEnabled && (
+        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle">
+          <Button size="sm" variant="outline" disabled={approving} onClick={onApprove}>
+            <Check className="h-3.5 w-3.5 mr-1.5" />
+            Approve
+          </Button>
+          <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="text-rose-700">
+            <X className="h-3.5 w-3.5 mr-1.5" />
+            Reject
           </Button>
         </div>
       )}
@@ -909,7 +1123,7 @@ function PicturePane({
     )
   }
 
-  // Single-image (or no image) — unchanged behaviour.
+  // Single-image (or no image) â€” unchanged behaviour.
   if (!post.image) {
     return (
       <div className="w-full max-w-sm aspect-square rounded-xl border-2 border-dashed border-border-subtle flex flex-col items-center justify-center text-ink-muted gap-2">

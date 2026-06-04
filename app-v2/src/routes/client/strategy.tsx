@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +19,14 @@ import { fmtDateShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
 import { useT } from '@/lib/i18n'
 import { useEdit } from '@/lib/edit-store'
+import { apiLoadCalendarRange, isApiEnabled } from '@/lib/api-client'
+import {
+  defaultCalendarRange,
+  isIsoInMonthRange,
+  monthsInRange,
+  normalizeCalendarRange,
+  type CalendarRangeConfig,
+} from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
 import type { KeyDate } from '@/types'
 
@@ -285,7 +293,26 @@ export default function StrategyView() {
   const { plan } = useOutletContext<ClientBundle>()
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode, setField } = useEdit()
-  const totalWeeks = 12
+  const defaultRange = useMemo(() => defaultCalendarRange(), [])
+  const [planningRange, setPlanningRange] = useState<CalendarRangeConfig>(defaultRange)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isApiEnabled) return
+    apiLoadCalendarRange(slug).then((range) => {
+      if (!cancelled) setPlanningRange(normalizeCalendarRange(range))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  const planningMonths = useMemo(() => monthsInRange(planningRange), [planningRange])
+  const totalWeeks = planningMonths.length * 4
+  const keyDatesInRange = useMemo(
+    () => plan.keyDates.filter((date) => isIsoInMonthRange(date.date, planningRange)),
+    [plan.keyDates, planningRange],
+  )
 
   /** Write a lastModified timestamp for a given block key. */
   const stampBlock = (blockKey: string) => {
@@ -535,14 +562,23 @@ export default function StrategyView() {
 
       {/* Campaign timeline */}
       <section className="space-y-3">
-        <SectionHeading type="roadmap">{t('strategy.campaignRoadmap')}</SectionHeading>
+        <SectionHeading
+          type="roadmap"
+          right={
+            <span className="text-[11px] text-ink-muted">
+              {planningMonths[0]?.label} - {planningMonths[planningMonths.length - 1]?.label}
+            </span>
+          }
+        >
+          {t('strategy.campaignRoadmap')}
+        </SectionHeading>
         <Card>
           <CardContent className="p-5">
             <div className="space-y-2">
               {/* Header week numbers */}
               <div className="grid items-center gap-2" style={{ gridTemplateColumns: '160px 1fr' }}>
                 <div />
-                <div className="grid grid-cols-12 gap-1 text-[10px] text-ink-muted">
+                <div className="grid gap-1 text-[10px] text-ink-muted" style={{ gridTemplateColumns: `repeat(${totalWeeks}, minmax(0, 1fr))` }}>
                   {Array.from({ length: totalWeeks }, (_, i) => (
                     <div key={i} className="text-center">W{i + 1}</div>
                   ))}
@@ -552,13 +588,14 @@ export default function StrategyView() {
               {/* Month banding */}
               <div className="grid items-center gap-2" style={{ gridTemplateColumns: '160px 1fr' }}>
                 <div />
-                <div className="grid grid-cols-12 gap-1">
-                  {plan.quarter.months.map((m) => (
+                <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${planningMonths.length}, minmax(0, 1fr))` }}>
+                  {planningMonths.map((m) => (
                     <div
                       key={m.key}
-                      className="col-span-4 rounded bg-paper-muted py-1 text-center text-[11px] font-medium text-ink-muted"
+                      className="rounded bg-paper-muted py-1 text-center text-[11px] font-medium text-ink-muted"
                     >
                       {m.name}
+                      {m.isCurrent && <span className="ml-1 text-brand-green-600">now</span>}
                     </div>
                   ))}
                 </div>
@@ -575,7 +612,7 @@ export default function StrategyView() {
                     <p className="font-medium">{c.name}</p>
                     <p className="text-ink-muted text-[10px]">{c.pillar}</p>
                   </div>
-                  <div className="relative grid grid-cols-12 gap-1 h-7">
+                  <div className="relative grid gap-1 h-7" style={{ gridTemplateColumns: `repeat(${totalWeeks}, minmax(0, 1fr))` }}>
                     {Array.from({ length: totalWeeks }, (_, i) => (
                       <div key={i} className="rounded-sm bg-paper-muted" />
                     ))}
@@ -586,8 +623,8 @@ export default function StrategyView() {
                       className="absolute top-0 bottom-0 rounded-md flex items-center px-2 text-[10px] font-semibold text-white shadow-sm"
                       style={{
                         backgroundColor: c.color,
-                        left: `calc(${((c.startWeek - 1) / totalWeeks) * 100}% + ${(c.startWeek - 1) * 4}px)`,
-                        width: `calc(${((c.endWeek - c.startWeek + 1) / totalWeeks) * 100}% - 4px)`,
+                        left: `calc(${((Math.min(c.startWeek, totalWeeks) - 1) / totalWeeks) * 100}% + ${(Math.min(c.startWeek, totalWeeks) - 1) * 4}px)`,
+                        width: `calc(${((Math.min(c.endWeek, totalWeeks) - Math.min(c.startWeek, totalWeeks) + 1) / totalWeeks) * 100}% - 4px)`,
                       }}
                     >
                       W{c.startWeek}-W{c.endWeek}
@@ -698,7 +735,7 @@ export default function StrategyView() {
       <section className="space-y-3">
         <SectionHeading type="keyDates">{t('strategy.keyDates')}</SectionHeading>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {plan.keyDates.map((d) => (
+          {keyDatesInRange.map((d) => (
             <Card key={d.date + d.title} className={RELEVANCE_RING[d.relevance]}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3 mb-2">

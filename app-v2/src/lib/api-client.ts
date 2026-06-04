@@ -22,6 +22,7 @@ import type {
   Suggestions,
 } from '@/types'
 import { normalizePost } from '@/lib/normalize-post'
+import type { CalendarRangeConfig } from '@/lib/planning-range'
 
 const API_BASE = import.meta.env.VITE_API_BASE as string | undefined
 // Build-time fallback for local dev / CI smoke tests. In production it's empty
@@ -298,6 +299,81 @@ export async function apiPatchPost(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
+}
+
+export async function apiLoadCalendarRange(slug: string): Promise<CalendarRangeConfig | null> {
+  try {
+    const r = await apiGet<{ data: CalendarRangeConfig | null }>(`/clients/${slug}/config/calendar-range`)
+    return r.data
+  } catch {
+    return null
+  }
+}
+
+export async function apiSaveCalendarRange(
+  slug: string,
+  range: CalendarRangeConfig,
+): Promise<CalendarRangeConfig> {
+  const r = await apiSend<{ data: CalendarRangeConfig }>('PUT', `/clients/${slug}/config/calendar-range`, {
+    data: range,
+  })
+  return r.data
+}
+
+export type InformationSourceType = 'website' | 'note' | 'news' | 'reference' | 'other'
+
+export interface InformationSource {
+  id: string
+  slug: string
+  title: string
+  url?: string
+  sourceType?: InformationSourceType
+  summary?: string
+  prompt?: string
+  approved?: boolean
+  approvedAt?: string
+  lastImportedAt?: string
+  tags?: string[]
+  actor?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export async function apiListInformationSources(
+  slug: string,
+  approvedOnly = false,
+): Promise<InformationSource[]> {
+  try {
+    const query = approvedOnly ? '?approved=true' : ''
+    const r = await apiGet<{ items: InformationSource[] }>(`/clients/${slug}/information-sources${query}`)
+    return r.items ?? []
+  } catch {
+    return []
+  }
+}
+
+export type InformationSourceInput = Pick<
+  InformationSource,
+  'title' | 'url' | 'sourceType' | 'summary' | 'prompt' | 'tags' | 'approved'
+>
+
+export async function apiCreateInformationSource(
+  slug: string,
+  input: InformationSourceInput,
+): Promise<InformationSource> {
+  return apiSend<InformationSource>('POST', `/clients/${slug}/information-sources`, input)
+}
+
+export async function apiPatchInformationSource(
+  slug: string,
+  id: string,
+  patch: Partial<InformationSourceInput>,
+): Promise<InformationSource> {
+  return apiSend<InformationSource>('PATCH', `/clients/${slug}/information-sources/${id}`, patch)
+}
+
+export async function apiApproveInformationSource(slug: string, id: string): Promise<InformationSource> {
+  return apiSend<InformationSource>('POST', `/clients/${slug}/information-sources/${id}/approve`, {})
 }
 
 // ── Inspiration assets (drag-drop image library) ────────────────────────────
