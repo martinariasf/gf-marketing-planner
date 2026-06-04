@@ -15,6 +15,8 @@ interface FieldSpec {
   min?: number
   values?: string[]
   maxSize?: number
+  onCreate?: boolean
+  onUpdate?: boolean
   // file-field options
   maxSelect?: number
   mimeTypes?: string[]
@@ -24,6 +26,11 @@ interface CollectionSpec {
   name: string
   fields: FieldSpec[]
   indexes?: string[]
+  listRule?: string | null
+  viewRule?: string | null
+  createRule?: string | null
+  updateRule?: string | null
+  deleteRule?: string | null
 }
 
 const collections: CollectionSpec[] = [
@@ -62,8 +69,14 @@ const collections: CollectionSpec[] = [
       { name: 'role', type: 'select', required: true, values: ['user', 'assistant', 'tool'] },
       { name: 'content', type: 'text', maxSize: 5_000_000 },
       { name: 'toolEvent', type: 'json', maxSize: 1_000_000 },
+      { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
     ],
-    indexes: ['CREATE INDEX `idx_chat_slug` ON `chat_messages` (`slug`)'],
+    indexes: [
+      'CREATE INDEX `idx_chat_slug` ON `chat_messages` (`slug`)',
+      'CREATE INDEX `idx_chat_thread_created` ON `chat_messages` (`slug`,`thread`,`created`)',
+    ],
+    listRule: '@request.query.slug != "" && slug = @request.query.slug',
+    viewRule: '@request.query.slug != "" && slug = @request.query.slug',
   },
   // Phase 4 overlays — Viktor-owned data still lives on disk; the dashboard's
   // staging-only writes go into these collections and read endpoints merge
@@ -184,18 +197,53 @@ const collections: CollectionSpec[] = [
 export async function ensureCollections(): Promise<void> {
   await withPb(async (pb) => {
     const existing = await pb.collections.getFullList()
-    const existingNames = new Set(existing.map((c) => c.name))
+    const existingByName = new Map(existing.map((c) => [c.name, c]))
     for (const spec of collections) {
-      if (existingNames.has(spec.name)) continue
+      const current = existingByName.get(spec.name)
+      if (current) {
+        if (spec.name === 'chat_messages') {
+          const currentFields = Array.isArray(current.fields) ? current.fields : []
+          const currentFieldNames = new Set(currentFields.map((f: { name?: string }) => f.name))
+          const needsField = spec.fields.some((field) => !currentFieldNames.has(field.name))
+          const needsRules =
+            current.listRule !== spec.listRule ||
+            current.viewRule !== spec.viewRule ||
+            current.createRule !== (spec.createRule ?? null) ||
+            current.updateRule !== (spec.updateRule ?? null) ||
+            current.deleteRule !== (spec.deleteRule ?? null)
+
+          if (needsField || needsRules) {
+            try {
+              await pb.collections.update(current.id, {
+                ...current,
+                listRule: spec.listRule ?? null,
+                viewRule: spec.viewRule ?? null,
+                createRule: spec.createRule ?? null,
+                updateRule: spec.updateRule ?? null,
+                deleteRule: spec.deleteRule ?? null,
+                fields: [
+                  ...currentFields,
+                  ...spec.fields.filter((field) => !currentFieldNames.has(field.name)),
+                ],
+                indexes: spec.indexes ?? current.indexes ?? [],
+              })
+              console.log('[ensureCollections] updated chat_messages')
+            } catch (err) {
+              console.warn('[ensureCollections] failed updating chat_messages', err)
+            }
+          }
+        }
+        continue
+      }
       try {
         await pb.collections.create({
           name: spec.name,
           type: 'base',
-          listRule: null,
-          viewRule: null,
-          createRule: null,
-          updateRule: null,
-          deleteRule: null,
+          listRule: spec.listRule ?? null,
+          viewRule: spec.viewRule ?? null,
+          createRule: spec.createRule ?? null,
+          updateRule: spec.updateRule ?? null,
+          deleteRule: spec.deleteRule ?? null,
           fields: spec.fields,
           indexes: spec.indexes ?? [],
         })
@@ -208,11 +256,11 @@ export async function ensureCollections(): Promise<void> {
         await pb.collections.create({
           name: spec.name,
           type: 'base',
-          listRule: null,
-          viewRule: null,
-          createRule: null,
-          updateRule: null,
-          deleteRule: null,
+          listRule: spec.listRule ?? null,
+          viewRule: spec.viewRule ?? null,
+          createRule: spec.createRule ?? null,
+          updateRule: spec.updateRule ?? null,
+          deleteRule: spec.deleteRule ?? null,
           fields: spec.fields,
           indexes: [],
         })

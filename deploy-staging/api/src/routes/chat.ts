@@ -337,7 +337,7 @@ chat.get('/clients/:slug/chat/messages', requireScope(), requireRole('dash', 'ad
     // older turns once a thread grew past the page limit).
     pb.collection('chat_messages').getList(1, 200, {
       filter: `slug="${slug}" && thread="${thread}"`,
-      sort: 'id',
+      sort: 'created,id',
     }),
   )
   return c.json({ items: items.items })

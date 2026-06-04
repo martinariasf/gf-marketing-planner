@@ -16,6 +16,16 @@ import type {
   ClientIndexEntry,
 } from '@/types'
 
+export interface ChatMessageRecord {
+  id: string
+  slug: string
+  thread: string
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  created?: string
+  toolEvent?: unknown
+}
+
 // ── PocketBase instance (singleton) ──────────────────────────────────────────
 
 const PB_URL = import.meta.env.VITE_PB_URL as string | undefined
@@ -165,4 +175,30 @@ export async function pbSaveClient(
   } catch {
     await pb.collection('clients').create(entry)
   }
+}
+
+export async function subscribeChat(
+  slug: string,
+  thread: string,
+  onCreate: (message: ChatMessageRecord) => void,
+): Promise<() => void> {
+  if (!isPocketBaseEnabled) return () => undefined
+
+  const pb = getPB()
+  const unsubscribe = await pb.collection('chat_messages').subscribe(
+    '*',
+    (event: { action?: string; record?: ChatMessageRecord }) => {
+      if (event.action !== 'create' || !event.record) return
+      if (event.record.slug !== slug || event.record.thread !== thread) return
+      onCreate(event.record)
+    },
+    {
+      query: {
+        slug,
+        filter: `slug="${slug}" && thread="${thread}"`,
+      },
+    },
+  )
+
+  return unsubscribe
 }

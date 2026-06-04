@@ -36,6 +36,11 @@ import {
   isWriteTool,
   type ChatTurn,
 } from '@/lib/api-client'
+import {
+  isPocketBaseEnabled,
+  subscribeChat,
+  type ChatMessageRecord,
+} from '@/lib/pocketbase'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
@@ -55,11 +60,74 @@ interface ToolCall {
 }
 
 interface Message {
+  id?: string
+  created?: string
   role: 'user' | 'assistant'
   content: string
   tools?: ToolEvent[]      // synthetic UI labels from server (Reading brief.json…)
   toolCalls?: ToolCall[]   // real OpenAI-style tool calls (set_approval, etc.)
   streaming?: boolean
+}
+
+function recordToMessage(record: ChatMessageRecord): Message | null {
+  if (record.role !== 'user' && record.role !== 'assistant') return null
+  return {
+    id: record.id,
+    created: record.created,
+    role: record.role,
+    content: record.content,
+  }
+}
+
+function orderMessages(messages: Message[]): Message[] {
+  return messages
+    .map((message, index) => ({ message, index }))
+    .sort((a, b) => {
+      if (!a.message.created || !b.message.created) return a.index - b.index
+      const byCreated = a.message.created.localeCompare(b.message.created)
+      if (byCreated !== 0) return byCreated
+      return (a.message.id ?? '').localeCompare(b.message.id ?? '')
+    })
+    .map(({ message }) => message)
+}
+
+function mergeRealtimeMessage(prev: Message[], incoming: Message): Message[] {
+  if (incoming.id && prev.some((message) => message.id === incoming.id)) return prev
+
+  const next = [...prev]
+  if (incoming.role === 'user') {
+    const index = next.findLastIndex(
+      (message) =>
+        message.role === 'user' &&
+        !message.id &&
+        message.content.trim() === incoming.content.trim(),
+    )
+    if (index >= 0) {
+      next[index] = { ...next[index], ...incoming }
+      return orderMessages(next)
+    }
+  }
+
+  if (incoming.role === 'assistant') {
+    const index = next.findLastIndex(
+      (message) =>
+        message.role === 'assistant' &&
+        !message.id &&
+        (message.streaming || message.content.trim() === incoming.content.trim()),
+    )
+    if (index >= 0) {
+      next[index] = {
+        ...next[index],
+        ...incoming,
+        tools: next[index].tools,
+        toolCalls: next[index].toolCalls,
+        streaming: false,
+      }
+      return orderMessages(next)
+    }
+  }
+
+  return orderMessages([...next, incoming])
 }
 
 const SLASH_CHIPS: Array<{ cmd: string; hintKey: string }> = [
@@ -197,13 +265,45 @@ export function ChatSheet({
       if (cancelled) return
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-      setMessages(hist)
+        .map((m) => {
+          const record = m as typeof m & { created?: string }
+          return {
+            id: record.id,
+            created: record.created,
+            role: record.role as 'user' | 'assistant',
+            content: record.content,
+          }
+        })
+      setMessages(orderMessages(hist))
     })
     return () => {
       cancelled = true
     }
   }, [open, slug, thread, busy])
+
+  useEffect(() => {
+    if (!open || !isPocketBaseEnabled) return
+
+    let disposed = false
+    let unsubscribe: (() => void) | null = null
+    subscribeChat(slug, thread, (record) => {
+      const incoming = recordToMessage(record)
+      if (!incoming) return
+      setMessages((prev) => mergeRealtimeMessage(prev, incoming))
+    })
+      .then((fn) => {
+        if (disposed) void fn()
+        else unsubscribe = fn
+      })
+      .catch((err) => {
+        console.warn('[chat] realtime subscribe failed', err)
+      })
+
+    return () => {
+      disposed = true
+      if (unsubscribe) void unsubscribe()
+    }
+  }, [open, slug, thread])
 
   // Autoscroll the actual scroll container (not an inner div).
   useLayoutEffect(() => {
@@ -251,33 +351,25 @@ export function ChatSheet({
       // The chat proxy keeps consuming the Hermes run even if the browser
       // disconnects and persists the assistant message on completion, so we
       // poll history and fill the bubble in place — no page reload needed.
-      const pollForReply = async (baseline: number, signal: AbortSignal): Promise<boolean> => {
-        const deadline = Date.now() + 5 * 60_000
-        while (Date.now() < deadline) {
-          if (signal.aborted) return false
-          await sleep(4000)
-          if (signal.aborted) return false
-          let items: Awaited<ReturnType<typeof apiLoadChatHistory>>
-          try {
-            items = await apiLoadChatHistory(slug, thread)
-          } catch {
-            continue
-          }
-          const assistants = items.filter((m) => m.role === 'assistant')
-          if (assistants.length > baseline) {
-            const reply = assistants[assistants.length - 1]
-            setMessages((prev) => {
-              const next = [...prev]
-              const last = next[next.length - 1]
-              if (last?.role === 'assistant') {
-                next[next.length - 1] = { ...last, content: reply.content, streaming: false }
-              }
-              return next
-            })
-            return true
-          }
+      const fetchLateReply = async (baseline: number, signal: AbortSignal): Promise<boolean> => {
+        await sleep(4000)
+        if (signal.aborted) return false
+        const items = await apiLoadChatHistory(slug, thread)
+        const assistants = items.filter((m) => m.role === 'assistant')
+        if (assistants.length <= baseline) return false
+        const reply = assistants[assistants.length - 1] as (typeof assistants)[number] & {
+          created?: string
         }
-        return false
+        setMessages((prev) =>
+          mergeRealtimeMessage(prev, {
+            id: reply.id,
+            created: reply.created,
+            role: 'assistant',
+            content: reply.content,
+            streaming: false,
+          }),
+        )
+        return true
       }
 
       let sawDone = false
@@ -369,7 +461,11 @@ export function ChatSheet({
               const next = [...prev]
               const last = next[next.length - 1]
               if (last?.role === 'assistant') {
-                next[next.length - 1] = { ...last, streaming: false }
+                next[next.length - 1] = {
+                  ...last,
+                  id: ev.messageId ?? last.id,
+                  streaming: false,
+                }
               }
               return next
             })
@@ -386,8 +482,8 @@ export function ChatSheet({
         // Live stream ended without a terminal `done` and the user didn't
         // abort → the run is likely still finishing on the server. Poll for
         // the persisted reply instead of making the user reload the page.
-        if (!sawDone && !sawError && !ac.signal.aborted) {
-          const recovered = await pollForReply(priorAssistantCount, ac.signal)
+        if (!isPocketBaseEnabled && !sawDone && !sawError && !ac.signal.aborted) {
+          const recovered = await fetchLateReply(priorAssistantCount, ac.signal)
           if (!recovered && !ac.signal.aborted) {
             setMessages((prev) => {
               const next = [...prev]
@@ -408,7 +504,7 @@ export function ChatSheet({
         abortRef.current = null
       }
     },
-    [busy, messages, slug, thread, onWroteSomething],
+    [busy, messages, slug, thread, onWroteSomething, t],
   )
 
   const onSubmit = (e: React.FormEvent) => {
@@ -592,10 +688,8 @@ function MessageBubble({ m }: { m: Message }) {
   // Collapsible synthetic tool steps. Default: collapsed once the message is
   // done streaming. Real tool CALLS (set_approval etc.) always render — they're
   // the value, not noise.
-  const [showTools, setShowTools] = useState(true)
-  useEffect(() => {
-    if (m.role === 'assistant' && !m.streaming) setShowTools(false)
-  }, [m.streaming, m.role])
+  const [showToolsOverride, setShowToolsOverride] = useState<boolean | null>(null)
+  const showTools = showToolsOverride ?? !(m.role === 'assistant' && !m.streaming)
 
   const hasTools = m.role === 'assistant' && (m.tools?.length ?? 0) > 0
   const hasToolCalls = m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0
@@ -614,7 +708,7 @@ function MessageBubble({ m }: { m: Message }) {
           <div className="mb-2">
             <button
               type="button"
-              onClick={() => setShowTools((v) => !v)}
+              onClick={() => setShowToolsOverride((v) => !(v ?? showTools))}
               className="flex items-center gap-1 text-[10px] text-ink-muted hover:text-ink transition-colors"
             >
               {showTools ? (

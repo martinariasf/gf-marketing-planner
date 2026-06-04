@@ -48,6 +48,7 @@ jobs:
           # session for a short-lived dash_* token via /api/v1/auth/exchange
           # on boot. See deploy-staging/api/src/routes/authExchange.ts.
           VITE_API_BASE: https://staging.marketing.gfinnov.com/api/v1
+          VITE_PB_URL: https://staging.marketing.gfinnov.com
         run: pnpm build
 
       - name: Setup SSH key

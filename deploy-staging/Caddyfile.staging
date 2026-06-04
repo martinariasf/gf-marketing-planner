@@ -7,7 +7,7 @@
 # Routing precedence (most specific first via Caddy's `handle` ordering):
 #
 #   /api/v1/*  -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
-#   /api/*     -> mp-staging-pb   (legacy direct PocketBase access; removed in Phase 2)
+#   /api/realtime -> mp-staging-pb (PocketBase realtime for chat updates)
 #   /_/*       -> mp-staging-pb   (PB admin UI)
 #   /chat/*    -> hermes-marketing-staging  (Phase 6 wires this up)
 #   /data/*    -> static Viktor-owned JSON  (legacy read path; removed Phase 3)
@@ -32,6 +32,17 @@
     # SSE-friendly transport for /api/v1/clients/:slug/chat/stream (Phase 6).
     handle /api/v1/* {
         reverse_proxy mp-staging-api:8080 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # PocketBase realtime for dashboard chat updates. Keep this narrow so the
+    # dashboard still uses /api/v1/* for normal reads/writes.
+    handle /api/realtime* {
+        reverse_proxy mp-staging-pb:8090 {
             flush_interval -1
             transport http {
                 read_timeout 0
