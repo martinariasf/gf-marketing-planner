@@ -27,8 +27,7 @@ import {
   Save,
   PanelLeftClose,
   PanelLeftOpen,
-  Palette,
-  BookImage,
+  Video,
 } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -71,12 +70,11 @@ const NAV: NavItem[] = [
   { to: 'context',     labelKey: 'nav.context',     icon: Building2,     phase: 'plan'    as WorkflowPhase },
   { to: 'goals',       labelKey: 'nav.goals',       icon: Target,        phase: 'plan'    as WorkflowPhase },
   { to: 'strategy',    labelKey: 'nav.strategy',    icon: Compass,       phase: 'plan'    as WorkflowPhase },
-  { to: 'brand-kit',   labelKey: 'nav.brandKit',    icon: Palette,       phase: 'plan'    as WorkflowPhase },
   { to: 'suggestions', labelKey: 'nav.suggestions', icon: Sparkles,      phase: 'plan'    as WorkflowPhase },
   { to: 'calendar',    labelKey: 'nav.calendar',    icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
   { to: 'approvals',   labelKey: 'nav.approvals',   icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
   { to: 'assets',      labelKey: 'nav.assets',      icon: Images,        phase: 'prepare' as WorkflowPhase },
-  { to: 'references',  labelKey: 'nav.references',  icon: BookImage,     phase: 'prepare' as WorkflowPhase },
+  { to: 'videos',      labelKey: 'nav.videos',      icon: Video,         phase: 'prepare' as WorkflowPhase },
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
@@ -495,7 +493,9 @@ function NavContent({
                 collapsed ? '' : 'flex-1',
               )}
             >
-              <n.icon className="h-4 w-4 shrink-0" />
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                <n.icon className="h-4 w-4 shrink-0" />
+              </span>
               {!collapsed && (
                 <>
                   <span className="flex-1 truncate">{label}</span>

@@ -601,7 +601,8 @@ function BrandingSection({
       const uploaded: Array<{ variant: string; url: string }> = []
       for (const file of images) {
         const item = await apiUploadInspiration(slug, file, 'logo')
-        uploaded.push({ variant: '', url: item.url })
+        const variant = file.name.replace(/\.[^.]+$/, '').trim() || 'Logo'
+        uploaded.push({ variant, url: item.url })
       }
       set(['logos'], [...logos, ...uploaded])
     } catch (err) {

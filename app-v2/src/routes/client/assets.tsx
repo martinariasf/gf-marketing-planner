@@ -31,6 +31,9 @@ import {
   Search,
   FolderOpen,
   Palette,
+  Globe2,
+  CheckCircle2,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -38,7 +41,13 @@ import {
   apiListInspiration,
   apiUploadInspiration,
   apiDeleteInspiration,
+  apiApproveInformationSource,
+  apiCreateInformationSource,
+  apiListInformationSources,
+  apiPatchInformationSource,
   type InspirationItem,
+  type InformationSource,
+  type InformationSourceType,
 } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
@@ -83,7 +92,7 @@ function sourceMeta(source: AssetSource, t: (k: string) => string): { Icon: type
 // as AI for the filter chips.
 const isAiSource = (s: AssetSource) => s !== 'unsplash' && s !== 'canva' && s !== 'internal'
 
-type Folder = 'viktor' | 'uploads' | 'references' | 'brandkit'
+type Folder = 'viktor' | 'uploads' | 'references' | 'brandkit' | 'information'
 
 function matchesSearch(item: AssetItem, q: string): boolean {
   if (!q) return true
@@ -162,6 +171,7 @@ export default function AssetsView() {
     uploads: uploadItems.length,
     references: 0, // references board has its own count
     brandkit: brandLogos.length,
+    information: 0,
   }
 
   return (
@@ -204,6 +214,10 @@ export default function AssetsView() {
               <Lightbulb className="h-3.5 w-3.5" />
               {t('assets.folderReferences')}
             </TabsTrigger>
+            <TabsTrigger value="information" className="flex items-center gap-1.5">
+              <Globe2 className="h-3.5 w-3.5" />
+              Information Sources
+            </TabsTrigger>
             <TabsTrigger value="brandkit" className="flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5" />
               {t('assets.folderBrandKit')}
@@ -233,6 +247,21 @@ export default function AssetsView() {
         {/* Brand Kit folder */}
         {folder === 'brandkit' && (
           <BrandKitFolder logos={brandLogos} colors={brandColors} />
+        )}
+
+        {folder === 'information' && (
+          <>
+            {isApiEnabled ? (
+              <InformationSourcesBoard slug={routeSlug} />
+            ) : (
+              <Card>
+                <CardContent className="p-10 text-center text-ink-muted">
+                  <Globe2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Information Sources require the staging API.</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         {/* Manifest folders: viktor + uploads */}
@@ -663,6 +692,216 @@ function InspirationBoard({ slug }: { slug: string }) {
         </div>
       ) : (
         <p className="text-xs text-ink-muted italic">{t('inspiration.noneYet')}</p>
+      )}
+    </section>
+  )
+}
+
+function InformationSourcesBoard({ slug }: { slug: string }) {
+  const [items, setItems] = useState<InformationSource[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState({
+    title: '',
+    url: '',
+    sourceType: 'website' as InformationSourceType,
+    summary: '',
+    prompt: 'Use this approved source as factual context for post generation. Show source references.',
+  })
+
+  const load = useCallback(() => {
+    setLoading(true)
+    apiListInformationSources(slug)
+      .then(setItems)
+      .finally(() => setLoading(false))
+  }, [slug])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const create = async () => {
+    if (!draft.title.trim()) {
+      toast.error('Add a title first.')
+      return
+    }
+    setSaving(true)
+    try {
+      const item = await apiCreateInformationSource(slug, {
+        ...draft,
+        title: draft.title.trim(),
+        url: draft.url.trim(),
+        summary: draft.summary.trim(),
+        prompt: draft.prompt.trim(),
+        approved: false,
+        tags: [],
+      })
+      setItems((cur) => [item, ...cur])
+      setDraft({
+        title: '',
+        url: '',
+        sourceType: 'website',
+        summary: '',
+        prompt: 'Use this approved source as factual context for post generation. Show source references.',
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save source')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const patch = async (item: InformationSource, patch: Partial<InformationSource>) => {
+    const prev = items
+    setItems((cur) => cur.map((it) => (it.id === item.id ? { ...it, ...patch } : it)))
+    try {
+      const updated = await apiPatchInformationSource(slug, item.id, patch)
+      setItems((cur) => cur.map((it) => (it.id === item.id ? updated : it)))
+    } catch (err) {
+      setItems(prev)
+      toast.error(err instanceof Error ? err.message : 'Could not update source')
+    }
+  }
+
+  const approve = async (item: InformationSource) => {
+    try {
+      const updated = await apiApproveInformationSource(slug, item.id)
+      setItems((cur) => cur.map((it) => (it.id === item.id ? updated : it)))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not approve source')
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
+          <Globe2 className="h-3 w-3" />
+          Information Sources
+        </p>
+        <h2 className="text-lg font-semibold">Source material for post generation</h2>
+        <p className="text-sm text-ink-muted">
+          Save websites, notes, references, or news here before Viktor uses them. Approved sources are available to the agent by default.
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input
+            value={draft.title}
+            onChange={(e) => setDraft((cur) => ({ ...cur, title: e.target.value }))}
+            placeholder="Source title"
+            className="rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+          <div className="grid grid-cols-[120px_1fr] gap-2">
+            <select
+              value={draft.sourceType}
+              onChange={(e) => setDraft((cur) => ({ ...cur, sourceType: e.target.value as InformationSourceType }))}
+              className="rounded-md border border-border-subtle bg-paper px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+            >
+              {(['website', 'note', 'news', 'reference', 'other'] as InformationSourceType[]).map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+            <input
+              value={draft.url}
+              onChange={(e) => setDraft((cur) => ({ ...cur, url: e.target.value }))}
+              placeholder="https://..."
+              className="rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+            />
+          </div>
+          <textarea
+            value={draft.summary}
+            onChange={(e) => setDraft((cur) => ({ ...cur, summary: e.target.value }))}
+            placeholder="Imported/saved information or short summary"
+            rows={3}
+            className="md:col-span-2 rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
+          />
+          <textarea
+            value={draft.prompt}
+            onChange={(e) => setDraft((cur) => ({ ...cur, prompt: e.target.value }))}
+            placeholder="Agent prompt for how to use this source"
+            rows={2}
+            className="md:col-span-2 rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
+          />
+          <div className="md:col-span-2 flex justify-end">
+            <Button onClick={create} disabled={saving}>
+              {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Save source
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <p className="text-xs text-ink-muted">Loading sources...</p>
+      ) : items.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center text-ink-muted">
+            <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">No information sources saved yet.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <Card key={item.id} className={cn(item.approved && 'border-brand-green-200/70 bg-brand-green-50/20')}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline">{item.sourceType ?? 'source'}</Badge>
+                      {item.approved ? (
+                        <Badge className="bg-brand-green-100 text-brand-green-600">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Approved
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-800">Needs approval</Badge>
+                      )}
+                    </div>
+                    <h3 className="font-semibold mt-1">{item.title}</h3>
+                    {item.url && (
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-xs font-mono text-brand-blue hover:underline break-all">
+                        {item.url}
+                      </a>
+                    )}
+                  </div>
+                  {!item.approved && (
+                    <Button size="sm" variant="outline" onClick={() => approve(item)}>
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      Approve
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">Saved information</span>
+                    <textarea
+                      defaultValue={item.summary ?? ''}
+                      onBlur={(e) => {
+                        if (e.target.value !== (item.summary ?? '')) void patch(item, { summary: e.target.value })
+                      }}
+                      rows={4}
+                      className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">Agent prompt</span>
+                    <textarea
+                      defaultValue={item.prompt ?? ''}
+                      onBlur={(e) => {
+                        if (e.target.value !== (item.prompt ?? '')) void patch(item, { prompt: e.target.value })
+                      }}
+                      rows={4}
+                      className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
+                    />
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </section>
   )
