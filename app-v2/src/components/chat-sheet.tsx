@@ -182,13 +182,22 @@ export function ChatSheet({
     if (!open) return
     if (loadedThreadRef.current === thread) return
     if (busy) return // never overwrite an in-flight conversation
+    // Mark the thread loaded SYNCHRONOUSLY, before the async fetch resolves.
+    // Previously this was set inside .then(), so if the user sent a message
+    // before the initial history load returned, the load was cancelled and the
+    // ref stayed null — then when the turn finished and `busy` flipped back to
+    // false, this effect re-ran and re-fetched, overwriting the live (or
+    // just-completed) conversation with a stale DB snapshot. That snapshot
+    // wiped the visible turn — the "everything got deleted" symptom. Setting
+    // the ref up front makes history load exactly once per thread; after that
+    // the in-memory messages are the source of truth.
+    loadedThreadRef.current = thread
     let cancelled = false
     apiLoadChatHistory(slug, thread).then((items) => {
       if (cancelled) return
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-      loadedThreadRef.current = thread
       setMessages(hist)
     })
     return () => {
@@ -536,6 +545,48 @@ export function ChatSheet({
   )
 }
 
+// Render assistant text with inline images. Viktor delivers generated images
+// as a public URL — either as markdown `![alt](url)` or a bare image URL. We
+// split the text on those and render <img> for the image parts so the picture
+// actually shows in the chat (previously the URL appeared as raw text and the
+// image was invisible). Everything else renders as plain pre-wrapped text.
+const IMG_TOKEN_RE =
+  /!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s)]*)?)|(https?:\/\/[^\s)]+\/assets\/files\/[^\s)]+)/gi
+
+function MessageContent({ text }: { text: string }) {
+  const parts: Array<{ type: 'text' | 'img'; value: string }> = []
+  let last = 0
+  for (const match of text.matchAll(IMG_TOKEN_RE)) {
+    const url = match[1] || match[2] || match[3]
+    if (!url) continue
+    const start = match.index ?? 0
+    if (start > last) parts.push({ type: 'text', value: text.slice(last, start) })
+    parts.push({ type: 'img', value: url })
+    last = start + match[0].length
+  }
+  if (last < text.length) parts.push({ type: 'text', value: text.slice(last) })
+  if (parts.every((p) => p.type === 'text')) return <>{text}</>
+
+  return (
+    <div className="space-y-2">
+      {parts.map((p, i) =>
+        p.type === 'img' ? (
+          <a key={i} href={p.value} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={p.value}
+              alt=""
+              loading="lazy"
+              className="max-h-72 w-auto max-w-full rounded-md border border-border-subtle"
+            />
+          </a>
+        ) : p.value.trim() ? (
+          <span key={i}>{p.value}</span>
+        ) : null,
+      )}
+    </div>
+  )
+}
+
 function MessageBubble({ m }: { m: Message }) {
   const t = useT()
   // Collapsible synthetic tool steps. Default: collapsed once the message is
@@ -606,7 +657,7 @@ function MessageBubble({ m }: { m: Message }) {
             ))}
           </div>
         )}
-        {m.content ? m.content : m.streaming ? <WorkingIndicator /> : null}
+        {m.content ? <MessageContent text={m.content} /> : m.streaming ? <WorkingIndicator /> : null}
       </div>
     </div>
   )

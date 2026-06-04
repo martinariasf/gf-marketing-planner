@@ -147,18 +147,26 @@ chat.post(
 
     const principal = c.get('principal')
 
-    // Persist user message immediately so chat history is queryable even if
-    // the run errors mid-flight.
-    withPb((pb) =>
-      pb.collection('chat_messages').create({
-        id: mkMsgId(),
-        slug,
-        thread,
-        role: 'user',
-        content: message,
-        toolEvent: null,
-      }),
-    ).catch((err) => console.warn('[chat] persist user msg failed', err))
+    // Persist the user message BEFORE opening the stream, and AWAIT it. The
+    // dashboard re-fetches thread history as soon as a turn settles; when this
+    // write was fire-and-forget, that reload could race ahead of the un-awaited
+    // create and read a snapshot missing the just-sent message — so it appeared
+    // "deleted" from the conversation. Awaiting closes that window. A PB hiccup
+    // is logged but non-fatal so the chat still proceeds.
+    try {
+      await withPb((pb) =>
+        pb.collection('chat_messages').create({
+          id: mkMsgId(),
+          slug,
+          thread,
+          role: 'user',
+          content: message,
+          toolEvent: null,
+        }),
+      )
+    } catch (err) {
+      console.warn('[chat] persist user msg failed', err)
+    }
 
     return stream(c, async (s) => {
       c.header('Content-Type', 'text/event-stream')
