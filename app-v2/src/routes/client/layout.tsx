@@ -148,7 +148,12 @@ export default function ClientLayout() {
   const currentNav = NAV.find((n) => n.to === currentSegment)
   const currentPhase = currentNav?.phase ?? 'plan'
 
-  if (loading) {
+  // Only show the blocking skeleton when we genuinely have nothing to render
+  // yet (first load / client switch). A background refetch keeps `data`
+  // populated, so we must keep the app mounted — otherwise a mid-chat refetch
+  // (Viktor running a write tool) would unmount the ChatSheet and drop the
+  // streaming reply, which looked like a spurious page reload.
+  if (loading && !data) {
     return <LoadingState slug={slug} />
   }
 
