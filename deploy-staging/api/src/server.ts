@@ -25,6 +25,7 @@ import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
+import { registerApiDocs } from './openapi-docs.js'
 import { problem } from './problem.js'
 
 const app = new OpenAPIHono()
@@ -36,6 +37,11 @@ app.use('*', logger())
 // Phase 7: global rate limit (120 req/min per token+IP). Stricter caps on
 // /chat/stream live in routes/chat.ts.
 app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
+
+// Document the plain-Hono routes (posts/branding/suggestions/approvals/assets/…)
+// in the OpenAPI registry so /api/v1/docs is complete for external agents. This
+// only adds spec entries; the real handlers live in the route files.
+registerApiDocs(app)
 
 // OpenAPI spec + docs UI are registered BEFORE the auth-gated subapps so
 // the clients router's wildcard requireAuth middleware doesn't swallow them.
