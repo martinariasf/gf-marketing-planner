@@ -39,6 +39,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
 interface ToolEvent {
   label: string
   status: 'start' | 'done'
@@ -146,18 +148,27 @@ export function ChatSheet({
   // Pre-fill the composer when a caller hands us an initial message (e.g. the
   // "Change picture" button). Keyed on the raw string so re-clicking the same
   // post re-fills even if the text is identical (we append a nonce upstream).
+  //
+  // We apply each distinct initialMessage AT MOST ONCE. Without this guard the
+  // effect re-ran on every panel open/close (deps include `open`), so after you
+  // sent the prefilled prompt and later reopened the panel — or the parent
+  // re-rendered — the same "Change the image for post …" text reappeared in the
+  // composer as if it hadn't been sent. The ref remembers the last value we
+  // injected so only a genuinely new prompt (new nonce) refills.
+  const appliedInitialRef = useRef<string | null>(null)
   useEffect(() => {
-    if (open && initialMessage) {
-      setInput(initialMessage)
-      // Focus + move caret to end on the next frame, after the panel mounts.
-      requestAnimationFrame(() => {
-        const el = inputRef.current
-        if (el) {
-          el.focus()
-          el.setSelectionRange(el.value.length, el.value.length)
-        }
-      })
-    }
+    if (!open || !initialMessage) return
+    if (appliedInitialRef.current === initialMessage) return
+    appliedInitialRef.current = initialMessage
+    setInput(initialMessage)
+    // Focus + move caret to end on the next frame, after the panel mounts.
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(el.value.length, el.value.length)
+      }
+    })
   }, [open, initialMessage])
 
   // Load history from the server ONCE per thread, on first open. We must not
@@ -217,8 +228,51 @@ export function ChatSheet({
         .slice(-10)
         .map((m) => ({ role: m.role, content: m.content }))
 
+      // Baseline = how many assistant replies are already persisted. If the
+      // live stream drops, a NEW persisted assistant row (count > baseline)
+      // is this turn's recovered reply.
+      const priorAssistantCount = messages.filter(
+        (m) => m.role === 'assistant' && m.content.trim().length > 0,
+      ).length
+
       const ac = new AbortController()
       abortRef.current = ac
+
+      // Recover a reply that finished server-side after the live SSE dropped.
+      // The chat proxy keeps consuming the Hermes run even if the browser
+      // disconnects and persists the assistant message on completion, so we
+      // poll history and fill the bubble in place — no page reload needed.
+      const pollForReply = async (baseline: number, signal: AbortSignal): Promise<boolean> => {
+        const deadline = Date.now() + 5 * 60_000
+        while (Date.now() < deadline) {
+          if (signal.aborted) return false
+          await sleep(4000)
+          if (signal.aborted) return false
+          let items: Awaited<ReturnType<typeof apiLoadChatHistory>>
+          try {
+            items = await apiLoadChatHistory(slug, thread)
+          } catch {
+            continue
+          }
+          const assistants = items.filter((m) => m.role === 'assistant')
+          if (assistants.length > baseline) {
+            const reply = assistants[assistants.length - 1]
+            setMessages((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = { ...last, content: reply.content, streaming: false }
+              }
+              return next
+            })
+            return true
+          }
+        }
+        return false
+      }
+
+      let sawDone = false
+      let sawError = false
       try {
         for await (const ev of apiChatStream({
           slug,
@@ -287,6 +341,7 @@ export function ChatSheet({
               if (ok) onWroteSomething?.()
             }
           } else if (ev.type === 'error') {
+            sawError = true
             setMessages((prev) => {
               const next = [...prev]
               const last = next[next.length - 1]
@@ -300,6 +355,7 @@ export function ChatSheet({
               return next
             })
           } else if (ev.type === 'done') {
+            sawDone = true
             setMessages((prev) => {
               const next = [...prev]
               const last = next[next.length - 1]
@@ -311,19 +367,32 @@ export function ChatSheet({
           }
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          setMessages((prev) => {
-            const next = [...prev]
-            const last = next[next.length - 1]
-            if (last?.role === 'assistant') {
-              next[next.length - 1] = {
-                ...last,
-                content: last.content + `\n\n_${t('chat.networkError')}_`,
-                streaming: false,
+        // User-initiated abort is terminal — nothing to recover. Any other
+        // error (e.g. the SSE socket dropped mid image-gen) leaves both flags
+        // false so the recovery poll below can still surface the reply.
+        if ((err as Error).name === 'AbortError') sawError = true
+      }
+
+      try {
+        // Live stream ended without a terminal `done` and the user didn't
+        // abort → the run is likely still finishing on the server. Poll for
+        // the persisted reply instead of making the user reload the page.
+        if (!sawDone && !sawError && !ac.signal.aborted) {
+          const recovered = await pollForReply(priorAssistantCount, ac.signal)
+          if (!recovered && !ac.signal.aborted) {
+            setMessages((prev) => {
+              const next = [...prev]
+              const last = next[next.length - 1]
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = {
+                  ...last,
+                  content: last.content || `_${t('chat.networkError')}_`,
+                  streaming: false,
+                }
               }
-            }
-            return next
-          })
+              return next
+            })
+          }
         }
       } finally {
         setBusy(false)
@@ -537,9 +606,32 @@ function MessageBubble({ m }: { m: Message }) {
             ))}
           </div>
         )}
-        {m.content || (m.streaming ? <span className="opacity-60">…</span> : null)}
+        {m.content ? m.content : m.streaming ? <WorkingIndicator /> : null}
       </div>
     </div>
+  )
+}
+
+// Live "Viktor is working" indicator shown in the streaming assistant bubble
+// before any text arrives. Surfaces an elapsed-seconds counter so a slow step
+// (image generation now ~10-15s) visibly reports progress instead of a silent
+// "…" that made the panel look frozen.
+function WorkingIndicator() {
+  const t = useT()
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const id = setInterval(() => setSecs(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <span className="inline-flex items-center gap-1.5 text-ink-muted">
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" />
+      <span className="text-xs">
+        {t('chat.stillWorking')}
+        {secs > 2 ? ` · ${secs}s` : ''}
+      </span>
+    </span>
   )
 }
 
