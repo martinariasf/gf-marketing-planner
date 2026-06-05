@@ -340,19 +340,17 @@ platform_toolsets:
   api_server: [terminal, file, web, vision, image_gen, todo]
 
 # =============================================================================
-# Tool-progress display. Telegram defaults to "all" (one status line per tool
-# call — the 📖/🎨/⚙️ icons), which the user found noisy. "new" only shows a
-# line when the tool *changes*, keeping progress visible but far quieter. The
-# system prompt also adds a human "Generating…" line for slow steps.
-# Modes: off | new | all | verbose. Live override: /verbose in the chat.
+# Tool-progress display. Keep this quiet on the main production agent.
+# Modes: off | new | all | verbose.
 # =============================================================================
 display:
-  # Allow users to cycle the tool-progress mode live with /verbose
-  # (off | new | all | verbose). Gated off by default; enabled here.
-  tool_progress_command: true
+  # Disable the live /verbose toggle for production.
+  tool_progress_command: false
   platforms:
     telegram:
-      tool_progress: new
+      tool_progress: off
+    api_server:
+      tool_progress: off
 
 # =============================================================================
 # Approval policy. The api_server (in-app dashboard chat) has no human to
