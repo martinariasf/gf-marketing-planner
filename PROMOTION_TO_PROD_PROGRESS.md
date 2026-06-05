@@ -71,9 +71,13 @@ Last updated: 2026-06-05
    the `extra.key` line scrubbed to a placeholder + inject the real key on the box
    at (manual) deploy. **Awaiting decision.** Until then the untracked source
    (`staging-demo-agent/`, `pb-run.sh`, `CHAT_ROBUSTNESS_PLAN.md`) is **not committed**.
-2. **Prod dashboard auth model.** Prod gates data per-client; staging's
-   `/auth/exchange` uses one `staging` user. Need the prod token-exchange auth
-   design before wiring `/api/v1/auth/exchange` in the prod Caddyfile.
+2. **Prod dashboard auth model — ✅ RESOLVED + IMPLEMENTED.** `authExchange.ts`
+   minted `slug:'*'` for every user → cross-client leak under prod's per-client
+   passwords. Fixed (commit `5bbf910`): admins→`*`, every other user scoped to its
+   own slug. Decided: GF staff hold the passwords → per-client logins are `dash`
+   (editable). Deployed to staging + verified (admin `staging` unchanged, sees all
+   clients). Remaining at cutover: prod outer Caddy uses one multi-cred basicauth
+   realm on `/api/v1/auth/exchange` (the per-client hashes), per the website ref.
 3. **Prod agent slug** (Phase 2.1).
 4. **Secrets to provide** (not in repo): prod PB admin email+password,
    prod `BOOTSTRAP_TOKENS`, prod Hermes gateway key, prod Telegram bot token,
