@@ -41,7 +41,8 @@
 
     # PocketBase realtime for dashboard chat updates. Keep this narrow so the
     # dashboard still uses /api/v1/* for normal reads/writes.
-    handle /api/realtime* {
+    @pb_realtime path /api/realtime /api/realtime/*
+    handle @pb_realtime {
         reverse_proxy mp-staging-pb:8090 {
             flush_interval -1
             transport http {
