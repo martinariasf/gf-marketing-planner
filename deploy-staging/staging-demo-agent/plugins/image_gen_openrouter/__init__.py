@@ -167,16 +167,31 @@ class OpenRouterImageGenProvider(ImageGenProvider):
         # reproduces it faithfully, instead of us describing it in text (which
         # produced wrong, hallucinated logos). Each becomes an extra image_url
         # content block in the same user turn.
+        requested_refs = [str(ref) for ref in (kwargs.get("reference_images") or [])]
         ref_errors: List[str] = []
         ref_blocks: List[Dict[str, Any]] = []
-        for ref in (kwargs.get("reference_images") or []):
+        for ref in requested_refs:
             try:
-                data_uri = _reference_to_data_uri(str(ref))
+                data_uri = _reference_to_data_uri(ref)
             except Exception as exc:
                 ref_errors.append(f"{ref}: {exc}")
                 logger.warning("reference image %r failed to load: %s", ref, exc)
                 continue
             ref_blocks.append({"type": "image_url", "image_url": {"url": data_uri}})
+        if requested_refs and not ref_blocks:
+            return error_response(
+                error=(
+                    "All requested reference images failed to load; refusing to "
+                    "generate from description because this request requires an "
+                    "exact logo/product/previous image. Reference errors: "
+                    + "; ".join(ref_errors)
+                ),
+                error_type="reference_image_required",
+                provider="openrouter",
+                model=model,
+                prompt=prompt,
+                aspect_ratio=aspect,
+            )
 
         # When reference images are attached the model otherwise tends to draw
         # the scene and ignore them (e.g. omit the logo). Append an explicit
