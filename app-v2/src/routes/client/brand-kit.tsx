@@ -44,8 +44,13 @@ export default function BrandKitView() {
     setField(slug, 'brief', ['branding', ...path], value)
 
   const b = { ...DEFAULT_BRANDING, ...(brief.branding ?? {}) }
-  const colors = b.colors
-  const logos = b.logos
+  // Defensive: drop null/non-object entries a malformed local edit could leave.
+  const colors = (b.colors ?? []).filter(
+    (c): c is { name: string; hex: string } => !!c && typeof c === 'object',
+  )
+  const logos = (b.logos ?? []).filter(
+    (l): l is { variant: string; url: string } => !!l && typeof l === 'object',
+  )
 
   return (
     <div className="space-y-8">
@@ -85,7 +90,9 @@ export default function BrandKitView() {
                 <input
                   type="color"
                   value={normalizeHex(c.hex)}
-                  onChange={(e) => set(['colors', i, 'hex'], e.target.value)}
+                  onChange={(e) =>
+                    set(['colors'], colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))
+                  }
                   disabled={!editMode}
                   className="h-8 w-10 rounded border border-border-subtle cursor-pointer disabled:cursor-default"
                   aria-label={`Pick ${c.name || 'color'}`}
@@ -96,13 +103,17 @@ export default function BrandKitView() {
                 />
                 <EditableText
                   value={c.name}
-                  onChange={(v) => set(['colors', i, 'name'], v)}
+                  onChange={(v) =>
+                    set(['colors'], colors.map((x, j) => (j === i ? { ...x, name: v } : x)))
+                  }
                   placeholder={t('context.colorNameHint')}
                   className="text-sm flex-1"
                 />
                 <EditableText
                   value={c.hex}
-                  onChange={(v) => set(['colors', i, 'hex'], v)}
+                  onChange={(v) =>
+                    set(['colors'], colors.map((x, j) => (j === i ? { ...x, hex: v } : x)))
+                  }
                   placeholder="#000000"
                   className="text-xs font-mono w-24"
                 />
@@ -220,13 +231,17 @@ export default function BrandKitView() {
                 <div className="flex-1 space-y-1">
                   <EditableText
                     value={logo.variant}
-                    onChange={(v) => set(['logos', i, 'variant'], v)}
+                    onChange={(v) =>
+                      set(['logos'], logos.map((x, j) => (j === i ? { ...x, variant: v } : x)))
+                    }
                     placeholder={t('context.logoVariantHint')}
                     className="text-sm"
                   />
                   <EditableText
                     value={logo.url}
-                    onChange={(v) => set(['logos', i, 'url'], v)}
+                    onChange={(v) =>
+                      set(['logos'], logos.map((x, j) => (j === i ? { ...x, url: v } : x)))
+                    }
                     placeholder="https://…"
                     className="text-xs font-mono text-ink-muted"
                   />

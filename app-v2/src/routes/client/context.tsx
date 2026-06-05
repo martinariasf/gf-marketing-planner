@@ -580,8 +580,14 @@ function BrandingSection({
   const t = useT()
   const { editMode } = useEdit()
   const b = { ...DEFAULT_BRANDING, ...(branding ?? {}) }
-  const colors = b.colors
-  const logos = b.logos
+  // Defensive: a malformed local edit could leave null/non-object entries in
+  // these arrays. Filter them so a single bad entry can't crash the render.
+  const colors = (b.colors ?? []).filter(
+    (c): c is { name: string; hex: string } => !!c && typeof c === 'object',
+  )
+  const logos = (b.logos ?? []).filter(
+    (l): l is { variant: string; url: string } => !!l && typeof l === 'object',
+  )
 
   // Drag-drop logo upload. Files are stored via the same per-client asset
   // endpoint the Inspiration board uses, then appended as logo entries so they
@@ -634,20 +640,26 @@ function BrandingSection({
               <input
                 type="color"
                 value={normalizeHex(c.hex)}
-                onChange={(e) => set(['colors', i, 'hex'], e.target.value)}
+                onChange={(e) =>
+                  set(['colors'], colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))
+                }
                 disabled={!editMode}
                 className="h-8 w-10 rounded border border-border-subtle cursor-pointer disabled:cursor-default"
                 aria-label={`Pick ${c.name || 'color'}`}
               />
               <EditableText
                 value={c.name}
-                onChange={(v) => set(['colors', i, 'name'], v)}
+                onChange={(v) =>
+                  set(['colors'], colors.map((x, j) => (j === i ? { ...x, name: v } : x)))
+                }
                 placeholder={t('context.colorNameHint')}
                 className="text-sm flex-1"
               />
               <EditableText
                 value={c.hex}
-                onChange={(v) => set(['colors', i, 'hex'], v)}
+                onChange={(v) =>
+                  set(['colors'], colors.map((x, j) => (j === i ? { ...x, hex: v } : x)))
+                }
                 placeholder="#000000"
                 className="text-xs font-mono w-24"
               />
@@ -745,13 +757,17 @@ function BrandingSection({
               <div className="flex-1 space-y-1">
                 <EditableText
                   value={logo.variant}
-                  onChange={(v) => set(['logos', i, 'variant'], v)}
+                  onChange={(v) =>
+                    set(['logos'], logos.map((x, j) => (j === i ? { ...x, variant: v } : x)))
+                  }
                   placeholder={t('context.logoVariantHint')}
                   className="text-sm"
                 />
                 <EditableText
                   value={logo.url}
-                  onChange={(v) => set(['logos', i, 'url'], v)}
+                  onChange={(v) =>
+                    set(['logos'], logos.map((x, j) => (j === i ? { ...x, url: v } : x)))
+                  }
                   placeholder="https://…"
                   className="text-xs font-mono text-ink-muted"
                 />

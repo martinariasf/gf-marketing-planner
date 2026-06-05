@@ -92,11 +92,32 @@ function setAtPath(obj: unknown, path: Path, value: unknown): unknown {
  */
 export function deepMerge<T>(base: T, patch: unknown): T {
   if (patch === undefined) return base
-  if (
-    patch === null ||
-    typeof patch !== 'object' ||
-    Array.isArray(patch)
-  ) {
+  if (Array.isArray(patch)) {
+    // Arrays normally replace the base wholesale (delete/reorder pass a full
+    // dense array). But a patch produced by editing a *deep* array index —
+    // e.g. set(['logos', 1, 'url'], v) — is SPARSE, and once round-tripped
+    // through localStorage its holes deserialize to `null`. Replacing
+    // wholesale then injects `null` entries (which crash `.map(x => x.url)`
+    // renders) and drops untouched siblings. So: only when the patch is sparse
+    // (has holes / null / undefined slots) do we fall back to the base value
+    // for those slots. Dense arrays keep the exact previous behaviour.
+    const patchArr = patch as unknown[]
+    const sparse =
+      patchArr.length !== Object.keys(patchArr).length ||
+      patchArr.includes(null) ||
+      patchArr.includes(undefined)
+    if (!sparse) return patch as T
+    const baseArr = Array.isArray(base) ? (base as unknown[]) : []
+    const out: unknown[] = []
+    const n = Math.max(baseArr.length, patchArr.length)
+    for (let i = 0; i < n; i++) {
+      if (i in patchArr && patchArr[i] != null) out.push(patchArr[i])
+      else if (i < baseArr.length) out.push(baseArr[i])
+      // else: slot exists in neither (trailing null) — drop it, no hole.
+    }
+    return out as T
+  }
+  if (patch === null || typeof patch !== 'object') {
     return patch as T
   }
   if (base === null || typeof base !== 'object' || Array.isArray(base)) {
