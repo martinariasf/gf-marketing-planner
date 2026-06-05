@@ -42,5 +42,9 @@ API-integrated persona.
      `google/gemini-3.1-pro-preview`).
    - Remaining prose "staging" mentions in `config.yaml` comments are cosmetic.
 6. `cd /opt/agents/gf-innov && docker compose up -d --build`.
-7. **Smoke test:** `hi viktor` → `suggest` → `draft …` → `approve p###` (Telegram
-   and in-app chat). Roll back to the `.bak` config if anything fails.
+7. **Smoke test API connectivity first:** use `/api/v1/health` for unauthenticated
+   health, and `GET $API_BASE/clients/$CLIENT_SLUG/brief` with the bearer token
+   for the agent's scoped read. Do not treat a bare `$API_BASE` probe as the only
+   connectivity check.
+8. **Smoke test agent behavior:** `hi viktor` → `suggest` → `draft …` → `approve p###`
+   (Telegram and in-app chat). Roll back to the `.bak` config if anything fails.

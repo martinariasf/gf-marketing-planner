@@ -6,14 +6,15 @@
 #
 # Routing precedence (most specific first via Caddy's `handle` ordering):
 #
-#   /api/v1/*  -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
+#   /api/v1    -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
+#   /api/v1/*  -> mp-staging-api
 #   /api/realtime -> mp-staging-pb (PocketBase realtime for chat updates)
 #   /_/*       -> mp-staging-pb   (PB admin UI)
 #   /chat/*    -> hermes-marketing-staging  (Phase 6 wires this up)
 #   /data/*    -> static Viktor-owned JSON  (legacy read path; removed Phase 3)
 #   /*         -> React SPA
 #
-# Site-wide basicauth still gates everything except /api/v1/* and /chat/*, which
+# Site-wide basicauth still gates everything except /api/v1, /api/v1/* and /chat/*, which
 # do their own bearer-token auth — basicauth at the edge would prevent agents
 # from calling the API without scraping creds.
 
@@ -28,9 +29,10 @@
     encode zstd gzip
 
     # ── New REST API (Hono) ──────────────────────────────────────────────
-    # The Hono app owns the full /api/v1/* path — no rewrite needed.
+    # The Hono app owns the full /api/v1 path — no rewrite needed.
     # SSE-friendly transport for /api/v1/clients/:slug/chat/stream (Phase 6).
-    handle /api/v1/* {
+    @api path /api/v1 /api/v1/*
+    handle @api {
         reverse_proxy mp-staging-api:8080 {
             flush_interval -1
             transport http {
