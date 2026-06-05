@@ -1,14 +1,14 @@
 """OpenRouter image generation backend for Hermes Agent.
 
 Routes image generation requests to OpenRouter's image-capable models
-(default: ``openai/gpt-5.4-image-2``) via the OpenAI-compatible Chat
+(default: Nano Banana 2 / ``google/gemini-3.1-flash-image-preview``) via the OpenAI-compatible Chat
 Completions endpoint with image content blocks. Saves the returned image
 to ``$HERMES_HOME/cache/images/`` so the gateway can attach it to the
 outgoing chat message.
 
 Environment:
   OPENROUTER_API_KEY        required
-  OPENROUTER_IMAGE_MODEL    optional, default "openai/gpt-5.4-image-2"
+  OPENROUTER_IMAGE_MODEL    optional, default Nano Banana 2
   OPENROUTER_BASE_URL       optional, default "https://openrouter.ai/api/v1"
 """
 
@@ -36,14 +36,13 @@ from agent.image_gen_provider import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "openai/gpt-5.4-image-2"
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-
 # Per-request fidelity → model mapping. The agent picks "fast" or "high"
 # (see the `image_generate` tool override below); each maps to a model that
 # can be overridden per company via env without touching code.
 DEFAULT_MODEL_FAST = "google/gemini-3.1-flash-image-preview"  # Nano Banana 2, ~seconds
 DEFAULT_MODEL_HIGH = "openai/gpt-5.4-image-2"                 # premium, ~3 min
+DEFAULT_MODEL = DEFAULT_MODEL_FAST
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 _ASPECT_TO_SIZE = {
     "landscape": "1536x1024",
@@ -525,9 +524,10 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
         "more reference images) and return its file path/URL in the `image` field; "
         "display it with markdown ![description](url-or-path) and the gateway "
         "delivers it. The `fidelity` argument selects the model: 'fast' = Nano "
-        "Banana 2 (a few seconds), 'high' = premium quality (~3 minutes). Default "
-        "to 'fast' and just generate; only use 'high' when the user explicitly asks "
-        "for maximum quality. Pass `reference_images` when the result must contain "
+        "Banana 2 (a few seconds), 'high' = premium quality (~3 minutes). The "
+        "default model is Nano Banana 2, but ask the user to choose fast vs high "
+        "before generating and pass the selected fidelity explicitly. Pass "
+        "`reference_images` when the result must contain "
         "the EXACT official logo or match a real product/photo — the model can't "
         "invent the real logo from a text description, so give it the actual file."
     ),
@@ -547,7 +547,7 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
             "fidelity": {
                 "type": "string",
                 "enum": ["fast", "high"],
-                "description": "'fast' = Nano Banana 2 (~seconds); 'high' = premium model (~3 min).",
+                "description": "Ask the user first. 'fast' = Nano Banana 2 (~seconds); 'high' = premium model (~3 min).",
             },
             "post_id": {
                 "type": "string",
@@ -656,7 +656,7 @@ def register(ctx) -> None:
         check_fn=_image_gen_available,
         requires_env=["OPENROUTER_API_KEY"],
         is_async=False,
-        description="Generate an image (fidelity: fast=Nano Banana 2, high=premium ~3min).",
+        description="Generate an image (ask first; fidelity: fast=Nano Banana 2, high=premium ~3min).",
         emoji="🎨",
         override=True,
     )

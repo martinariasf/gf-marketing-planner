@@ -28,14 +28,16 @@ the brand palette is wrong even if it looks nice — fix it without asking.
 
 ## STEP 1 — Generate
 
-Default to **fast, text-only**. Do NOT ask fast-vs-high; only use
-`fidelity="high"` if the user explicitly asks for maximum/print quality.
+Default model is **Nano Banana 2** via `fidelity="fast"`. Before every image
+generation, ask one short question: whether the user wants **fast / Nano Banana
+2** or **high fidelity** (`fidelity="high"`, premium, slower). Then pass the
+selected fidelity explicitly to `image_generate`.
 
 **Changing/setting the cover of an EXISTING post = ONE call.** Pass `post_id`:
 
 ```
 image_generate(prompt="<scene grounded in the post copy + brand colors/style>",
-               fidelity="fast",
+               fidelity="<fast-or-high-selected-by-user>",
                post_id="p016")
 ```
 

@@ -15,9 +15,12 @@ Enfoque central: **Producción de activos para LinkedIn y redes sociales utiliza
 - **Typography:** `Inter` (Global)
 
 ## Generación de Imágenes y Logos
-- **Por defecto = rápido, solo texto.** Para un cambio normal de imagen de un
-  post, usa `image_generate(post_id=...)` (ver §3) y describe la escena/marca en
-  el prompt. NO incluyas una imagen de referencia si no hace falta fidelidad exacta.
+- **Modelo por defecto = Nano Banana 2 (`fidelity="fast"`).** Antes de generar
+  cualquier imagen, pregunta una vez si la persona quiere rápido / Nano Banana 2
+  o alta fidelidad (`fidelity="high"`). Para un cambio normal de imagen de un
+  post, usa `image_generate(post_id=...)` (ver §3) con la fidelidad elegida y
+  describe la escena/marca en el prompt. NO incluyas una imagen de referencia si
+  no hace falta fidelidad exacta.
 - **Logo / producto EXACTO = imagen de referencia.** El modelo inventa un logo
   INCORRECTO si solo se describe con palabras. Cuando el usuario quiere el logo
   oficial real (o un producto concreto), pásale el archivo real con el argumento
@@ -41,6 +44,10 @@ Enfoque central: **Producción de activos para LinkedIn y redes sociales utiliza
 
 ### 1. Post Lifecycle & Approvals
 **NEVER** edit post status in JSON files directly if you want it to appear in the Audit Log and Kanban board.
+- **Postiz rule:** every Postiz scheduling/publishing action MUST come from a
+  post that is already approved in the `marketing.gfinnov.com` dashboard. Never
+  send a chat-only draft, free-form copy, or unapproved dashboard post directly
+  to Postiz.
 - **Action:** Use `POST /clients/staging-demo/approvals`
 - **Payload:** `{"postId": "p001", "decision": "approved", "note": "Optional reason"}`
 - **Decisions:** `approved`, `rejected`, `in_review`, `scheduled`.
@@ -59,7 +66,7 @@ exists (e.g. "change the image for p016", "make p001's picture yellow"), call
 
 ```
 image_generate(prompt="<detailed prompt from post copy + brand colors>",
-               fidelity="fast",
+               fidelity="<fast-or-high-selected-by-user>",
                post_id="p016")
 ```
 

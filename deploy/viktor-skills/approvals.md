@@ -47,7 +47,12 @@ For each `<id>`:
    ```
    2026-05-20T17:32:00Z  approve  p041  Martin  via=telegram
    ```
-6. Queue Postiz: call the Postiz API with the post's channel, scheduled date, copy, image, hashtags. Store the returned job id in `post.publishing.postizJobId`. Set `post.status = "scheduled"` and write the file again.
+6. Queue Postiz only after the post is approved in the `marketing.gfinnov.com`
+   dashboard. Never schedule chat-only copy, a draft, or an unapproved post.
+   Call the Postiz API/tool with the approved post's channel, scheduled date,
+   copy, image, and hashtags. Store the returned job id in
+   `post.publishing.postizJobId`. Set `post.status = "scheduled"` and write the
+   file again.
 7. Reply on Telegram with one line per id: `✅ p041 approved, scheduled in Postiz (job pz_xxx)`.
 
 ### `reject <id> reason="..."`
@@ -84,6 +89,9 @@ If `git push` fails (rate-limited, conflict, etc.) — **do not retry destructiv
 ## Idempotence + safety
 
 - An `approve` on an already-approved post is a no-op (return existing state). Never double-schedule in Postiz.
+- Postiz publishing must always originate from an approved dashboard post. If
+  there is no approved post id, stop and ask the user to approve/create the post
+  in the dashboard first.
 - An action on a missing post id → reply `⚠️ <id> not found` and continue with the remaining ids in the batch.
 - An action on a post the sender doesn't have permission for → reply `⚠️ <sender> cannot approve for <slug>; <owner> must do it.` (Permissions list lives in `brief.json` under `boundaries`; for now: anyone in the `viktorNeedsApprovalFor` allowlist can approve. Default allowlist: `Lena` + `Martin` for FitVibe.)
 - Never auto-approve. Never bypass the literal grammar.

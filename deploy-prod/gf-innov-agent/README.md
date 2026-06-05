@@ -15,9 +15,11 @@ API-integrated persona.
   `marketing`, `staging-demo` → `gf-internal`, `mp-staging-api` → `mp-prod-api`),
   with the staging-only "install anything / passwordless sudo" permission removed
   for production. Gateway key is a placeholder.
-- Skills + plugins: **reuse** `deploy-staging/staging-demo-agent/{skills,plugins}`
+- Skills + plugins: reuse `deploy-staging/staging-demo-agent/{skills,plugins}`
   (`copywriting`, `image-generation`, `marketing-planner-staging`,
-  `image_gen_openrouter`) — copy them in at deploy; don't fork.
+  `image_gen_openrouter`) and this folder's prod-only `plugins/postiz`. The Postiz
+  tool refuses to schedule anything that is not an already-approved
+  `marketing.gfinnov.com` dashboard post.
 
 ## Deploy checklist (after website cutover)
 1. **Back up** the live config: `cp /opt/agents/gf-innov/config.yaml{,.bak.$(date +%s)}`.
@@ -29,6 +31,8 @@ API-integrated persona.
    - `API_BASE=https://marketing.gfinnov.com/api/v1`
    - `API_TOKEN=<prod agent token, scope gf-internal — from 1Password>`
    - `CLIENT_SLUG=gf-internal` (already set)
+   - `OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview` (Nano Banana 2 default)
+   - `PUBLIC_ASSETS_BASE=https://marketing.gfinnov.com/api/v1`
    - Telegram bot token (8998…), Postiz key — already provided.
 5. **VERIFY before `up`:**
    - In-container assets path in the persona (`/opt/marketing-planner/client/assets/`)

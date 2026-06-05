@@ -1,0 +1,11 @@
+name: postiz
+version: 0.2.0
+description: "Postiz integration via the official `postiz` CLI. Lists connected accounts, uploads media, and schedules only already-approved marketing.gfinnov.com dashboard posts by shelling out to the CLI (preferred) instead of hitting REST directly."
+author: gf-innovative-solutions
+kind: backend
+requires_env:
+  - POSTIZ_API_KEY
+provides_tools:
+  - postiz_list_integrations
+  - postiz_schedule_post
+  - postiz_list_posts

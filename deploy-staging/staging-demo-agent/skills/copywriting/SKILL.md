@@ -36,9 +36,10 @@ without asking permission.
 - Match the channel: LinkedIn long-form by default; concise + hook-first for
   Instagram/X. One clear CTA.
 - Stay brand-consistent and concise. No filler phrases.
-- Show the proposed text + platform settings for confirmation BEFORE you
-  schedule/publish via Postiz. For in-dashboard edits (copy tweak, title) just
-  act.
+- Show the proposed text + platform settings in the dashboard for approval.
+  Postiz scheduling/publishing is allowed ONLY after the post is approved in the
+  `marketing.gfinnov.com` dashboard. Never schedule chat-only copy or an
+  unapproved draft directly to Postiz.
 
 ## STEP 2 — Write the change back via the API (not the JSON file)
 
