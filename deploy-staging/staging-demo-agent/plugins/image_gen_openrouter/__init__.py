@@ -358,6 +358,18 @@ def _resolve_image_bytes(image_ref: str) -> bytes:
         return f.read()
 
 
+def _mime_from_bytes(data: bytes, fallback_ref: str) -> str:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+        return "image/gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return mimetypes.guess_type(fallback_ref)[0] or "image/png"
+
+
 def _reference_to_data_uri(ref: str) -> str:
     """Turn a reference-image pointer into an inline `data:` URI for the request.
 
@@ -379,7 +391,7 @@ def _reference_to_data_uri(ref: str) -> str:
             slug = os.environ.get("CLIENT_SLUG", "")
             resolved = f"{_public_assets_base()}/clients/{slug}/assets/files/{ref}"
     data = _resolve_image_bytes(resolved)
-    mime = mimetypes.guess_type(resolved)[0] or "image/png"
+    mime = _mime_from_bytes(data, resolved)
     b64 = base64.b64encode(data).decode("ascii")
     return f"data:{mime};base64,{b64}"
 
@@ -610,6 +622,11 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         model=model,
         reference_images=refs,
     )
+    media_path = ""
+    if isinstance(result, dict) and result.get("image") and not result.get("error"):
+        candidate = str(result["image"])
+        if candidate.startswith("/") or candidate.startswith("~/"):
+            media_path = candidate
     # Deterministically wire the freshly generated image to the post, so the
     # post's cover actually updates even if the agent would otherwise skip the
     # mandatory PATCH. Only when generation succeeded and a post id was given.
@@ -641,6 +658,11 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         result["asset"] = pub
         if pub.get("published") and pub.get("url"):
             result["image"] = pub["url"]
+    if isinstance(result, dict) and media_path:
+        # Hermes scans tool results for MEDIA:/absolute/path and appends unseen
+        # entries to the final response, which makes Telegram send the generated
+        # image as a native photo even when the model only writes a text reply.
+        result["media"] = f"MEDIA:{media_path}"
     return json.dumps(result)
 
 
