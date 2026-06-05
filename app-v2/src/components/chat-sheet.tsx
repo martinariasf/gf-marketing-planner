@@ -30,10 +30,12 @@ import {
   FileText,
 } from 'lucide-react'
 import {
+  apiLoadAgentJobs,
   apiChatStream,
   apiLoadChatHistory,
   isApiEnabled,
   isWriteTool,
+  type AgentJob,
   type ChatTurn,
 } from '@/lib/api-client'
 import {
@@ -168,6 +170,7 @@ export function ChatSheet({
 }) {
   const t = useT()
   const [messages, setMessages] = useState<Message[]>([])
+  const [agentJobs, setAgentJobs] = useState<AgentJob[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -261,7 +264,7 @@ export function ChatSheet({
     // the in-memory messages are the source of truth.
     loadedThreadRef.current = thread
     let cancelled = false
-    apiLoadChatHistory(slug, thread).then((items) => {
+    Promise.all([apiLoadChatHistory(slug, thread), apiLoadAgentJobs(slug, thread)]).then(([items, jobs]) => {
       if (cancelled) return
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -275,6 +278,7 @@ export function ChatSheet({
           }
         })
       setMessages(orderMessages(hist))
+      setAgentJobs(jobs)
     })
     return () => {
       cancelled = true
@@ -590,7 +594,12 @@ export function ChatSheet({
                 run finishes, so surface that instead of looking "forgotten". */}
             {!busy &&
               messages.length > 0 &&
-              messages[messages.length - 1].role === 'user' && (
+              messages[messages.length - 1].role === 'user' &&
+              (() => {
+                const last = messages[messages.length - 1]
+                const linkedJob = agentJobs.find((job) => job.userMessageId && job.userMessageId === last.id)
+                return linkedJob?.status === 'queued' || linkedJob?.status === 'running'
+              })() && (
                 <div className="flex items-center gap-2 text-[12px] text-ink-muted px-1">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" />
                   {t('chat.stillWorking')}

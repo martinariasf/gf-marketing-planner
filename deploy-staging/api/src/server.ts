@@ -24,8 +24,10 @@ import { integration } from './routes/integration.js'
 import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
 import { planningConfig } from './routes/planningConfig.js'
+import { agentJobsRoute } from './routes/agentJobs.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
+import { startAgentJobReconciler } from './agentJobs.js'
 import { registerApiDocs } from './openapi-docs.js'
 import { problem } from './problem.js'
 
@@ -88,6 +90,7 @@ app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)
 app.route('/api/v1', planningConfig)
+app.route('/api/v1', agentJobsRoute)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)
@@ -113,6 +116,7 @@ app.onError((err, c) => {
 // boots so /health stays green while we investigate.
 if (env.pbAdminEmail && env.pbAdminPassword) {
   ensureCollections().catch((err) => console.error('[ensureCollections] failed', err))
+  startAgentJobReconciler()
 }
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {

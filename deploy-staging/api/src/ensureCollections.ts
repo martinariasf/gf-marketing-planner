@@ -82,6 +82,29 @@ const collections: CollectionSpec[] = [
   // staging-only writes go into these collections and read endpoints merge
   // disk + overlay before returning.
   {
+    name: 'agent_jobs',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'thread', type: 'text', max: 100 },
+      { name: 'source', type: 'select', required: true, values: ['dashboard_chat', 'telegram', 'n8n', 'make', 'claude', 'custom'] },
+      { name: 'status', type: 'select', required: true, values: ['queued', 'running', 'completed', 'failed', 'timed_out', 'recovered'] },
+      { name: 'input', type: 'json', maxSize: 5_000_000 },
+      { name: 'result', type: 'json', maxSize: 5_000_000 },
+      { name: 'error', type: 'json', maxSize: 1_000_000 },
+      { name: 'provider', type: 'text', max: 80 },
+      { name: 'providerRunId', type: 'text', max: 160 },
+      { name: 'userMessageId', type: 'text', max: 100 },
+      { name: 'assistantMessageId', type: 'text', max: 100 },
+      { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+      { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
+      { name: 'completedAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_agent_jobs_thread_created` ON `agent_jobs` (`slug`,`thread`,`created`)',
+      'CREATE INDEX `idx_agent_jobs_status_updated` ON `agent_jobs` (`status`,`updated`)',
+    ],
+  },
+  {
     name: 'posts_patches',
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },

@@ -576,3 +576,39 @@ export async function apiLoadChatHistory(
     return []
   }
 }
+
+export type AgentJobStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'timed_out'
+  | 'recovered'
+
+export interface AgentJob {
+  id: string
+  slug: string
+  thread: string
+  source: string
+  status: AgentJobStatus
+  userMessageId?: string
+  assistantMessageId?: string
+  created?: string
+  updated?: string
+  completedAt?: string
+}
+
+export async function apiLoadAgentJobs(
+  slug: string,
+  thread = 'default',
+  limit = 20,
+): Promise<AgentJob[]> {
+  try {
+    const r = await apiGet<{ items: AgentJob[] }>(
+      `/clients/${slug}/agent-jobs?thread=${encodeURIComponent(thread)}&limit=${limit}`,
+    )
+    return r.items
+  } catch {
+    return []
+  }
+}
