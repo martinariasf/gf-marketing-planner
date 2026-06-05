@@ -350,6 +350,8 @@ display:
   platforms:
     telegram:
       tool_progress: new
+    api_server:
+      tool_progress: off
 
 # =============================================================================
 # Approval policy. The api_server (in-app dashboard chat) has no human to
