@@ -44,8 +44,10 @@ Last updated: 2026-06-05
 | 1.5 | Data migration: seed prod PB from prod JSON | ✅ | **2026-06-05** seeded `gf-internal` + `fitvibe-demo` (clients/briefs/plans/goals/learnings). Stale migrations `1748200000/1748400000` retired (PB-version incompat); 16 collections live. Superuser created. |
 | 1.5a | Verify inner stack in isolation | ✅ | health `pb:up`; routing via `mp-prod-caddy` OK; admin token→both clients; agent token (gf-internal)→only gf-internal (no cross-client leak) |
 | 1.6 | Flip SPA to API mode in `deploy.yml` (`VITE_API_BASE`) | ✅ | **2026-06-05** `deploy.yml` rewritten: API-mode build (`VITE_API_BASE`/`VITE_PB_URL` → marketing.gfinnov.com), syncs `deploy-prod/` + clean `pb-migrations` (--delete) + `deploy-staging/api`, manages `mp-prod-inner` containers. Never touches outer Caddyfile. Committed on `experimental`. |
-| 1.7 | Merge `experimental` → `main` (PR) | 🟡 | **in progress** — triggers prod deploy (rsyncs API-mode bundle → flips live SPA) |
-| 1.8 | Verify live (API mode grep, health, clients render) | ⬜ | |
+| 1.7 | Merge `experimental` → `main` (PR) | ✅ | **2026-06-05** PR #1 merged; `deploy.yml` run 27005452086 green (build→rsync→containers) |
+| 1.8 | Verify live (API mode grep, health, clients render) | ✅ | **2026-06-05** API-mode bundle (`api-client-QwInRnKs.js`↦api/v1); all 3 `mp-prod-*` Up; `/api/v1/health` pb:up via public domain; per-client scoping intact; SPA 200 |
+
+**✅ WEBSITE CUTOVER COMPLETE 2026-06-05** — marketing.gfinnov.com is full-parity (Hono API + PocketBase, API-mode SPA, per-client token exchange). In-app chat still disabled (`mp-prod-api` HERMES_* blank) until the agent half wires it.
 
 ## Phase 2 — Agent promotion
 
@@ -53,11 +55,13 @@ Last updated: 2026-06-05
 |---|------|--------|-------|
 | 2.0 | **Scrub secret in `config.yaml`** + commit agent source | ✅ | gateway key scrubbed to placeholder (env-interp ruled out); agent source committed+pushed; real key stays on box only |
 | 2.1 | Pick prod slug | ✅ | Viktor-v2 / GF Innov → existing live agent `viktor-v2-gf-innov` at `/opt/agents/gf-innov`, client slug `gf-internal` |
-| 2.2 | Clone/upgrade agent | 🟡 | **Inert prep done**: `deploy-prod/gf-innov-agent/` (prod-adapted persona + README). Live deploy still **COUPLED to website cutover** — don't break the live file-mode bot. |
-| 2.3 | Wire prod env (.env) | 🟡 | have Telegram + Postiz tokens + generated keys (gateway/agent/admin); OpenRouter key already on box; API persona blocked on prod API |
-| 2.4 | Point prod chat at new agent | ⬜ | confirmation gate |
-| 2.5 | Smoke test (hi/suggest/draft/approve) | ⬜ | |
-| 2.6 | Retire `hermes-marketing-demo` (deliberate, last) | ⬜ | |
+| 2.2 | Clone/upgrade agent | ✅ | **2026-06-05** live agent upgraded to API persona. Backups taken (`*.bak.20260605-085952`). Remounted client dir `→ /opt/marketing-planner/client:rw` (asset path), joined `marketing-planner_default`, injected real gateway key on box. |
+| 2.3 | Wire prod env (.env) | ✅ | **2026-06-05** added `API_BASE=http://mp-prod-api:8080/api/v1` + `API_TOKEN` (agent scope gf-internal) to agent `.env`. Telegram/Postiz/OpenRouter unchanged (verified provided tokens == live). |
+| 2.4 | Point prod chat at new agent | ✅ | **2026-06-05** `mp-prod-api` `.env` `HERMES_BASE_URL=http://viktor-v2-gf-innov:8642` + `HERMES_API_KEY`=gateway key; recreated. Gateway `/health` reachable from api. |
+| 2.5 | Smoke test (chat e2e) | ✅ | **2026-06-05** public `chat/stream` → Viktor replied + persisted (`messageId`); agent→API `GET /brief` 200; assets path writable. ⚠️ replied ES to EN prompt — **known language-mirroring flakiness** (pre-existing, also on staging), persona/model tuning, not infra. `jq` missing in container (python3 fallback OK). |
+| 2.6 | Retire `hermes-marketing-demo` (deliberate, last) | n/a | We upgraded the EXISTING gf-innov agent (no parallel agent created). `hermes-marketing-demo` is the separate gisela demo — left untouched per locked decision. Nothing to retire. |
+
+**✅ AGENT PROMOTION COMPLETE 2026-06-05** — `viktor-v2-gf-innov` runs the API-integrated persona, in-app chat live on marketing.gfinnov.com. Follow-ups (non-blocking): tune language mirroring; add `jq` to the image if manual manifest flow is wanted.
 
 ---
 
