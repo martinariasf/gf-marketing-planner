@@ -1,0 +1,33 @@
+name: gf-innov
+
+services:
+  gateway:
+    build: .
+    image: viktor-v2:latest
+    container_name: viktor-v2-gf-innov
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/opt/data
+      - ./plugins:/opt/data/plugins:ro
+      - ./config.yaml:/opt/data/config.yaml:ro
+      # API-mode cutover: mount ONLY the per-client ASSETS dir at the path the
+      # image plugin expects, so generated assets land where mp-prod-api serves
+      # them. Locked down 2026-06-05: the agent must NOT have filesystem write
+      # access to posts/brief/etc — all post + status writes go through the REST
+      # API (which owns the data + PocketBase). This prevents the agent from
+      # editing/clobbering disk seed files (it corrupted p008.json on 2026-06-05
+      # by shelling around the API). assets/ is chowned to uid 10000 so the agent
+      # can write generated images; mp-prod-api (uid 1000) reads them as world-r.
+      - /opt/marketing-planner/clients/gf-internal/assets:/opt/marketing-planner/client/assets:rw
+    environment:
+      - HERMES_UID=10000
+      - HERMES_GID=10000
+    command: ["gateway", "run"]
+    networks:
+      - shared
+
+networks:
+  shared:
+    name: marketing-planner_default
+    external: true
