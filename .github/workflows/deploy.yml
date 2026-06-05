@@ -126,6 +126,21 @@ jobs:
             clients/fitvibe-demo/ \
             "$USER@$HOST:/opt/marketing-planner/clients/fitvibe-demo/"
 
+      - name: Ensure the Hermes agent can write client assets (uid 10000)
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          # The seed rsync above runs as root and resets ownership of the client
+          # assets dirs. The Hermes agent (viktor-v2-*) runs as uid 10000 and
+          # writes generated images straight into clients/<slug>/assets/ (the
+          # image plugin's deterministic post_id publish path). Without this the
+          # agent loses write access -> image generation silently fails and the
+          # agent flails in the terminal. mp-prod-api (uid 1000) only needs read,
+          # which the 0644 files provide.
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'chown -R 10000:10000 /opt/marketing-planner/clients/*/assets 2>/dev/null || true'
+
       - name: Build + start prod api & caddy (inner stack)
         env:
           HOST: ${{ secrets.HETZNER_HOST }}
