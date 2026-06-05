@@ -52,7 +52,7 @@ Last updated: 2026-06-05
 |---|------|--------|-------|
 | 2.0 | **Scrub secret in `config.yaml`** + commit agent source | ✅ | gateway key scrubbed to placeholder (env-interp ruled out); agent source committed+pushed; real key stays on box only |
 | 2.1 | Pick prod slug | ✅ | Viktor-v2 / GF Innov → existing live agent `viktor-v2-gf-innov` at `/opt/agents/gf-innov`, client slug `gf-internal` |
-| 2.2 | Clone/upgrade agent | ⛔ | **COUPLED to website cutover** — live agent is file-mode; API persona needs prod `/api/v1`. Don't break the live bot. |
+| 2.2 | Clone/upgrade agent | 🟡 | **Inert prep done**: `deploy-prod/gf-innov-agent/` (prod-adapted persona + README). Live deploy still **COUPLED to website cutover** — don't break the live file-mode bot. |
 | 2.3 | Wire prod env (.env) | 🟡 | have Telegram + Postiz tokens + generated keys (gateway/agent/admin); OpenRouter key already on box; API persona blocked on prod API |
 | 2.4 | Point prod chat at new agent | ⬜ | confirmation gate |
 | 2.5 | Smoke test (hi/suggest/draft/approve) | ⬜ | |
