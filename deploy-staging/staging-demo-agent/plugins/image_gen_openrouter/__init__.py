@@ -189,7 +189,7 @@ class OpenRouterImageGenProvider(ImageGenProvider):
                 + f"{len(ref_blocks)} reference image(s) are attached. Reproduce them "
                 "EXACTLY and FAITHFULLY in the output — composite the provided brand "
                 "logo / asset unaltered (do not redraw, restyle, recolor, or omit it). "
-                "Place it cleanly as instructed (typically the bottom-right corner)."
+                "Place each reference cleanly exactly where the prompt instructs."
             )
         content_blocks: List[Dict[str, Any]] = [{"type": "text", "text": text}]
         content_blocks.extend(ref_blocks)
@@ -345,13 +345,27 @@ def _api_base() -> str:
     return os.environ.get("API_BASE", "").rstrip("/")
 
 
+def _api_headers() -> Dict[str, str]:
+    token = os.environ.get("API_TOKEN", "")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def _internal_api_url(url: str) -> str:
+    """Route our own public dashboard API URLs through the container network."""
+    api_base = _api_base()
+    if not api_base or "/api/v1/" not in url:
+        return url
+    return f"{api_base}/{url.split('/api/v1/', 1)[1]}"
+
+
 def _resolve_image_bytes(image_ref: str) -> bytes:
     """`image_ref` is a local cache file path, an http(s) URL, or a data: URI."""
     if image_ref.startswith("data:"):
         return base64.b64decode(image_ref.split(",", 1)[1])
     if image_ref.startswith("http://") or image_ref.startswith("https://"):
+        resolved_url = _internal_api_url(image_ref)
         with httpx.Client(timeout=60.0) as client:
-            r = client.get(image_ref)
+            r = client.get(resolved_url, headers=_api_headers())
             r.raise_for_status()
             return r.content
     with open(image_ref, "rb") as f:
@@ -461,6 +475,54 @@ def _append_manifest(dest_dir: str, filename: str, url: str, post_id: str) -> No
     os.replace(tmp, manifest_path)
 
 
+def _current_post_image(post_id: str) -> str:
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    if not (slug and api_base and post_id):
+        return ""
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                f"{api_base}/clients/{slug}/posts/{post_id}",
+                headers=_api_headers(),
+            )
+            r.raise_for_status()
+            return str((r.json() or {}).get("image") or "")
+    except Exception:
+        logger.debug("could not fetch current image for post %r", post_id, exc_info=True)
+        return ""
+
+
+def _branding_logo_refs() -> List[str]:
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    if not (slug and api_base):
+        return []
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                f"{api_base}/clients/{slug}/brief",
+                headers=_api_headers(),
+            )
+            r.raise_for_status()
+            logos = (((r.json() or {}).get("data") or {}).get("branding") or {}).get("logos") or []
+    except Exception:
+        logger.debug("could not fetch branding logos", exc_info=True)
+        return []
+    refs: List[str] = []
+    for item in logos:
+        if isinstance(item, dict) and item.get("url"):
+            refs.append(str(item["url"]))
+        elif isinstance(item, str):
+            refs.append(item)
+    return refs
+
+
+def _append_unique_ref(refs: List[str], ref: str) -> None:
+    if ref and ref not in refs:
+        refs.append(ref)
+
+
 def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
     """Copy the generated image into the client assets dir and PATCH the post.
 
@@ -496,7 +558,7 @@ def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
     except Exception:
         logger.debug("manifest append failed", exc_info=True)
 
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    headers = {**_api_headers(), "Content-Type": "application/json"}
     try:
         with httpx.Client(timeout=30.0) as client:
             patch = client.patch(
@@ -612,6 +674,13 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     refs = args.get("reference_images") or args.get("reference_image") or []
     if isinstance(refs, str):
         refs = [refs]
+    refs = [str(ref) for ref in refs if str(ref).strip()]
+    current_image = _current_post_image(post_id) if post_id else ""
+    if current_image:
+        _append_unique_ref(refs, current_image)
+    if "logo" in prompt.lower():
+        for logo_ref in _branding_logo_refs():
+            _append_unique_ref(refs, logo_ref)
     logger.info(
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,
