@@ -48,14 +48,23 @@ authExchange.get('/auth/exchange', async (c) => {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
   )
-  const role = adminUsers.has(user.toLowerCase()) ? 'admin' : 'dash'
+  const isAdmin = adminUsers.has(user.toLowerCase())
+  const role = isAdmin ? 'admin' : 'dash'
+
+  // Admins operate across all clients (slug:'*'). Per-client basicauth users are
+  // scoped to their OWN client so one client login cannot read another client's
+  // data — in production the basicauth username IS the client slug (e.g.
+  // `gf-internal`, `fitvibe-demo`). requireScope + the picker filter enforce the
+  // rest. Staging's only exchange user is the admin `staging`, so this stays
+  // slug:'*' there (no behavior change on staging).
+  const slug = isAdmin ? '*' : user
 
   const token = `dash_${randomBytes(24).toString('base64url')}`
   const expiresAt = Date.now() + TTL_MS
   const principal: TokenPrincipal = {
     token,
     role: role as 'admin' | 'dash',
-    slug: '*',
+    slug,
     label: `basicauth:${user}`,
   }
   registerEphemeralToken(principal, expiresAt)
