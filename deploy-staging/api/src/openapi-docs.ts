@@ -121,6 +121,24 @@ const DataDoc = z.object({ data: z.unknown() }).openapi('DataDoc', {
 const ItemList = (item: z.ZodTypeAny, name: string) =>
   z.object({ items: z.array(item) }).openapi(name)
 
+const AgentJob = z
+  .object({
+    id: z.string(),
+    slug: z.string(),
+    thread: z.string().optional(),
+    source: z.enum(['dashboard_chat', 'telegram', 'n8n', 'make', 'claude', 'custom']),
+    status: z.enum(['queued', 'running', 'completed', 'failed', 'timed_out', 'recovered']),
+    provider: z.string().optional(),
+    providerRunId: z.string().optional(),
+    userMessageId: z.string().optional(),
+    assistantMessageId: z.string().optional(),
+    created: z.string().optional(),
+    updated: z.string().optional(),
+    completedAt: z.string().optional(),
+  })
+  .passthrough()
+  .openapi('AgentJob')
+
 // ── Registration ─────────────────────────────────────────────────────────────
 
 export function registerApiDocs(app: OpenAPIHono): void {
@@ -140,6 +158,28 @@ export function registerApiDocs(app: OpenAPIHono): void {
   })
 
   // ── Strategy (user-owned) reads + writes ───────────────────────────────────
+  reg({
+    method: 'get',
+    path: '/api/v1/clients/{slug}/agent-jobs',
+    tags: ['agent jobs'],
+    summary: 'List durable platform jobs',
+    description:
+      'Returns recent platform-owned jobs for a client/thread. Dashboard chat uses this to distinguish truly running work from completed/recovered/failed jobs.',
+    security: bearer,
+    request: {
+      params: slugParam,
+      query: z.object({
+        thread: z.string().optional().openapi({ example: 'dash-staging-demo' }),
+        limit: z.coerce.number().optional().openapi({ example: 20 }),
+      }),
+    },
+    responses: {
+      200: { description: 'Recent jobs', content: json(ItemList(AgentJob, 'AgentJobList')) },
+      401: errs[401],
+      403: errs[403],
+    },
+  })
+
   for (const res of ['brief', 'plan', 'goals', 'learnings'] as const) {
     reg({
       method: 'get',

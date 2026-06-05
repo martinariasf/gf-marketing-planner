@@ -24,6 +24,11 @@ import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { env } from '../env.js'
 import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
+import {
+  createDashboardChatJob,
+  finalizeAgentJob,
+  updateAgentJob,
+} from '../agentJobs.js'
 
 export const chat = new OpenAPIHono<AppEnv>()
 chat.use('/clients/:slug/chat/*', rateLimit({ windowMs: 60_000, max: 10 }, 'chat'))
@@ -153,8 +158,9 @@ chat.post(
     // create and read a snapshot missing the just-sent message — so it appeared
     // "deleted" from the conversation. Awaiting closes that window. A PB hiccup
     // is logged but non-fatal so the chat still proceeds.
+    let userMessageId: string | null = null
     try {
-      await withPb((pb) =>
+      const rec = await withPb((pb) =>
         pb.collection('chat_messages').create({
           id: mkMsgId(),
           slug,
@@ -164,9 +170,17 @@ chat.post(
           toolEvent: null,
         }),
       )
+      userMessageId = (rec as { id: string }).id
     } catch (err) {
       console.warn('[chat] persist user msg failed', err)
     }
+
+    const job = await createDashboardChatJob({
+      slug,
+      thread,
+      userMessageId,
+      input: { message, history },
+    })
 
     return stream(c, async (s) => {
       c.header('Content-Type', 'text/event-stream')
@@ -175,6 +189,7 @@ chat.post(
 
       // Start the run on Hermes.
       let runId: string | null = null
+      let jobStatus: 'running' | 'completed' | 'failed' | 'timed_out' | 'recovered' = 'running'
       let assistantFinalText = ''
       let sawRunCompleted = false
       let sawToolActivity = false
@@ -231,10 +246,19 @@ chat.post(
         const runJson = (await runRes.json()) as { run_id?: string }
         runId = runJson.run_id ?? null
         if (!runId) throw new Error('Hermes did not return a run_id')
+        await updateAgentJob(job.id, {
+          status: 'running',
+          provider: 'hermes',
+          providerRunId: runId,
+        })
 
         for await (const ev of hermesRunEvents(runId, ac.signal)) {
           if (ev.event === 'tool.started') {
             sawToolActivity = true
+            void updateAgentJob(job.id, {
+              status: 'running',
+              result: { sawToolActivity: true, lastEvent: ev.event, tool: ev.tool ?? 'tool' },
+            })
             const id = `t${++toolCounter}`
             toolIds.set(ev.tool ?? `tool-${toolCounter}`, id)
             await safeWrite(
@@ -246,6 +270,10 @@ chat.post(
             )
           } else if (ev.event === 'tool.completed') {
             sawToolActivity = true
+            void updateAgentJob(job.id, {
+              status: 'running',
+              result: { sawToolActivity: true, lastEvent: ev.event, tool: ev.tool ?? 'tool' },
+            })
             const id = toolIds.get(ev.tool ?? '') ?? `t${++toolCounter}`
             const ok = !ev.error
             await safeWrite(
@@ -263,6 +291,7 @@ chat.post(
             }
           } else if (ev.event === 'run.completed') {
             sawRunCompleted = true
+            jobStatus = 'completed'
             assistantFinalText = ev.output ?? ''
             if (!assistantFinalText.trim() && sawToolActivity) {
               assistantFinalText =
@@ -275,15 +304,24 @@ chat.post(
             }
             break
           } else if (ev.event === 'run.failed') {
+            jobStatus = 'failed'
             await safeWrite(sse('error', { detail: String(ev.error ?? 'run failed') }))
             break
           } else if (ev.event === 'run.cancelled') {
+            jobStatus = 'failed'
             await safeWrite(sse('error', { detail: 'run cancelled' }))
             break
           }
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : 'unknown'
+        jobStatus = ac.signal.aborted ? 'timed_out' : 'failed'
+        await updateAgentJob(job.id, {
+          status: jobStatus,
+          provider: 'hermes',
+          providerRunId: runId ?? '',
+          error: { detail },
+        })
         await safeWrite(sse('error', { detail }))
       } finally {
         clearTimeout(hardTimeout)
@@ -291,6 +329,7 @@ chat.post(
       }
 
       if (!assistantFinalText.trim() && runId && sawToolActivity && !sawRunCompleted) {
+        jobStatus = 'recovered'
         assistantFinalText =
           'I saw tool activity for this request, but the Hermes event stream ended before a final reply arrived. Refresh the dashboard if you do not see the update yet.'
         await safeWrite(sse('token', { text: assistantFinalText }))
@@ -301,23 +340,17 @@ chat.post(
       // assistant bubble. A reply that finished server-side after the client
       // left still lands here because we kept consuming events above.
       try {
-        let messageId: string | null = null
-        if (assistantFinalText.trim()) {
-          const rec = await withPb((pb) =>
-            pb.collection('chat_messages').create({
-              id: mkMsgId(),
-              slug,
-              thread,
-              role: 'assistant',
-              content: assistantFinalText,
-              toolEvent: {
-                actor: principal.label ?? principal.token.slice(0, 12),
-                runId,
-              },
-            }),
-          )
-          messageId = (rec as { id: string }).id
-        }
+        const messageId = await finalizeAgentJob({
+          jobId: job.id,
+          slug,
+          thread,
+          status: jobStatus,
+          output: assistantFinalText,
+          error: jobStatus === 'failed' || jobStatus === 'timed_out' ? 'Hermes stream ended without a completed run.' : null,
+          providerRunId: runId,
+          actor: principal.label ?? principal.token.slice(0, 12),
+          sawToolActivity,
+        })
         await safeWrite(sse('done', { messageId }))
       } catch (err) {
         console.warn('[chat] persist assistant msg failed', err)

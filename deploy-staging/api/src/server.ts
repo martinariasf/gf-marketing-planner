@@ -24,8 +24,10 @@ import { integration } from './routes/integration.js'
 import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
 import { planningConfig } from './routes/planningConfig.js'
+import { agentJobsRoute } from './routes/agentJobs.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
+import { startAgentJobReconciler } from './agentJobs.js'
 import { registerApiDocs } from './openapi-docs.js'
 import { problem } from './problem.js'
 
@@ -37,6 +39,7 @@ app.use('*', cors({ origin: ['http://localhost:5173', 'http://localhost:4173'], 
 app.use('*', logger())
 // Phase 7: global rate limit (120 req/min per token+IP). Stricter caps on
 // /chat/stream live in routes/chat.ts.
+app.use('/api/v1', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
 app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
 
 // Document the plain-Hono routes (posts/branding/suggestions/approvals/assets/…)
@@ -75,6 +78,16 @@ app.get(
   }),
 )
 
+app.get('/api/v1', (c) =>
+  c.json({
+    name: 'marketing-planner-api',
+    release: env.release,
+    health: '/api/v1/health',
+    docs: '/api/v1/docs',
+    openapi: '/api/v1/openapi.json',
+  }),
+)
+
 // Mount under /api/v1. authExchange is mounted FIRST because the other
 // subapps register `use('*', requireAuth)` which would otherwise intercept
 // /auth/exchange and 401 it before our handler runs.
@@ -88,13 +101,22 @@ app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)
 app.route('/api/v1', planningConfig)
+app.route('/api/v1', agentJobsRoute)
 app.route('/api/v1', auditRoute)
 app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)
 app.route('/api/v1', integration)
 
 // Friendly root.
-app.get('/', (c) => c.json({ name: 'mp-staging-api', docs: '/api/v1/docs' }))
+app.get('/', (c) =>
+  c.json({
+    name: 'marketing-planner-api',
+    release: env.release,
+    health: '/api/v1/health',
+    docs: '/api/v1/docs',
+    openapi: '/api/v1/openapi.json',
+  }),
+)
 
 // 404 + error handlers in problem+json shape.
 app.notFound((c) =>
@@ -113,6 +135,7 @@ app.onError((err, c) => {
 // boots so /health stays green while we investigate.
 if (env.pbAdminEmail && env.pbAdminPassword) {
   ensureCollections().catch((err) => console.error('[ensureCollections] failed', err))
+  startAgentJobReconciler()
 }
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
