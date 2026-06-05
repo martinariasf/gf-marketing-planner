@@ -39,11 +39,12 @@ Last updated: 2026-06-05
 |---|------|--------|-------|
 | 1.1 | Pre-flight (experimental pushed+green, main 0-ahead, secrets gathered) | ✅ | main 0-ahead; experimental committed+pushed; `deploy-staging.yml` green; staging healthy (`pb:up`, API-mode). Prod secrets still TBD. |
 | 1.2 | Add prod deploy assets to repo (`deploy-prod/` mirror) | ✅ | `deploy-prod/{docker-compose.yml,Caddyfile.prod,pb-run.prod.sh,.env.example,README.md}`; inert (no CI trigger); API image reuses `deploy-staging/api` |
-| 1.3 | Edit shared outer Caddyfile prod block (⚠️ highest risk) | ⛔ | **confirmation gate** + auth decision |
-| 1.4 | Stand up `mp-prod-pb` + `mp-prod-api` + `mp-prod-caddy` | ⬜ | |
-| 1.5 | Data migration: seed prod PB from prod JSON | ⛔ | **confirmation gate** + needs prod PB admin creds |
-| 1.6 | Flip SPA to API mode in `deploy.yml` (`VITE_API_BASE`) | ⬜ | |
-| 1.7 | Merge `experimental` → `main` (PR) | ⛔ | **confirmation gate** — triggers prod deploy |
+| 1.3 | Edit shared outer Caddyfile prod block (⚠️ highest risk) | ✅ | **2026-06-05** additive API routes added (`/api/v1/*`, `/api/v1/auth/exchange` w/ per-client basicauth realm, `/api/realtime`); backup taken, `caddy validate` OK, graceful reload; live site verified intact (index 200, SPA 200) + per-client exchange chain proven (gf-internal→gf-internal only, fitvibe→fitvibe only) |
+| 1.4 | Stand up `mp-prod-pb` + `mp-prod-api` + `mp-prod-caddy` | ✅ | **2026-06-05** all three Up on `marketing-planner_default`; isolated (outer Caddy not routing to them yet) |
+| 1.5 | Data migration: seed prod PB from prod JSON | ✅ | **2026-06-05** seeded `gf-internal` + `fitvibe-demo` (clients/briefs/plans/goals/learnings). Stale migrations `1748200000/1748400000` retired (PB-version incompat); 16 collections live. Superuser created. |
+| 1.5a | Verify inner stack in isolation | ✅ | health `pb:up`; routing via `mp-prod-caddy` OK; admin token→both clients; agent token (gf-internal)→only gf-internal (no cross-client leak) |
+| 1.6 | Flip SPA to API mode in `deploy.yml` (`VITE_API_BASE`) | ✅ | **2026-06-05** `deploy.yml` rewritten: API-mode build (`VITE_API_BASE`/`VITE_PB_URL` → marketing.gfinnov.com), syncs `deploy-prod/` + clean `pb-migrations` (--delete) + `deploy-staging/api`, manages `mp-prod-inner` containers. Never touches outer Caddyfile. Committed on `experimental`. |
+| 1.7 | Merge `experimental` → `main` (PR) | 🟡 | **in progress** — triggers prod deploy (rsyncs API-mode bundle → flips live SPA) |
 | 1.8 | Verify live (API mode grep, health, clients render) | ⬜ | |
 
 ## Phase 2 — Agent promotion

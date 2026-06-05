@@ -1,10 +1,13 @@
-name: Build & deploy app-v2
+name: Build & deploy app-v2 (production)
 
 on:
   push:
     branches: [main]
     paths:
       - 'app-v2/**'
+      - 'deploy-prod/**'
+      - 'deploy-staging/api/**'
+      - 'clients/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -15,7 +18,7 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -43,7 +46,14 @@ jobs:
         # need any postinstall to run for a static SPA build.
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Build
+      - name: Build (production — REST API enabled)
+        env:
+          # Full-parity cutover: the prod SPA talks to the /api/v1/* surface.
+          # No VITE_API_TOKEN — the SPA exchanges its basicauth session for a
+          # short-lived dash_* token via /api/v1/auth/exchange on boot
+          # (per-client scoped). See deploy-staging/api/src/routes/authExchange.ts.
+          VITE_API_BASE: https://marketing.gfinnov.com/api/v1
+          VITE_PB_URL: https://marketing.gfinnov.com
         run: pnpm build
 
       - name: Setup SSH key
@@ -55,7 +65,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Sync dist/ to Hetzner
+      - name: Sync dist/ to Hetzner (prod app-dist — API-mode bundle)
         env:
           HOST: ${{ secrets.HETZNER_HOST }}
           USER: ${{ secrets.HETZNER_USER }}
@@ -64,3 +74,62 @@ jobs:
           rsync -avz --delete \
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
             ./dist/ "$USER@$HOST:$TARGET/"
+
+      - name: Sync deploy-prod config + api source
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        working-directory: .
+        run: |
+          # Inner-stack compose (renamed on the box so it never collides with the
+          # outer-caddy docker-compose.yml), the INNER Caddyfile, and the PB launcher.
+          # NOTE: this deliberately does NOT touch /opt/marketing-planner/Caddyfile
+          # (the shared OUTER caddy config) — that file is hand-managed.
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-prod/docker-compose.yml \
+            "$USER@$HOST:/opt/marketing-planner/docker-compose.prod-inner.yml"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-prod/Caddyfile.prod \
+            deploy-prod/pb-run.prod.sh \
+            "$USER@$HOST:/opt/marketing-planner/"
+          # PB migrations — clean set only (--delete keeps the stale, PB-version
+          # incompatible 1748* migrations from ever being reintroduced).
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-prod/pb-migrations/ \
+            "$USER@$HOST:/opt/marketing-planner/pb-migrations/"
+          # API source (same Hono code as staging). Never sync node_modules/dist/.env.
+          rsync -avz --delete \
+            --exclude node_modules --exclude dist --exclude .env \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/api/ \
+            "$USER@$HOST:/opt/marketing-planner/api/"
+
+      - name: Sync client seed data (disk — Viktor-owned files; user-owned live in PB)
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        working-directory: .
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/index.json \
+            "$USER@$HOST:/opt/marketing-planner/clients/index.json"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/gf-internal/ \
+            "$USER@$HOST:/opt/marketing-planner/clients/gf-internal/"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/fitvibe-demo/ \
+            "$USER@$HOST:/opt/marketing-planner/clients/fitvibe-demo/"
+
+      - name: Build + start prod api & caddy (inner stack)
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'cd /opt/marketing-planner && docker compose -p mp-prod-inner -f docker-compose.prod-inner.yml up -d --build api caddy'
