@@ -692,16 +692,24 @@ function MessageContent({ text }: { text: string }) {
   )
 }
 
+// Master switch for showing the agent's step-by-step tool activity in the chat
+// bubble (the synthetic "thoughts" list AND the per-call tool chips). Kept OFF
+// so the in-app chat reads as a clean conversation — just the working indicator
+// while Viktor runs, then the final answer. The underlying tool_call/tool_result
+// events are STILL consumed (they drive the dashboard auto-refresh); only their
+// rendering is suppressed. Flip to `true` to surface tool activity again.
+const SHOW_TOOL_ACTIVITY: boolean = false
+
 function MessageBubble({ m }: { m: Message }) {
   const t = useT()
   // Collapsible synthetic tool steps. Default: collapsed once the message is
-  // done streaming. Real tool CALLS (set_approval etc.) always render — they're
-  // the value, not noise.
+  // done streaming. Real tool CALLS (set_approval etc.) render only when
+  // SHOW_TOOL_ACTIVITY is enabled — by default the chat hides the chatter.
   const [showToolsOverride, setShowToolsOverride] = useState<boolean | null>(null)
   const showTools = showToolsOverride ?? !(m.role === 'assistant' && !m.streaming)
 
-  const hasTools = m.role === 'assistant' && (m.tools?.length ?? 0) > 0
-  const hasToolCalls = m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0
+  const hasTools = SHOW_TOOL_ACTIVITY && m.role === 'assistant' && (m.tools?.length ?? 0) > 0
+  const hasToolCalls = SHOW_TOOL_ACTIVITY && m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0
 
   return (
     <div className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
