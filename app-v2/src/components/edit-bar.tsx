@@ -1,6 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Download, Trash2, ChevronDown, Pencil, Eye } from 'lucide-react'
+import {
+  Download,
+  Save,
+  Trash2,
+  ChevronDown,
+  Pencil,
+  Check,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,27 +20,33 @@ import {
 } from '@/components/ui/dialog'
 import { useEdit, deepMerge, type EditableFile } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
+import { isPocketBaseEnabled, pbSave } from '@/lib/pocketbase'
+import { isApiEnabled, apiSave, apiNotifyViktor } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 
 /**
  * Floating bar that appears whenever the current slug has unsaved patches.
  *
- * Per file, the user can:
- *   - Download — saves a fully-merged JSON file ready to commit to the repo
- *   - Discard  — drops local edits for that file
- *
- * Plus a "Download all" shortcut.
+ * Dual-mode:
+ *   - **PocketBase enabled**: "Save" button persists merged data to PocketBase,
+ *     then clears local patches. Instant, no manual step.
+ *   - **File mode**: "Download" button exports merged JSON for manual commit.
  *
  * `bundle` is the ORIGINAL (server-loaded) data — we re-merge here so the
- * downloaded file always reflects the latest patches.
+ * saved/downloaded file always reflects the latest patches.
  */
 export function EditBar({
   slug,
   bundle,
+  onSaved,
 }: {
   slug: string
   /** Original (un-merged) bundle. */
   bundle: ClientBundle
+  /** Called after a successful PocketBase save — layout can refetch. */
+  onSaved?: () => void
 }) {
+  const t = useT()
   const { patches, resetFile, resetSlug, editMode, setEditMode } = useEdit()
   const slugPatches = patches[slug] ?? {}
   const dirtyFiles = useMemo(
@@ -41,6 +55,9 @@ export function EditBar({
   )
   const [discardOpen, setDiscardOpen] = useState(false)
   const [expanded, setExpanded] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Map file key → original value from the loaded bundle.
   const originalFor = (file: EditableFile): unknown => {
@@ -56,8 +73,13 @@ export function EditBar({
     }
   }
 
+  const mergedFor = (file: EditableFile) =>
+    deepMerge(originalFor(file), slugPatches[file])
+
+  // ── Download (file mode) ─────────────────────────────────────────────────
+
   const downloadOne = (file: EditableFile) => {
-    const merged = deepMerge(originalFor(file), slugPatches[file])
+    const merged = mergedFor(file)
     const blob = new Blob([JSON.stringify(merged, null, 2) + '\n'], {
       type: 'application/json',
     })
@@ -73,7 +95,139 @@ export function EditBar({
 
   const downloadAll = () => dirtyFiles.forEach(downloadOne)
 
+  // ── Save (PocketBase mode) ───────────────────────────────────────────────
+
+  const saveOne = useCallback(
+    async (file: EditableFile) => {
+      const merged = mergedFor(file)
+      if (isApiEnabled) {
+        await apiSave(slug, file, merged)
+      } else {
+        await pbSave(slug, file, merged)
+      }
+      resetFile(slug, file)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug, slugPatches],
+  )
+
+  // ── Notify Viktor after save ─────────────────────────────────────────────
+  // Fire-and-forget: records a viktor.notify audit row so the sync indicator
+  // can show "enviado a Víktor · hace 2 min". Does not block the save.
+  const notifyViktor = useCallback(
+    (savedFiles: EditableFile[]) => {
+      if (!isApiEnabled || savedFiles.length === 0) return
+      const summary = t('sync.savedSummary', { files: savedFiles.join(', ') })
+      apiNotifyViktor(slug, summary)
+        .then(() => window.dispatchEvent(new CustomEvent('mp:viktor-notified')))
+        .catch(() => {/* non-fatal */})
+    },
+    [slug, t],
+  )
+
+  const saveAll = useCallback(async () => {
+    setSaving(true)
+    setSaveError(null)
+    // Capture before saveOne calls resetFile and clears them.
+    const filesToSave = [...dirtyFiles]
+    try {
+      await Promise.all(filesToSave.map(saveOne))
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2000)
+      notifyViktor(filesToSave)
+      onSaved?.()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }, [dirtyFiles, saveOne, notifyViktor, onSaved, t])
+
+  const handleSaveOne = useCallback(
+    async (file: EditableFile) => {
+      setSaving(true)
+      setSaveError(null)
+      try {
+        await saveOne(file)
+        notifyViktor([file])
+        onSaved?.()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : t('editBar.saveFailed'))
+      } finally {
+        setSaving(false)
+      }
+    },
+    [saveOne, notifyViktor, onSaved, t],
+  )
+
+  // ── Phase 4: debounced autosave when API mode is on ─────────────────────
+  // After the user stops typing for 1.2s, all dirty files for this slug are
+  // pushed up via PUT and the local patches are cleared. Failures fall back
+  // to the existing manual Save button.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!isApiEnabled) return
+    if (dirtyFiles.length === 0) return
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(async () => {
+      setSaving(true)
+      setSaveError(null)
+      // Capture before saveOne calls resetFile and clears them.
+      const filesToSave = [...dirtyFiles]
+      try {
+        await Promise.all(filesToSave.map(saveOne))
+        setLastSavedAt(Date.now())
+        notifyViktor(filesToSave)
+        onSaved?.()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : t('editBar.autosaveFailed'))
+      } finally {
+        setSaving(false)
+      }
+    }, 1200)
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slugPatches, slug])
+
+  // Rerender every 5s so "Saved Xs ago" stays fresh.
+  const [, force] = useState(0)
+  useEffect(() => {
+    if (lastSavedAt === null) return
+    const t = setInterval(() => force((n) => n + 1), 5000)
+    return () => clearInterval(t)
+  }, [lastSavedAt])
+
+  function savedAgoLabel(): string {
+    if (saving) return t('common.saving')
+    if (saveError) return saveError
+    if (lastSavedAt === null) return ''
+    const s = Math.round((Date.now() - lastSavedAt) / 1000)
+    if (s < 5) return t('editBar.savedJustNow')
+    if (s < 60) return t('editBar.savedAgoS', { s })
+    const m = Math.round(s / 60)
+    return t('editBar.savedAgoM', { m })
+  }
+
   const showEditToggle = editMode || dirtyFiles.length > 0
+
+  // Choose action labels + icons based on mode.
+  const usePB = isPocketBaseEnabled || isApiEnabled
+  const ActionIcon = usePB ? Save : Download
+  const actionLabel = usePB ? t('editBar.save') : t('editBar.download')
+  const bulkLabel = usePB
+    ? dirtyFiles.length === 1
+      ? t('editBar.save')
+      : t('editBar.saveAll')
+    : dirtyFiles.length === 1
+      ? t('editBar.downloadFile')
+      : t('editBar.downloadAll')
+  const subtitle = usePB
+    ? t('editBar.subtitleSave')
+    : t('editBar.subtitleDownload', { slug })
 
   return (
     <>
@@ -84,7 +238,9 @@ export function EditBar({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 z-40"
+            /* Header already has its own Edit/Preview button on sm+. Show this
+               floating pill only on small viewports where the header button is hidden. */
+            className="fixed bottom-4 right-4 z-40 sm:hidden"
           >
             <Button
               variant={editMode ? 'default' : 'outline'}
@@ -98,11 +254,11 @@ export function EditBar({
             >
               {editMode ? (
                 <>
-                  <Eye className="h-3.5 w-3.5 mr-1.5" /> Preview
+                  <Save className="h-3.5 w-3.5 mr-1.5" /> {t('common.save')}
                 </>
               ) : (
                 <>
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('common.edit')}
                 </>
               )}
             </Button>
@@ -125,11 +281,13 @@ export function EditBar({
                 <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-ink">
-                    {dirtyFiles.length} file
-                    {dirtyFiles.length === 1 ? '' : 's'} modified locally
+                    {(dirtyFiles.length === 1
+                      ? t('editBar.modified', { count: dirtyFiles.length })
+                      : t('editBar.modifiedPlural', { count: dirtyFiles.length })
+                    ) + (usePB ? '' : t('editBar.locallySuffix'))}
                   </p>
                   <p className="text-[11px] text-ink-muted">
-                    Download &amp; commit to <code>clients/{slug}/</code> to publish.
+                    {isApiEnabled && savedAgoLabel() ? savedAgoLabel() : subtitle}
                   </p>
                 </div>
                 <Button
@@ -141,10 +299,10 @@ export function EditBar({
                       ? 'bg-amber-500 hover:bg-amber-600 text-white'
                       : ''
                   }
-                  title={editMode ? 'Exit edit mode' : 'Enter edit mode'}
+                  title={editMode ? t('header.exitEdit') : t('editBar.enterEditMode')}
                 >
                   {editMode ? (
-                    <Eye className="h-3.5 w-3.5" />
+                    <Save className="h-3.5 w-3.5" />
                   ) : (
                     <Pencil className="h-3.5 w-3.5" />
                   )}
@@ -153,7 +311,7 @@ export function EditBar({
                   type="button"
                   onClick={() => setExpanded((x) => !x)}
                   className="p-1 rounded hover:bg-amber-100"
-                  aria-label={expanded ? 'Collapse' : 'Expand'}
+                  aria-label={expanded ? t('editBar.collapse') : t('editBar.expand')}
                 >
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${
@@ -185,21 +343,33 @@ export function EditBar({
                             variant="ghost"
                             onClick={() => resetFile(slug, f)}
                             className="h-7 px-2 text-xs text-ink-muted hover:text-rose-600"
+                            disabled={saving}
                           >
-                            Discard
+                            {t('editBar.discard')}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => downloadOne(f)}
+                            onClick={() =>
+                              usePB ? handleSaveOne(f) : downloadOne(f)
+                            }
                             className="h-7 px-2 text-xs"
+                            disabled={saving}
                           >
-                            <Download className="h-3 w-3 mr-1" />
-                            Download
+                            <ActionIcon className="h-3 w-3 mr-1" />
+                            {actionLabel}
                           </Button>
                         </div>
                       ))}
                     </div>
+
+                    {saveError && (
+                      <div className="px-3 pb-2">
+                        <p className="text-xs text-rose-600 bg-rose-50 rounded-md px-2.5 py-1.5">
+                          {saveError}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 px-3 pb-3 pt-1 border-t border-border-subtle">
                       <Button
@@ -207,18 +377,33 @@ export function EditBar({
                         variant="ghost"
                         onClick={() => setDiscardOpen(true)}
                         className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        disabled={saving}
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Discard all
+                        {t('editBar.discardAll')}
                       </Button>
                       <span className="flex-1" />
+                      {saveSuccess && (
+                        <motion.span
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="text-xs text-brand-green-600 flex items-center gap-1"
+                        >
+                          <Check className="h-3.5 w-3.5" /> {t('common.saved')}
+                        </motion.span>
+                      )}
                       <Button
                         size="sm"
-                        onClick={downloadAll}
+                        onClick={usePB ? saveAll : downloadAll}
+                        disabled={saving}
                         className="bg-brand-blue hover:bg-brand-blue-700 text-white"
                       >
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Download {dirtyFiles.length === 1 ? 'file' : 'all'}
+                        {saving ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <ActionIcon className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        {bulkLabel}
                       </Button>
                     </div>
                   </motion.div>
@@ -232,15 +417,14 @@ export function EditBar({
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Discard all changes?</DialogTitle>
+            <DialogTitle>{t('editBar.discardTitle')}</DialogTitle>
             <DialogDescription>
-              This drops every local edit for <code>{slug}</code> (
-              {dirtyFiles.join(', ')}). It cannot be undone.
+              {t('editBar.discardBody', { slug, files: dirtyFiles.join(', ') })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDiscardOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -249,7 +433,7 @@ export function EditBar({
                 setDiscardOpen(false)
               }}
             >
-              Discard all
+              {t('editBar.discardAll')}
             </Button>
           </DialogFooter>
         </DialogContent>

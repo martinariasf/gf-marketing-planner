@@ -1,0 +1,79 @@
+# Staging Caddyfile — staging.marketing.gfinnov.com
+#
+# This is the inner Caddy. TLS + the public hostname are handled by the
+# production Caddy on :80/:443, which reverse_proxies the whole staging host
+# to mp-staging-caddy:80 over the shared docker network.
+#
+# Routing precedence (most specific first via Caddy's `handle` ordering):
+#
+#   /api/v1/*  -> mp-staging-api  (new REST surface, bearer-token auth, Phase 1+)
+#   /api/realtime -> mp-staging-pb (PocketBase realtime for chat updates)
+#   /_/*       -> mp-staging-pb   (PB admin UI)
+#   /chat/*    -> hermes-marketing-staging  (Phase 6 wires this up)
+#   /data/*    -> static Viktor-owned JSON  (legacy read path; removed Phase 3)
+#   /*         -> React SPA
+#
+# Site-wide basicauth still gates everything except /api/v1/* and /chat/*, which
+# do their own bearer-token auth — basicauth at the edge would prevent agents
+# from calling the API without scraping creds.
+
+{
+    auto_https off
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+:80 {
+    encode zstd gzip
+
+    # ── New REST API (Hono) ──────────────────────────────────────────────
+    # The Hono app owns the full /api/v1/* path — no rewrite needed.
+    # SSE-friendly transport for /api/v1/clients/:slug/chat/stream (Phase 6).
+    handle /api/v1/* {
+        reverse_proxy mp-staging-api:8080 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # PocketBase realtime for dashboard chat updates. Keep this narrow so the
+    # dashboard still uses /api/v1/* for normal reads/writes.
+    @pb_realtime path /api/realtime /api/realtime/*
+    handle @pb_realtime {
+        reverse_proxy mp-staging-pb:8090 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # The outer (production) Caddy already enforces site-wide basicauth for
+    # staging.marketing.gfinnov.com, so the inner caddy does not double-gate.
+
+    # ── PocketBase admin UI ──────────────────────────────────────────────
+    # Kept so Martin can manage api_tokens / inspect audit via /_/.
+    # The direct PB REST API (/api/*) is intentionally removed in Phase 3 —
+    # the dashboard now goes through /api/v1/* exclusively.
+    handle /_/* {
+        reverse_proxy mp-staging-pb:8090
+    }
+
+    # ── React SPA ────────────────────────────────────────────────────────
+    handle {
+        root * /srv/app
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "public, max-age=60, must-revalidate"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

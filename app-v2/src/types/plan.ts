@@ -72,4 +72,5 @@ export interface Plan {
   monthlyFocus: MonthlyFocus[]
   keyDates: KeyDate[]
   platforms: PlatformStrategy[]
+  lastModified?: Record<string, string>
 }

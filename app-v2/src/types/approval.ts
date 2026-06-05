@@ -1,4 +1,17 @@
-export type ApprovalAction = 'approve' | 'reject' | 'block' | 'unblock'
+// Legacy disk log uses the imperative forms (`approve`, `reject`, `block`,
+// `unblock`). The newer PB-backed approvals_v2 collection stores the resulting
+// state (`approved`, `rejected`, `in_review`, `scheduled`), which surfaces
+// through `GET /approvals`. Components must handle both — see ACTION_ICON in
+// approvals.tsx for the rendering map and the fallback for unknown values.
+export type ApprovalAction =
+  | 'approve'
+  | 'reject'
+  | 'block'
+  | 'unblock'
+  | 'approved'
+  | 'rejected'
+  | 'in_review'
+  | 'scheduled'
 
 export interface ApprovalLogEntry {
   ts: string

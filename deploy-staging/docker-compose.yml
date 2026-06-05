@@ -1,0 +1,78 @@
+# Staging stack — API (Hono) + edge Caddy.
+#
+# Reality on Hetzner:
+#   - PocketBase already runs as a bare `docker run` container (`mp-staging-pb`)
+#     with bind mounts at /opt/marketing-planner-staging/pb-{data,migrations}.
+#     We deliberately do NOT manage it from compose to avoid disturbing its
+#     volume / admin account / data. Future migration may absorb it.
+#   - The production Caddy on :80/:443 (`marketing-planner-caddy`) terminates
+#     TLS for both marketing.gfinnov.com and staging.marketing.gfinnov.com. It
+#     will reverse_proxy the entire staging host to `mp-staging-caddy:80` over
+#     the shared `marketing-planner_default` network. The staging routing
+#     surface (/api/v1/*, /api/*, /_/* , /data/*, SPA) lives here in
+#     Caddyfile.staging, NOT in the production Caddyfile.
+#
+# Network:
+#   `marketing-planner_default` is created and owned by the production
+#   compose project (/opt/marketing-planner/). We attach to it as `external`
+#   so prod caddy + mp-staging-pb (both already on it) can reach us by name.
+#
+# Usage on Hetzner (one-time + each deploy):
+#   cd /opt/marketing-planner-staging && docker compose up -d --build
+
+services:
+  api:
+    build:
+      context: ./api
+    image: mp-staging-api:latest
+    container_name: mp-staging-api
+    restart: unless-stopped
+    volumes:
+      - ./clients:/data/clients:ro
+    environment:
+      DATA_ROOT: "/data"
+      PORT: "8080"
+      PB_URL: "http://mp-staging-pb:8090"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
+      BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
+      # Chat is proxied to hermes-marketing-staging's built-in OpenAI gateway
+      # (api_server platform). Same agent + tools as Telegram, single source
+      # of truth for chat behaviour. HERMES_API_KEY must match the value set
+      # in /opt/agents/staging-demo/config.yaml under platforms.api_server.extra.key
+      HERMES_BASE_URL: "${HERMES_BASE_URL:-http://hermes-marketing-staging:8642}"
+      HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      RELEASE: "${RELEASE:-dev}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    expose:
+      - "8080"
+    networks:
+      - shared
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mp-staging-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    # No published ports — production caddy terminates TLS and proxies in
+    # over the shared docker network.
+    expose:
+      - "80"
+    volumes:
+      - ./Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - ./app-dist:/srv/app:ro
+      - ./clients:/srv/data:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - shared
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared:
+    name: marketing-planner_default
+    external: true

@@ -1,0 +1,68 @@
+# Production INNER Caddyfile — marketing.gfinnov.com (full-parity cutover).
+#
+# Mirrors deploy-staging/Caddyfile.staging. This is the INNER caddy
+# (mp-prod-caddy). TLS + the public hostname + edge basicauth are handled by
+# the shared OUTER caddy (marketing-planner-caddy) on :80/:443, which
+# reverse_proxies /api/v1/*, /chat/* (and /api/v1/auth/exchange) for
+# marketing.gfinnov.com to mp-prod-caddy:80 over the shared docker network.
+#
+# Routing precedence (most specific first via Caddy's `handle` ordering):
+#   /api/v1/*     -> mp-prod-api    (Hono REST surface, bearer-token auth)
+#   /api/realtime -> mp-prod-pb     (PocketBase realtime for chat updates)
+#   /_/*          -> mp-prod-pb     (PB admin UI)
+#   /*            -> React SPA (prod app-dist, API mode)
+#
+# basicauth is NOT applied here — the outer caddy gates the SPA + does the
+# basicauth->token exchange; /api/v1/* and /chat/* use bearer-token auth.
+
+{
+    auto_https off
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+:80 {
+    encode zstd gzip
+
+    # ── REST API (Hono) ──────────────────────────────────────────────────
+    handle /api/v1/* {
+        reverse_proxy mp-prod-api:8080 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # PocketBase realtime for dashboard chat updates.
+    @pb_realtime path /api/realtime /api/realtime/*
+    handle @pb_realtime {
+        reverse_proxy mp-prod-pb:8090 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # ── PocketBase admin UI ──────────────────────────────────────────────
+    handle /_/* {
+        reverse_proxy mp-prod-pb:8090
+    }
+
+    # ── React SPA (prod, API mode) ───────────────────────────────────────
+    handle {
+        root * /srv/app
+        try_files {path} /index.html
+        file_server
+        header Cache-Control "public, max-age=60, must-revalidate"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

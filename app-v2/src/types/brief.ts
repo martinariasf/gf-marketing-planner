@@ -1,3 +1,7 @@
+export type SocialNetwork = 'linkedin' | 'instagram' | 'facebook' | 'x' | 'tiktok'
+
+export const SOCIAL_NETWORKS: SocialNetwork[] = ['linkedin', 'instagram', 'facebook', 'x', 'tiktok']
+
 export interface Brief {
   company: {
     name: string
@@ -36,6 +40,7 @@ export interface Brief {
     primary: string[]
     cadence: string
     language: string
+    profiles?: Array<{ network: SocialNetwork; url: string }>
   }
   boundaries: {
     viktorCanDoWithoutAsking: string[]
@@ -55,6 +60,15 @@ export interface Brief {
   references: {
     drive_folder_url: string | null
     examples: string[]
+  }
+  branding?: {
+    colors: Array<{ name: string; hex: string }>
+    typography: {
+      headingFont: string
+      bodyFont: string
+    }
+    logos: Array<{ variant: string; url: string }>
+    toneKeywords: string[]
   }
   expectations: string
 }

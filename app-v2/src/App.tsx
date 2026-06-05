@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { EditProvider } from '@/lib/edit-store'
+import { LanguageProvider } from '@/lib/i18n'
 
 const ClientPicker  = lazy(() => import('@/routes/index'))
 const ClientLayout  = lazy(() => import('@/routes/client/layout'))
@@ -9,12 +10,13 @@ const ContextView   = lazy(() => import('@/routes/client/context'))
 const GoalsView     = lazy(() => import('@/routes/client/goals'))
 const StrategyView  = lazy(() => import('@/routes/client/strategy'))
 const CalendarView  = lazy(() => import('@/routes/client/calendar'))
-const PipelineView  = lazy(() => import('@/routes/client/pipeline'))
 const ApprovalsView = lazy(() => import('@/routes/client/approvals'))
 const AssetsView    = lazy(() => import('@/routes/client/assets'))
 const PerformanceView = lazy(() => import('@/routes/client/performance'))
 const LearningsView   = lazy(() => import('@/routes/client/learnings'))
 const SuggestionsView = lazy(() => import('@/routes/client/suggestions'))
+const IntegrationView = lazy(() => import('@/routes/client/integration'))
+const VideosView      = lazy(() => import('@/routes/client/videos'))
 
 function RouteFallback() {
   return (
@@ -27,6 +29,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      <LanguageProvider>
       <EditProvider>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -37,17 +40,21 @@ export default function App() {
             <Route path="goals"       element={<GoalsView />} />
             <Route path="strategy"    element={<StrategyView />} />
             <Route path="calendar"    element={<CalendarView />} />
-            <Route path="pipeline"    element={<PipelineView />} />
             <Route path="approvals"   element={<ApprovalsView />} />
             <Route path="assets"      element={<AssetsView />} />
             <Route path="performance" element={<PerformanceView />} />
             <Route path="learnings"   element={<LearningsView />} />
             <Route path="suggestions" element={<SuggestionsView />} />
+            <Route path="integration" element={<IntegrationView />} />
+            <Route path="videos"      element={<VideosView />} />
+            <Route path="brand-kit"   element={<Navigate to="../context" replace />} />
+            <Route path="references"  element={<Navigate to="../assets" replace />} />
             <Route path="*"           element={<Navigate to="context" replace />} />
           </Route>
         </Routes>
       </Suspense>
       </EditProvider>
+      </LanguageProvider>
     </BrowserRouter>
   )
 }

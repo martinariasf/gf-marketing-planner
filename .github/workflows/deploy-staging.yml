@@ -1,0 +1,115 @@
+name: Build & deploy staging (experimental)
+
+on:
+  push:
+    branches: [experimental]
+    paths:
+      - 'app-v2/**'
+      - 'deploy-staging/**'
+      - '.github/workflows/deploy-staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: app-v2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app-v2/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build (staging — REST API enabled)
+        env:
+          # Phase 3 cutover: the staging SPA talks to the new /api/v1/* surface.
+          # Phase 7: no VITE_API_TOKEN — the SPA exchanges its basicauth
+          # session for a short-lived dash_* token via /api/v1/auth/exchange
+          # on boot. See deploy-staging/api/src/routes/authExchange.ts.
+          VITE_API_BASE: https://staging.marketing.gfinnov.com/api/v1
+          VITE_PB_URL: https://staging.marketing.gfinnov.com
+        run: pnpm build
+
+      - name: Setup SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.HETZNER_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync dist/ to staging on Hetzner
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+          TARGET: /opt/marketing-planner-staging/app-dist
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            ./dist/ "$USER@$HOST:$TARGET/"
+
+      - name: Sync deploy-staging config
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        working-directory: .
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/docker-compose.yml \
+            deploy-staging/Caddyfile.staging \
+            "$USER@$HOST:/opt/marketing-planner-staging/"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/pb-migrations/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/pb-migrations/"
+          rsync -avz --delete \
+            --exclude node_modules --exclude dist --exclude .env \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-staging/api/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/api/"
+
+      - name: Sync GF internal client seed data
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        working-directory: .
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/index.json \
+            "$USER@$HOST:/opt/marketing-planner-staging/clients/index.json"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            clients/gf-internal/ \
+            "$USER@$HOST:/opt/marketing-planner-staging/clients/gf-internal/"
+
+      - name: Build + start staging api & caddy
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'cd /opt/marketing-planner-staging && docker compose up -d --build api caddy'

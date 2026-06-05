@@ -1,0 +1,73 @@
+# Production INNER stack — API (Hono) + edge Caddy, full-parity cutover.
+# Mirrors deploy-staging/docker-compose.yml.
+#
+# Deployed to /opt/marketing-planner/ on the box and run alongside the existing
+# outer-caddy compose with an explicit project name + file:
+#   cd /opt/marketing-planner && \
+#     docker compose -p mp-prod-inner -f docker-compose.prod-inner.yml up -d --build api caddy
+# (rename this file to docker-compose.prod-inner.yml on the box, or pass -f to
+#  this name — just don't collide with the outer-caddy docker-compose.yml.)
+#
+# PocketBase (mp-prod-pb) is NOT managed here — it runs as a bare `docker run`
+# via pb-run.prod.sh, exactly like staging's mp-staging-pb. Stand it up first.
+#
+# The api image is the SAME Hono code as staging. CI rsyncs deploy-staging/api/
+# to /opt/marketing-planner/api/ so the build context `./api` resolves on the
+# box (see the deploy.yml changes made at cutover time).
+#
+# Network: attach to the prod-owned `marketing-planner_default` as external so
+# the outer caddy + mp-prod-pb (both on it) can reach us by name.
+
+services:
+  api:
+    build:
+      context: ./api
+    image: mp-prod-api:latest
+    container_name: mp-prod-api
+    restart: unless-stopped
+    volumes:
+      - ./clients:/data/clients:ro
+    environment:
+      DATA_ROOT: "/data"
+      PORT: "8080"
+      PB_URL: "http://mp-prod-pb:8090"
+      PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
+      PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
+      BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
+      # Chat is proxied to the PROD Hermes agent's api_server gateway. Set these
+      # to the prod agent container + its gateway key (must match the prod
+      # config.yaml extra.key). Until the prod agent exists, leave chat disabled.
+      HERMES_BASE_URL: "${HERMES_BASE_URL:-}"
+      HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      RELEASE: "${RELEASE:-prod}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    expose:
+      - "8080"
+    networks:
+      - shared
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mp-prod-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    expose:
+      - "80"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ./app-dist:/srv/app:ro
+      - ./clients:/srv/data:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - shared
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  shared:
+    name: marketing-planner_default
+    external: true

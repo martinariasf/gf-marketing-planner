@@ -6,10 +6,11 @@
  *   performance, approvals.log). But the *setup* files — brief.json, plan.json,
  *   goals.json, learnings.json — are USER-OWNED. We let the human edit them
  *   directly in the dashboard, persist the changes to localStorage as deep-
- *   partial patches, and surface a "Download JSON" affordance so the user can
- *   commit the file back to the repo (CI then rsyncs to Hetzner).
+ *   partial patches.
  *
- *   No backend. No silent writes. Still filesystem-first.
+ *   When PocketBase is enabled (VITE_PB_URL), the "Save" button writes the
+ *   merged data to PocketBase — instant, no download/commit step.
+ *   When PocketBase is off, the "Download" flow remains as before.
  */
 
 import {

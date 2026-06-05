@@ -62,3 +62,46 @@ marketing.gfinnov.com {
 http://100.92.24.75, http://46.224.224.113 {
     redir https://marketing.gfinnov.com{uri} permanent
 }
+
+# ── Staging ───────────────────────────────────────────────────────────────────
+# staging.marketing.gfinnov.com — Phase 1 routes /api/v1/* (and Phase 6 /chat/*)
+# to mp-staging-caddy, which then fans out to mp-staging-api / mp-staging-pb /
+# the staging SPA. basicauth lives inside the catch-all handle so the new API
+# and chat surface stay un-gated (bearer-token auth is enforced upstream).
+
+staging.marketing.gfinnov.com {
+    encode zstd gzip
+
+    # Phase 7 basicauth→token exchange: this ONE api path requires basicauth
+    # so Caddy can forward the authenticated username to mp-staging-api, which
+    # mints a short-lived dash_* token tied to that user.
+    # Caddy sorts handle directives by path specificity, so this matches
+    # before the broader /api/v1/* handle below.
+    handle /api/v1/auth/exchange {
+        basicauth /* {
+            staging $2a$14$fe6MgMpmwSKKKkmwd9KWoe/kh.ZFaKVU4WtIaF0wIHgMa5SBkSUhe
+        }
+        reverse_proxy mp-staging-caddy:80 {
+            header_up X-Forwarded-User {http.auth.user.id}
+        }
+    }
+
+    handle /api/v1/* {
+        reverse_proxy mp-staging-caddy:80
+    }
+    handle /chat/* {
+        reverse_proxy mp-staging-caddy:80
+    }
+
+    handle {
+        basicauth /* {
+            staging $2a$14$fe6MgMpmwSKKKkmwd9KWoe/kh.ZFaKVU4WtIaF0wIHgMa5SBkSUhe
+        }
+        reverse_proxy mp-staging-caddy:80
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

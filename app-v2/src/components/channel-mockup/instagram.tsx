@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal } from 'lucide-react'
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy } from 'lucide-react'
 import type { Post } from '@/types'
 
 interface Props {
@@ -8,6 +8,8 @@ interface Props {
 }
 
 export function InstagramMockup({ post, handle, logoInitials }: Props) {
+  const slideCount = post.slides?.length ?? 0
+  const isCarousel = slideCount > 1
   return (
     <div className="mx-auto max-w-[340px] rounded-[2.2rem] border-8 border-neutral-900 bg-white shadow-xl">
       <div className="rounded-[1.5rem] overflow-hidden">
@@ -26,7 +28,7 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
           <MoreHorizontal className="h-4 w-4 text-neutral-500" />
         </div>
 
-        <div className="aspect-square bg-neutral-100 overflow-hidden">
+        <div className="relative aspect-square bg-neutral-100 overflow-hidden">
           {post.image && (
             <img
               src={post.image}
@@ -35,7 +37,27 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
               loading="lazy"
             />
           )}
+          {isCarousel && (
+            <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+              <Copy className="h-3 w-3" />
+              1/{slideCount}
+            </span>
+          )}
         </div>
+
+        {/* Carousel dots (IG shows them below the image) */}
+        {isCarousel && (
+          <div className="flex items-center justify-center gap-1 pt-2">
+            {Array.from({ length: slideCount }).map((_, i) => (
+              <span
+                key={i}
+                className={
+                  'h-1.5 w-1.5 rounded-full ' + (i === 0 ? 'bg-brand-blue' : 'bg-neutral-300')
+                }
+              />
+            ))}
+          </div>
+        )}
 
         <div className="px-3 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
