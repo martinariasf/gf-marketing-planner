@@ -37,8 +37,8 @@ Last updated: 2026-06-05
 
 | # | Step | Status | Notes |
 |---|------|--------|-------|
-| 1.1 | Pre-flight (experimental pushed+green, main 0-ahead, secrets gathered) | 🟡 | main 0-ahead ✅; experimental has **uncommitted** files (see blockers) |
-| 1.2 | Add prod deploy assets to repo (`deploy/api`, compose.prod, Caddyfile.prod.inner, pb-run.prod) | ⬜ | |
+| 1.1 | Pre-flight (experimental pushed+green, main 0-ahead, secrets gathered) | ✅ | main 0-ahead; experimental committed+pushed; `deploy-staging.yml` green; staging healthy (`pb:up`, API-mode). Prod secrets still TBD. |
+| 1.2 | Add prod deploy assets to repo (`deploy-prod/` mirror) | ✅ | `deploy-prod/{docker-compose.yml,Caddyfile.prod,pb-run.prod.sh,.env.example,README.md}`; inert (no CI trigger); API image reuses `deploy-staging/api` |
 | 1.3 | Edit shared outer Caddyfile prod block (⚠️ highest risk) | ⛔ | **confirmation gate** + auth decision |
 | 1.4 | Stand up `mp-prod-pb` + `mp-prod-api` + `mp-prod-caddy` | ⬜ | |
 | 1.5 | Data migration: seed prod PB from prod JSON | ⛔ | **confirmation gate** + needs prod PB admin creds |
@@ -50,7 +50,7 @@ Last updated: 2026-06-05
 
 | # | Step | Status | Notes |
 |---|------|--------|-------|
-| 2.0 | **Scrub secret in `config.yaml`** + commit agent source | ⛔ | secret found (see blockers); needs scrub-approach decision |
+| 2.0 | **Scrub secret in `config.yaml`** + commit agent source | ✅ | gateway key scrubbed to placeholder (env-interp ruled out); agent source committed+pushed; real key stays on box only |
 | 2.1 | Pick prod slug | ⛔ | decision needed |
 | 2.2 | Clone template → `/opt/agents/<slug>/` | ⬜ | |
 | 2.3 | Wire prod env (.env) | ⛔ | needs Telegram token, OpenRouter key, Postiz creds, prod bearer |
