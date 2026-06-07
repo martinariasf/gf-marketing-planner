@@ -7,6 +7,13 @@ source_branch: experimental
 code_reviewed: true
 code_reviewed_at: 2026-06-07
 focus_tasks: [TASK-001, TASK-002, TASK-003, TASK-004, TASK-005, TASK-006, TASK-007, TASK-008, TASK-009, TASK-010, TASK-011]
+items:
+  - gf-1: GF logo in header | priority: medium
+  - gf-5: Delete assets | priority: medium
+  - gf-6: Opaque image preview | priority: medium
+  - gf-8: Review Strategy | priority: medium
+  - gf-10: Simplify AI suggestions | priority: medium
+  - gf-11: Postiz API in Integrations | priority: medium
 ---
 
 # Plan
