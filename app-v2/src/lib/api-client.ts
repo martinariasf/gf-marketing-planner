@@ -376,6 +376,35 @@ export async function apiApproveInformationSource(slug: string, id: string): Pro
   return apiSend<InformationSource>('POST', `/clients/${slug}/information-sources/${id}/approve`, {})
 }
 
+// Max upload size for information-source files (transcripts/notes). Mirrors the
+// server-side limit in the API's information-sources/upload route (GF-12).
+export const INFO_SOURCE_MAX_BYTES = 15_000_000
+
+// Drag-and-drop file upload: a text transcript/notes file becomes an
+// information_sources record (text extracted into `summary` server-side).
+export async function apiUploadInformationSourceFile(
+  slug: string,
+  file: File,
+): Promise<InformationSource> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await authedFetch(`/clients/${slug}/information-sources/upload`, {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) {
+    let detail = `Upload failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { detail?: string; title?: string }
+      detail = body.detail || body.title || detail
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail)
+  }
+  return (await res.json()) as InformationSource
+}
+
 // ── Inspiration assets (drag-drop image library) ────────────────────────────
 
 export interface InspirationItem {
