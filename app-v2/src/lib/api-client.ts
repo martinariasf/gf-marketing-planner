@@ -606,6 +606,23 @@ export async function apiLoadChatHistory(
   }
 }
 
+export interface ChatThread {
+  thread: string
+  lastActivity: string
+  title: string
+  count: number
+}
+
+/** List a client's saved chat sessions (threads), newest activity first. */
+export async function apiLoadChatThreads(slug: string): Promise<ChatThread[]> {
+  try {
+    const r = await apiGet<{ items: ChatThread[] }>(`/clients/${slug}/chat/threads`)
+    return r.items
+  } catch {
+    return []
+  }
+}
+
 export type AgentJobStatus =
   | 'queued'
   | 'running'

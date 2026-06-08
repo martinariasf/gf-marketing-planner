@@ -28,16 +28,29 @@ import {
   Plus,
   Trash2,
   FileText,
+  MessageSquarePlus,
+  History,
+  Check,
 } from 'lucide-react'
 import {
   apiLoadAgentJobs,
   apiChatStream,
   apiLoadChatHistory,
+  apiLoadChatThreads,
   isApiEnabled,
   isWriteTool,
   type AgentJob,
   type ChatTurn,
+  type ChatThread,
 } from '@/lib/api-client'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import {
   isPocketBaseEnabled,
   subscribeChat,
@@ -176,7 +189,19 @@ export function ChatSheet({
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
-  const thread = `dash-${slug}`
+  // The active session. `dash-${slug}` is the default/legacy session; "New chat"
+  // mints a fresh `dash-${slug}-${ts}` thread, and the session switcher can jump
+  // back to any past one. Everything downstream (history, persistence, Hermes
+  // long-term memory key, realtime subscription) is namespaced by slug+thread,
+  // so a distinct thread is a fully isolated conversation.
+  const defaultThread = `dash-${slug}`
+  const [thread, setThread] = useState(defaultThread)
+  const [threads, setThreads] = useState<ChatThread[]>([])
+
+  // Reset to the default session if the dashboard switches client.
+  useEffect(() => {
+    setThread(`dash-${slug}`)
+  }, [slug])
 
   // Drag-to-resize from the left edge.
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
@@ -308,6 +333,41 @@ export function ChatSheet({
       if (unsubscribe) void unsubscribe()
     }
   }, [open, slug, thread])
+
+  // Keep the session list fresh: on open, on session switch, and whenever a turn
+  // settles (busy → false) so a brand-new session shows up once its first
+  // message has persisted.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    apiLoadChatThreads(slug)
+      .then((list) => {
+        if (!cancelled) setThreads(list)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [open, slug, thread, busy])
+
+  // Switch the active session. Clears the visible transcript synchronously (so we
+  // don't flash the previous session's messages) and forces the history loader to
+  // re-run by resetting loadedThreadRef. Disabled mid-turn by callers.
+  const switchThread = useCallback(
+    (next: string) => {
+      if (busy || next === thread) return
+      setMessages([])
+      setAgentJobs([])
+      loadedThreadRef.current = null
+      setThread(next)
+    },
+    [busy, thread],
+  )
+
+  const startNewChat = useCallback(() => {
+    if (busy) return
+    switchThread(`dash-${slug}-${Date.now()}`)
+  }, [busy, slug, switchThread])
 
   // Autoscroll the actual scroll container (not an inner div).
   useLayoutEffect(() => {
@@ -563,15 +623,72 @@ export function ChatSheet({
                 {t('chat.scopedToPrefix')}<code>{slug}</code>{t('chat.scopedToSuffix')}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-7 w-7 shrink-0"
-              aria-label={t('chat.close')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={startNewChat}
+                disabled={busy}
+                className="h-7 w-7"
+                title={t('chat.newChat')}
+                aria-label={t('chat.newChat')}
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={busy}
+                    className="h-7 w-7"
+                    title={t('chat.sessions')}
+                    aria-label={t('chat.sessions')}
+                  >
+                    <History className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72 max-h-80 overflow-y-auto">
+                  <DropdownMenuLabel>{t('chat.sessions')}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {threads.length === 0 ? (
+                    <div className="px-2 py-3 text-xs text-ink-muted">{t('chat.sessionsEmpty')}</div>
+                  ) : (
+                    threads.map((s) => (
+                      <DropdownMenuItem
+                        key={s.thread}
+                        onSelect={() => switchThread(s.thread)}
+                        className="flex items-start gap-2"
+                      >
+                        <Check
+                          className={cn(
+                            'h-3.5 w-3.5 mt-0.5 shrink-0',
+                            s.thread === thread ? 'opacity-100 text-brand-blue' : 'opacity-0',
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium">
+                            {s.title || t('chat.sessionUntitled')}
+                          </div>
+                          <div className="text-[10px] text-ink-muted">
+                            {new Date(s.lastActivity).toLocaleString()} · {s.count}
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="h-7 w-7"
+                aria-label={t('chat.close')}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Scrolling message list.
