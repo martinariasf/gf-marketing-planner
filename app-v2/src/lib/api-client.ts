@@ -324,6 +324,16 @@ export async function apiCreatePost(
   return normalizePost(raw)
 }
 
+// GF-5 — delete a Viktor-owned manifest asset (soft-delete overlay on the backend).
+export async function apiDeleteManifestAsset(slug: string, assetId: string): Promise<void> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(
+    `/clients/${slug}/assets/${encodeURIComponent(assetId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
+}
+
 export async function apiLoadCalendarRange(slug: string): Promise<CalendarRangeConfig | null> {
   try {
     const r = await apiGet<{ data: CalendarRangeConfig | null }>(`/clients/${slug}/config/calendar-range`)
