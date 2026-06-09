@@ -301,6 +301,15 @@ export async function apiPatchPost(
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
 }
 
+export async function apiDeleteManifestAsset(slug: string, assetId: string): Promise<void> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(
+    `/clients/${slug}/assets/${encodeURIComponent(assetId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
+}
+
 export async function apiLoadCalendarRange(slug: string): Promise<CalendarRangeConfig | null> {
   try {
     const r = await apiGet<{ data: CalendarRangeConfig | null }>(`/clients/${slug}/config/calendar-range`)
