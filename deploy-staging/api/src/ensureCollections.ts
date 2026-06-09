@@ -154,6 +154,22 @@ const collections: CollectionSpec[] = [
     indexes: ['CREATE INDEX `idx_inspiration_slug` ON `inspiration_assets` (`slug`)'],
   },
   {
+    // Soft-delete overlay for Viktor-owned manifest assets. The dashboard can
+    // hide pictures from the Assets section without mutating assets/manifest.json
+    // or deleting image files from the agent-owned client assets directory.
+    name: 'asset_states',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'assetId', type: 'text', required: true, max: 160 },
+      { name: 'status', type: 'select', required: true, values: ['active', 'deleted'] },
+      { name: 'ts', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_asset_states_slug_asset` ON `asset_states` (`slug`, `assetId`)',
+    ],
+  },
+  {
     // Dashboard- and chat-created posts. Viktor's disk JSON is the authoritative
     // source for posts he wrote; this collection holds posts originated from
     // the staging dashboard/chat. Reads merge both. `data` is the full post JSON.
