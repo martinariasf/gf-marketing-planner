@@ -169,14 +169,6 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
       p.image = cover.image
     }
   }
-  // GF-7: a post must always surface a type. The agent's create_post tool may
-  // omit `format` (it's optional on write), which left the calendar/chat with a
-  // blank post type. Derive a structural default from the shape (carousel when
-  // there are multiple slides, otherwise a single image) so every post — and
-  // every chat action that quotes it — carries its type.
-  if (typeof p.format !== 'string' || p.format.length === 0) {
-    p.format = Array.isArray(p.slides) && (p.slides as unknown[]).length > 1 ? 'carousel' : 'single image'
-  }
   if (typeof p.approval !== 'object' || p.approval === null) {
     p.approval = { ...DEFAULT_APPROVAL, status: p.status }
   } else {

@@ -543,7 +543,7 @@ export default function CalendarView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title, format: activePost.format || (isCarousel(activePost) ? 'carousel' : 'single image') }))}
+                          onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title }))}
                           className="gap-1.5"
                         >
                           <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
