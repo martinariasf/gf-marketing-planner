@@ -540,6 +540,13 @@ export async function* apiChatStream(args: {
   }
 }
 
+/** Masked Postiz key status (GF-11). The raw key is never sent to the SPA. */
+export interface PostizStatus {
+  configured: boolean
+  last4: string | null
+  updatedAt: string | null
+}
+
 export interface IntegrationInfo {
   slug: string
   apiBase: string
@@ -554,10 +561,24 @@ export interface IntegrationInfo {
   }
   assetsDir: string
   assetsManifestPath: string
+  postiz: PostizStatus
 }
 
 export async function apiLoadIntegration(slug: string): Promise<IntegrationInfo> {
   return apiGet<IntegrationInfo>(`/clients/${slug}/integration`)
+}
+
+/** Save / rotate the Postiz API key. Returns the masked status; never the key. */
+export async function apiSavePostizKey(slug: string, apiKey: string): Promise<PostizStatus> {
+  return apiSend<PostizStatus>('PUT', `/clients/${slug}/integration/postiz`, { apiKey })
+}
+
+/** Remove the stored Postiz API key. */
+export async function apiDeletePostizKey(slug: string): Promise<PostizStatus> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(`/clients/${slug}/integration/postiz`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /clients/${slug}/integration/postiz failed: ${res.status}`)
+  return (await res.json()) as PostizStatus
 }
 
 // ── Sync / notify-viktor ─────────────────────────────────────────────────────

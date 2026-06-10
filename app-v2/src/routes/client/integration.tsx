@@ -28,9 +28,18 @@ import {
   Bot,
   Image as ImageIcon,
   AlertTriangle,
+  Send,
+  Trash2,
+  ShieldCheck,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
-import { apiLoadIntegration, type IntegrationInfo } from '@/lib/api-client'
+import {
+  apiLoadIntegration,
+  apiSavePostizKey,
+  apiDeletePostizKey,
+  type IntegrationInfo,
+  type PostizStatus,
+} from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 
 export default function IntegrationView() {
@@ -180,10 +189,112 @@ export default function IntegrationView() {
         <CodeBlock label={t('integration.curlSetApproval')} code={info.examples.curlSetApproval} />
       </section>
 
+      <Separator />
+
+      {/* ── Postiz API key (GF-11) ──────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Send className="h-4 w-4 text-brand-blue" />
+          {t('integration.postizTitle')}
+        </h2>
+        <PostizCard slug={info.slug} initial={info.postiz} />
+      </section>
+
       <p className="text-[11px] text-ink-muted">
         {t('integration.everyWrite')}
       </p>
     </div>
+  )
+}
+
+function PostizCard({ slug, initial }: { slug: string; initial: PostizStatus }) {
+  const t = useT()
+  const [status, setStatus] = useState<PostizStatus>(initial)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [removing, setRemoving] = useState(false)
+
+  const save = async () => {
+    const apiKey = value.trim()
+    if (!apiKey || saving) return
+    setSaving(true)
+    try {
+      const next = await apiSavePostizKey(slug, apiKey)
+      setStatus(next)
+      setValue('') // never keep the plaintext around after a successful save
+      toast.success(t('integration.postizSaved'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    if (removing) return
+    setRemoving(true)
+    try {
+      const next = await apiDeletePostizKey(slug)
+      setStatus(next)
+      toast.success(t('integration.postizRemoved'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-3 text-sm">
+        <p className="text-ink-muted text-xs max-w-2xl">{t('integration.postizIntro')}</p>
+
+        {status.configured && (
+          <div className="flex items-center gap-2 rounded-md border border-brand-green-200/60 bg-brand-green-50/40 px-3 py-2 text-xs">
+            <ShieldCheck className="h-4 w-4 text-brand-green-600 shrink-0" />
+            <span>
+              {t('integration.postizConfigured', { last4: status.last4 ?? '••••' })}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            autoComplete="off"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={t('integration.postizPlaceholder')}
+            className="flex-1 min-w-0 px-3 py-1.5 text-xs font-mono rounded-lg border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save()
+            }}
+          />
+          <Button onClick={save} disabled={!value.trim() || saving} size="sm" className="h-9 shrink-0">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline ml-1.5">{t('integration.postizSave')}</span>
+          </Button>
+          {status.configured && (
+            <Button
+              onClick={remove}
+              disabled={removing}
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 text-rose-600 hover:text-rose-700"
+              title={t('integration.postizRemove')}
+              aria-label={t('integration.postizRemove')}
+            >
+              {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+        </div>
+
+        <p className="flex items-start gap-1.5 text-[11px] text-ink-muted">
+          <Eye className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
+          {t('integration.postizNeverShown')}
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
