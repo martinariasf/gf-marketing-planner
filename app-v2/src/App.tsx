@@ -17,6 +17,8 @@ const LearningsView   = lazy(() => import('@/routes/client/learnings'))
 const SuggestionsView = lazy(() => import('@/routes/client/suggestions'))
 const IntegrationView = lazy(() => import('@/routes/client/integration'))
 const VideosView      = lazy(() => import('@/routes/client/videos'))
+// GF-4 — external reviewer page. Standalone, code-gated, OUTSIDE client layout.
+const ExternalReview  = lazy(() => import('@/routes/review/external'))
 
 function RouteFallback() {
   return (
@@ -104,6 +106,8 @@ export default function App() {
       <AppErrorBoundary>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+          {/* Public external review — must precede the /:slug catch-all layout. */}
+          <Route path="/review/:publicId" element={<ExternalReview />} />
           <Route path="/" element={<ClientPicker />} />
           <Route path="/:slug" element={<ClientLayout />}>
             <Route index element={<Navigate to="context" replace />} />

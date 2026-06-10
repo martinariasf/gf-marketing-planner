@@ -12,15 +12,24 @@ import {
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
 import { Pillar } from '@/components/pillar'
+import { ReviewShareDialog } from '@/components/review-share-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { fmtDate } from '@/lib/format'
 import {
   apiLoadCalendarRange,
+  apiLoadReviewActivity,
   apiPatchPost,
   apiSaveCalendarRange,
   apiSetApproval,
   apiUploadInspiration,
   isApiEnabled,
 } from '@/lib/api-client'
+import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
 import {
   CalendarDays,
@@ -39,6 +48,10 @@ import {
   Rows3,
   Images,
   Settings2,
+  Share2,
+  Download,
+  FileText,
+  FileType2,
   Check,
   X,
 } from 'lucide-react'
@@ -102,6 +115,9 @@ export default function CalendarView() {
   const [rangeOpen, setRangeOpen] = useState(false)
   const [savingRange, setSavingRange] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  // GF-4 — review share dialog + unread external-review activity badge.
+  const [shareOpen, setShareOpen] = useState(false)
+  const [reviewUnread, setReviewUnread] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +127,18 @@ export default function CalendarView() {
       const normalized = normalizeCalendarRange(range)
       setCalendarRange(normalized)
       setRangeDraft(normalized)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  // GF-4 — surface unread external-review activity on the Share button.
+  useEffect(() => {
+    let cancelled = false
+    if (!isApiEnabled) return
+    apiLoadReviewActivity(slug, { unread: true, limit: 1 }).then((a) => {
+      if (!cancelled) setReviewUnread(a.unreadCount)
     })
     return () => {
       cancelled = true
@@ -190,6 +218,36 @@ export default function CalendarView() {
       setApprovingId(null)
     }
   }
+
+  // GF-17 â€” export the currently visible calendar range as PDF or Word.
+  const runExport = useCallback(
+    (kind: 'pdf' | 'word') => {
+      try {
+        const input = {
+          clientName: plan.client.name,
+          range: calendarRange,
+          posts,
+          labels: {
+            title: t('calendar.eyebrow'),
+            rangeLabel: `${rangeMonths[0]?.label ?? ''} â€“ ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
+            date: t('export.date'),
+            channel: t('export.channel'),
+            format: t('export.format'),
+            pillar: t('export.pillar'),
+            post: t('export.post'),
+            copy: t('calendar.copyLabel'),
+            noPosts: t('calendar.noPostsShort'),
+            generatedOn: t('export.generatedOn'),
+          },
+        }
+        if (kind === 'pdf') exportCalendarPdf(input)
+        else exportCalendarWord(input)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('export.failed'))
+      }
+    },
+    [plan.client.name, calendarRange, posts, rangeMonths, t],
+  )
 
   // CAL2 â€” upload an image straight onto the active post (no Viktor needed).
   // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
@@ -297,18 +355,56 @@ export default function CalendarView() {
           </button>
         ))}
       </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setRangeDraft(calendarRange)
-            setRangeOpen(true)
-          }}
-          className="gap-1.5"
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-          {rangeMonths[0]?.label} - {rangeMonths[rangeMonths.length - 1]?.label}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isApiEnabled && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShareOpen(true)}
+                className="gap-1.5 relative"
+              >
+                <Share2 className="h-3.5 w-3.5 text-brand-blue" />
+                {t('review.share')}
+                {reviewUnread > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-green-500 px-1 text-[10px] font-bold text-white">
+                    {reviewUnread}
+                  </span>
+                )}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-3.5 w-3.5 text-brand-blue" />
+                    {t('export.download')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => runExport('pdf')}>
+                    <FileText className="h-3.5 w-3.5 mr-2" />
+                    {t('export.asPdf')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => runExport('word')}>
+                    <FileType2 className="h-3.5 w-3.5 mr-2" />
+                    {t('export.asWord')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setRangeDraft(calendarRange)
+              setRangeOpen(true)
+            }}
+            className="gap-1.5"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            {rangeMonths[0]?.label} - {rangeMonths[rangeMonths.length - 1]?.label}
+          </Button>
+        </div>
       </div>
 
       {/* Month tabs â€” shown in Week + Month modes (Quarter shows all months). */}
@@ -740,6 +836,21 @@ export default function CalendarView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* GF-4 â€” share-for-review + external-review activity. */}
+      {isApiEnabled && (
+        <ReviewShareDialog
+          slug={slug}
+          range={calendarRange}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          onJumpToPost={(postId) => {
+            const p = posts.find((x) => x.id === postId)
+            if (p) jumpToPost(p)
+          }}
+          onUnreadChange={setReviewUnread}
+        />
+      )}
     </div>
   )
 }
