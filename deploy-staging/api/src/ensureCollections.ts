@@ -215,6 +215,75 @@ const collections: CollectionSpec[] = [
     ],
     indexes: ['CREATE INDEX `idx_information_sources_slug` ON `information_sources` (`slug`)'],
   },
+  // ── GF-4 Collaboration layer ────────────────────────────────────────────────
+  // Protected external review links for the Content Creation calendar range.
+  // A reviewer opens /review/<publicId> with a code, sees only the sanitized
+  // posts in [rangeStart,rangeEnd], and can comment / submit a review decision.
+  // The access code is stored hashed (sha256(publicId+":"+code)); never plaintext.
+  {
+    name: 'review_links',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'publicId', type: 'text', required: true, max: 64 },
+      { name: 'title', type: 'text', max: 200 },
+      { name: 'rangeStart', type: 'text', required: true, max: 7 },
+      { name: 'rangeEnd', type: 'text', required: true, max: 7 },
+      { name: 'codeHash', type: 'text', required: true, max: 128 },
+      { name: 'status', type: 'select', required: true, values: ['active', 'revoked'] },
+      { name: 'expiresAt', type: 'text', max: 40 },
+      { name: 'createdBy', type: 'text', max: 100 },
+      { name: 'createdAt', type: 'text', max: 40 },
+      { name: 'revokedAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_review_links_public` ON `review_links` (`publicId`)',
+      'CREATE INDEX `idx_review_links_slug` ON `review_links` (`slug`)',
+    ],
+  },
+  // External-reviewer comments + dashboard moderation replies. Kept distinct from
+  // chat_messages (Viktor transcripts) and approvals_v2 (internal decisions).
+  {
+    name: 'review_comments',
+    fields: [
+      { name: 'linkId', type: 'text', required: true, max: 50 },
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postId', type: 'text', max: 100 },
+      { name: 'reviewerName', type: 'text', max: 120 },
+      { name: 'body', type: 'text', required: true, maxSize: 20_000 },
+      { name: 'status', type: 'select', values: ['open', 'resolved'] },
+      { name: 'source', type: 'select', required: true, values: ['reviewer', 'dashboard'] },
+      { name: 'parentId', type: 'text', max: 50 },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_review_comments_link` ON `review_comments` (`linkId`,`createdAt`)',
+      'CREATE INDEX `idx_review_comments_slug` ON `review_comments` (`slug`)',
+    ],
+  },
+  // Dashboard-visible activity feed: one row per external review action so the
+  // dashboard can show unread counts and link back to the reviewed post.
+  {
+    name: 'review_events',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'linkId', type: 'text', required: true, max: 50 },
+      { name: 'postId', type: 'text', max: 100 },
+      {
+        name: 'kind',
+        type: 'select',
+        required: true,
+        values: ['comment', 'approved', 'changes_requested'],
+      },
+      { name: 'reviewerName', type: 'text', max: 120 },
+      { name: 'preview', type: 'text', max: 300 },
+      { name: 'read', type: 'bool' },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_review_events_slug_read` ON `review_events` (`slug`,`read`,`createdAt`)',
+      'CREATE INDEX `idx_review_events_link` ON `review_events` (`linkId`)',
+    ],
+  },
 ]
 
 export async function ensureCollections(): Promise<void> {

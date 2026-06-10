@@ -20,6 +20,8 @@ import { auditRoute } from './routes/audit.js'
 import { notifyRoute } from './routes/notify.js'
 import { chat } from './routes/chat.js'
 import { authExchange } from './routes/authExchange.js'
+import { reviewPublic } from './routes/reviewPublic.js'
+import { reviewLinks } from './routes/reviewLinks.js'
 import { integration } from './routes/integration.js'
 import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
@@ -95,8 +97,14 @@ app.route('/api/v1', health)
 // Public image serving — mounted before the auth-gated subapps so <img> tags
 // can load generated assets without a bearer token.
 app.route('/api/v1', assetFiles)
+// GF-4 public review API — code-gated, no bearer token. Mounted before the
+// auth-gated subapps so an external reviewer can reach /review/* without a
+// dashboard token (mirrors assetFiles + authExchange).
+app.route('/api/v1', reviewPublic)
 app.route('/api/v1', authExchange)
 app.route('/api/v1', clients)
+// GF-4 dashboard review-link management (bearer-gated).
+app.route('/api/v1', reviewLinks)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)

@@ -9,89 +9,23 @@ import { withPb } from '../pb.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { audit } from '../audit.js'
 import { disk } from '../diskData.js'
-import {
-  loadPostPatches,
-  loadCreatedPosts,
-  loadSuggestionStates,
-  loadApprovalsV2,
-  latestApprovalByPost,
-} from '../overlays.js'
+import { loadSuggestionStates, loadApprovalsV2 } from '../overlays.js'
+import { buildPost, listPostIds, type PostBase } from '../posts.js'
 import { problem } from '../problem.js'
 import {
   postCreateSchema,
   postPatchSchema,
   suggestionPatchSchema,
   approvalCreateSchema,
-  coalescePost,
   zodDetail,
 } from '../schemas/post.js'
-
-type PostBase = {
-  id: string
-  status?: string
-  pillar?: string
-  approval?: { status?: string }
-} & Record<string, unknown>
-
-// The chat agent doesn't always write the full image URL — it sometimes PATCHes
-// a relative path like "assets/p002_cover.png", a bare filename, or even an
-// absolute container path. Any of those break the dashboard <img>. Normalize to
-// our public, basicauth-bypassing file route (root-relative so it works on any
-// host). Leaves real absolute URLs (Unsplash, or the already-correct full URL)
-// untouched.
-function normalizeImageUrl(slug: string, image: unknown): unknown {
-  if (typeof image !== 'string') return image
-  const v = image.trim()
-  if (!v) return v
-  if (/^https?:\/\//i.test(v) || v.startsWith('/api/v1/')) return v
-  const name = v.split('/').filter(Boolean).pop() ?? v
-  return `/api/v1/clients/${slug}/assets/files/${name}`
-}
-
-async function buildPost(slug: string, id: string): Promise<PostBase | null> {
-  // Try disk first, then fall back to dashboard/chat-created posts in PB.
-  let base = (await disk.post(slug, id)) as PostBase | null
-  if (!base) {
-    const created = await loadCreatedPosts(slug)
-    const c = created.get(id)
-    if (!c) return null
-    base = { ...(c as PostBase), id }
-  }
-  const patches = await loadPostPatches(slug)
-  const approvals = await latestApprovalByPost(slug)
-  const patch = patches.get(id) ?? {}
-  const approval = approvals.get(id)
-  const next: PostBase = { ...base, ...patch, id }
-  if ('image' in next) next.image = normalizeImageUrl(slug, next.image)
-  // CAR1: normalize each carousel slide image the same way the cover is, so the
-  // agent can PATCH bare filenames and the dashboard still gets full asset URLs.
-  if (Array.isArray((next as Record<string, unknown>).slides)) {
-    const slides = (next as Record<string, unknown>).slides as Array<Record<string, unknown>>
-    ;(next as Record<string, unknown>).slides = slides.map((s) =>
-      s && typeof s === 'object' ? { ...s, image: normalizeImageUrl(slug, s.image) } : s,
-    )
-  }
-  if (approval) {
-    next.approval = {
-      ...(base.approval ?? {}),
-      ...(typeof patch.approval === 'object' && patch.approval !== null ? patch.approval : {}),
-      status: approval.decision,
-    }
-  }
-  // Repair partial / legacy rows so the dashboard never throws on a missing
-  // field (the June white-screen). Defensive last step — never invents content.
-  return coalescePost(next)
-}
 
 export const viktorOwned = new OpenAPIHono<AppEnv>()
 viktorOwned.use('*', requireAuth)
 
 viktorOwned.get('/clients/:slug/posts', requireScope(), async (c) => {
   const slug = c.req.param('slug')
-  const idsFromIndex = (await disk.postsIndex(slug))?.posts
-  const diskIds = idsFromIndex ?? (await disk.listPostFiles(slug))
-  const created = await loadCreatedPosts(slug)
-  const allIds = [...diskIds, ...Array.from(created.keys()).filter((id) => !diskIds.includes(id))]
+  const allIds = await listPostIds(slug)
   const status = c.req.query('status')
   const pillar = c.req.query('pillar')
   const includeDeleted = c.req.query('includeDeleted') === 'true'
