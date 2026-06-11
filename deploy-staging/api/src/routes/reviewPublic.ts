@@ -9,14 +9,16 @@
 //   - Nothing is returned before the code is verified.
 //   - Revoked or expired links return a safe error and zero client data.
 //   - Only sanitizePost() output is ever exposed — never brief/plan/goals/etc.
-//   - A reviewer "approve"/"request changes" is recorded as a signal event +
-//     comment. It NEVER writes approvals_v2 or mutates a post.
+//   - A reviewer "approve"/"request changes" is recorded as a signal event
+//     (overall decisions also leave an audit comment; per-post decisions are
+//     events only). It NEVER writes approvals_v2 or mutates a post.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { z } from 'zod'
 import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
+import { disk } from '../diskData.js'
 import { listPostsInRange } from '../posts.js'
 import {
   verifyCode,
@@ -43,6 +45,9 @@ const decisionSchema = z.object({
   decision: z.enum(['approved', 'changes_requested']),
   note: z.string().max(20_000).optional(),
   name: z.string().max(120).optional(),
+  // When present, the decision applies to ONE shared post (a per-post signal)
+  // instead of the overall review verdict.
+  postId: z.string().max(100).optional(),
 })
 
 async function findLink(publicId: string): Promise<ReviewLinkRecord | null> {
@@ -62,6 +67,62 @@ function deny(c: Context) {
     status: 403,
     detail: 'This review link is unavailable, or the access code is incorrect.',
   })
+}
+
+/**
+ * Display-only brand block so the reviewer page can render platform mockups.
+ * Reads ONLY the client identity fields from plan.json — never brief, goals,
+ * strategy or any other planning content.
+ */
+async function buildBrand(slug: string): Promise<{ name: string; handle: string; logoInitials: string }> {
+  const fallback = {
+    name: slug,
+    handle: `@${slug}`,
+    logoInitials: slug.slice(0, 2).toUpperCase(),
+  }
+  try {
+    const plan = (await disk.plan(slug)) as { client?: Record<string, unknown> } | null
+    const client = plan?.client
+    if (!client || typeof client !== 'object') return fallback
+    return {
+      name: typeof client.name === 'string' && client.name ? client.name : fallback.name,
+      handle: typeof client.handle === 'string' && client.handle ? client.handle : fallback.handle,
+      logoInitials:
+        typeof client.logoInitials === 'string' && client.logoInitials
+          ? client.logoInitials
+          : fallback.logoInitials,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+/** Latest per-post reviewer decision for a link, derived from review_events. */
+async function listPostDecisions(
+  linkId: string,
+): Promise<Array<{ postId: string; decision: string; reviewerName: string; createdAt: string }>> {
+  try {
+    const rows = await withPb((pb) =>
+      pb.collection('review_events').getFullList<Record<string, unknown>>({
+        filter: `linkId="${linkId}" && postId != "" && (kind="approved" || kind="changes_requested")`,
+        sort: 'createdAt',
+      }),
+    )
+    const latest = new Map<string, { postId: string; decision: string; reviewerName: string; createdAt: string }>()
+    for (const r of rows) {
+      const postId = String(r.postId ?? '')
+      if (!postId) continue
+      latest.set(postId, {
+        postId,
+        decision: String(r.kind ?? ''),
+        reviewerName: String(r.reviewerName ?? ''),
+        createdAt: String(r.createdAt ?? ''),
+      })
+    }
+    return [...latest.values()]
+  } catch {
+    return []
+  }
 }
 
 /** Sanitized, reviewer-safe payload for a link's shared content + comments. */
@@ -89,13 +150,16 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
   } catch {
     comments = []
   }
+  const [brand, postDecisions] = await Promise.all([buildBrand(link.slug), listPostDecisions(link.id)])
   return {
     link: {
       title: link.title ?? '',
       rangeStart: link.rangeStart,
       rangeEnd: link.rangeEnd,
     },
+    brand,
     posts,
+    postDecisions,
     comments,
   }
 }
@@ -251,9 +315,28 @@ reviewPublic.post('/review/:publicId/decision', async (c) => {
   const noteSuffix = parsed.data.note ? `: ${parsed.data.note}` : ''
   const body = `Review decision — ${decisionWord}${noteSuffix}`
 
-  // Record the reviewer's decision as a comment (audit trail for the reviewer)
-  // and an event (dashboard awareness). Deliberately does NOT touch approvals_v2
-  // or post status — a dashboard user still decides internally.
+  // Per-post decision: a pure signal event tied to one shared post. The postId
+  // must belong to the shared range — anything else is rejected without a write.
+  if (parsed.data.postId) {
+    const shared = await listPostsInRange(ctx.link.slug, ctx.link.rangeStart, ctx.link.rangeEnd)
+    const known = shared.some((p) => String((p as Record<string, unknown>).id ?? '') === parsed.data.postId)
+    if (!known) {
+      return problem(c, { title: 'Unprocessable Entity', status: 422, detail: 'Unknown post for this review link.' })
+    }
+    await recordEvent({
+      slug: ctx.link.slug,
+      linkId: ctx.link.id,
+      postId: parsed.data.postId,
+      kind: parsed.data.decision,
+      reviewerName,
+      preview: parsed.data.note ? parsed.data.note : `Reviewer ${decisionWord}`,
+    })
+    return c.json({ ok: true, decision: parsed.data.decision, postId: parsed.data.postId })
+  }
+
+  // Overall verdict: record the reviewer's decision as a comment (audit trail
+  // for the reviewer) and an event (dashboard awareness). Deliberately does NOT
+  // touch approvals_v2 or post status — a dashboard user still decides internally.
   await withPb((pb) =>
     pb.collection('review_comments').create({
       linkId: ctx.link.id,

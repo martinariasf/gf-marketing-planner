@@ -743,6 +743,12 @@ const en: Dict = {
   'review.ext.commentPlaceholder': 'Your comment on this post…',
   'review.ext.sendComment':     'Send',
   'review.ext.team':            'Team',
+  'review.ext.tabPreview':      'Preview',
+  'review.ext.tabDetails':      'Details',
+  'review.ext.acceptPost':      'Accept',
+  'review.ext.rejectPost':      'Request changes',
+  'review.ext.youAccepted':     'You accepted this post.',
+  'review.ext.youRequested':    'You requested changes on this post.',
 
   // GF-17 — content calendar export
   'export.download':    'Download',
@@ -1460,6 +1466,12 @@ const de: Dict = {
   'review.ext.commentPlaceholder': 'Dein Kommentar zu diesem Beitrag…',
   'review.ext.sendComment':     'Senden',
   'review.ext.team':            'Team',
+  'review.ext.tabPreview':      'Vorschau',
+  'review.ext.tabDetails':      'Details',
+  'review.ext.acceptPost':      'Freigeben',
+  'review.ext.rejectPost':      'Änderungen anfragen',
+  'review.ext.youAccepted':     'Du hast diesen Beitrag freigegeben.',
+  'review.ext.youRequested':    'Du hast Änderungen zu diesem Beitrag angefragt.',
 
   // GF-17 — Content-Kalender exportieren
   'export.download':    'Herunterladen',
@@ -2177,6 +2189,12 @@ const es: Dict = {
   'review.ext.commentPlaceholder': 'Tu comentario sobre esta publicación…',
   'review.ext.sendComment':     'Enviar',
   'review.ext.team':            'Equipo',
+  'review.ext.tabPreview':      'Vista previa',
+  'review.ext.tabDetails':      'Detalles',
+  'review.ext.acceptPost':      'Aprobar',
+  'review.ext.rejectPost':      'Solicitar cambios',
+  'review.ext.youAccepted':     'Aprobaste esta publicación.',
+  'review.ext.youRequested':    'Solicitaste cambios en esta publicación.',
 
   // GF-17 — exportar el calendario de contenido
   'export.download':    'Descargar',

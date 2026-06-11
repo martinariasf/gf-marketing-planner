@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { GFLogo } from '@/components/gf-logo'
+import { ChannelMockup } from '@/components/channel-mockup'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
@@ -32,8 +33,14 @@ import {
   ReviewGateError,
   type PublicReviewPayload,
   type PublicReviewPost,
+  type PublicReviewBrand,
+  type PublicPostDecision,
   type ReviewComment,
 } from '@/lib/api-client'
+
+// Channels with a platform-accurate mockup. Anything else (or no channel)
+// falls back to the plain details card.
+const MOCKUP_CHANNELS = new Set(['instagram', 'linkedin'])
 
 function fmtDate(iso: string): string {
   const d = new Date(iso)
@@ -250,6 +257,8 @@ function ReviewBody({
               key={post.id}
               t={t}
               post={post}
+              brand={payload.brand}
+              decision={payload.postDecisions?.find((d) => d.postId === post.id)}
               comments={commentsByPost(post.id)}
               publicId={publicId}
               token={token}
@@ -319,6 +328,8 @@ function ReviewBody({
 function PostReviewCard({
   t,
   post,
+  brand,
+  decision,
   comments,
   publicId,
   token,
@@ -327,6 +338,8 @@ function PostReviewCard({
 }: {
   t: (k: string, vars?: Record<string, string | number>) => string
   post: PublicReviewPost
+  brand?: PublicReviewBrand
+  decision?: PublicPostDecision
   comments: ReviewComment[]
   publicId: string
   token: string
@@ -336,6 +349,10 @@ function PostReviewCard({
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [showBox, setShowBox] = useState(false)
+  const [deciding, setDeciding] = useState(false)
+
+  const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
+  const [tab, setTab] = useState<'preview' | 'details'>(hasMockup ? 'preview' : 'details')
 
   const send = async () => {
     if (!body.trim()) return
@@ -353,73 +370,170 @@ function PostReviewCard({
     }
   }
 
+  const decide = async (d: 'approved' | 'changes_requested') => {
+    if (deciding || decision?.decision === d) return
+    setDeciding(true)
+    try {
+      await reviewDecision(publicId, token, d, { postId: post.id, name: reviewerName })
+      const { reviewRefresh } = await import('@/lib/api-client')
+      onPosted(await reviewRefresh(publicId, token))
+    } catch {
+      /* ignore — reviewer can retry */
+    } finally {
+      setDeciding(false)
+    }
+  }
+
   const cover = post.image || post.slides?.[0]?.image
+
+  const details = (
+    <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr]">
+      <div className="bg-paper-muted/40 flex items-center justify-center p-3 min-h-[140px]">
+        {cover ? (
+          <img src={cover} alt={post.title} className="max-h-48 w-full object-contain rounded-md" />
+        ) : (
+          <div className="text-ink-muted flex flex-col items-center gap-1">
+            <ImageIcon className="h-7 w-7 opacity-40" />
+            <span className="text-[11px]">{t('review.ext.noImage')}</span>
+          </div>
+        )}
+      </div>
+      <div className="p-4 space-y-2">
+        <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
+        {post.copy && <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>}
+        {post.hashtags && post.hashtags.length > 0 && (
+          <p className="text-xs text-brand-blue font-medium">{post.hashtags.join(' ')}</p>
+        )}
+        {post.cta && <p className="text-xs font-semibold">{post.cta}</p>}
+      </div>
+    </div>
+  )
 
   return (
     <article className="rounded-xl border border-border-subtle bg-paper overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr]">
-        <div className="bg-paper-muted/40 flex items-center justify-center p-3 min-h-[140px]">
-          {cover ? (
-            <img src={cover} alt={post.title} className="max-h-48 w-full object-contain rounded-md" />
-          ) : (
-            <div className="text-ink-muted flex flex-col items-center gap-1">
-              <ImageIcon className="h-7 w-7 opacity-40" />
-              <span className="text-[11px]">{t('review.ext.noImage')}</span>
-            </div>
+      <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
+          <span className="font-medium text-ink">{fmtDate(post.date)}</span>
+          {post.channel && <span>· {post.channel}</span>}
+          {post.format && <span>· {post.format}</span>}
+          {post.pillar && <Badge variant="outline" className="text-[10px]">{post.pillar}</Badge>}
+          {post.statusLabel && (
+            <Badge variant="secondary" className="text-[10px]">{post.statusLabel.replace('_', ' ')}</Badge>
           )}
         </div>
-        <div className="p-4 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
-            <span className="font-medium text-ink">{fmtDate(post.date)}</span>
-            {post.channel && <span>· {post.channel}</span>}
-            {post.format && <span>· {post.format}</span>}
-            {post.pillar && <Badge variant="outline" className="text-[10px]">{post.pillar}</Badge>}
-            {post.statusLabel && (
-              <Badge variant="secondary" className="text-[10px]">{post.statusLabel.replace('_', ' ')}</Badge>
-            )}
+        {hasMockup && (
+          <div className="flex rounded-lg border border-border-subtle p-0.5 bg-paper-muted/50 text-xs">
+            {(['preview', 'details'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={cn(
+                  'px-2.5 py-1 rounded-md font-medium transition-colors',
+                  tab === k ? 'bg-paper shadow-sm text-ink' : 'text-ink-muted hover:text-ink',
+                )}
+              >
+                {t(k === 'preview' ? 'review.ext.tabPreview' : 'review.ext.tabDetails')}
+              </button>
+            ))}
           </div>
-          <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
-          {post.copy && <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>}
-          {post.hashtags && post.hashtags.length > 0 && (
-            <p className="text-xs text-brand-blue font-medium">{post.hashtags.join(' ')}</p>
-          )}
-          {post.cta && <p className="text-xs font-semibold">{post.cta}</p>}
+        )}
+      </div>
 
-          {comments.length > 0 && (
-            <div className="pt-2 space-y-1.5 border-t border-border-subtle">
-              {comments.map((c) => (
-                <CommentRow key={c.id} c={c} t={t} />
-              ))}
-            </div>
-          )}
+      {hasMockup && tab === 'preview' ? (
+        <div className="bg-paper-muted/40 px-4 py-5">
+          <ChannelMockup
+            post={{
+              title: post.title,
+              copy: post.copy ?? '',
+              hashtags: post.hashtags ?? [],
+              image: post.image,
+              slides: post.slides,
+              channel: post.channel ?? '',
+            }}
+            clientName={brand?.name ?? ''}
+            handle={brand?.handle ?? ''}
+            logoInitials={brand?.logoInitials ?? ''}
+          />
+        </div>
+      ) : (
+        details
+      )}
 
-          {showBox ? (
-            <div className="pt-2 space-y-2">
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={2}
-                autoFocus
-                placeholder={t('review.ext.commentPlaceholder')}
-                className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-              />
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={send} disabled={posting || !body.trim()}>
-                  {posting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                  {t('review.ext.sendComment')}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowBox(false)} disabled={posting}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button size="sm" variant="outline" className="mt-1" onClick={() => setShowBox(true)}>
+      <div className="p-4 pt-3 space-y-2 border-t border-border-subtle">
+        {decision && (
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+              decision.decision === 'approved'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-amber-50 text-amber-700',
+            )}
+          >
+            {decision.decision === 'approved' ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <PenLine className="h-4 w-4 shrink-0" />
+            )}
+            {t(decision.decision === 'approved' ? 'review.ext.youAccepted' : 'review.ext.youRequested')}
+          </div>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant={decision?.decision === 'approved' ? 'default' : 'outline'}
+            onClick={() => decide('approved')}
+            disabled={deciding}
+          >
+            <ThumbsUp className="h-3.5 w-3.5 mr-1.5" />
+            {t('review.ext.acceptPost')}
+          </Button>
+          <Button
+            size="sm"
+            variant={decision?.decision === 'changes_requested' ? 'default' : 'outline'}
+            onClick={() => decide('changes_requested')}
+            disabled={deciding}
+          >
+            <PenLine className="h-3.5 w-3.5 mr-1.5" />
+            {t('review.ext.rejectPost')}
+          </Button>
+          {!showBox && (
+            <Button size="sm" variant="ghost" onClick={() => setShowBox(true)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               {t('review.ext.addComment')}
             </Button>
           )}
+          {deciding && <Loader2 className="h-4 w-4 animate-spin text-ink-muted" />}
         </div>
+
+        {comments.length > 0 && (
+          <div className="pt-1 space-y-1.5">
+            {comments.map((c) => (
+              <CommentRow key={c.id} c={c} t={t} />
+            ))}
+          </div>
+        )}
+
+        {showBox && (
+          <div className="pt-1 space-y-2">
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={2}
+              autoFocus
+              placeholder={t('review.ext.commentPlaceholder')}
+              className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={send} disabled={posting || !body.trim()}>
+                {posting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                {t('review.ext.sendComment')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowBox(false)} disabled={posting}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </article>
   )
