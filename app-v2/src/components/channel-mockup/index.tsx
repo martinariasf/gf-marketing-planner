@@ -1,9 +1,20 @@
-import type { Post } from '@/types'
 import { InstagramMockup } from './instagram'
 import { LinkedinMockup } from './linkedin'
 
+// The structural subset of Post the mockups actually render. Sanitized
+// external-review posts (PublicReviewPost) can be adapted into this shape too,
+// so the code-gated reviewer page can reuse the same mockups.
+export interface MockupPost {
+  title: string
+  copy: string
+  hashtags: string[]
+  image?: string
+  slides?: Array<{ image: string; caption?: string }>
+  channel: string
+}
+
 interface Props {
-  post: Post
+  post: MockupPost
   clientName: string
   handle: string
   logoInitials: string

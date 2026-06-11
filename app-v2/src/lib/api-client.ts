@@ -798,13 +798,28 @@ export interface PublicReviewPost {
   statusLabel?: string
 }
 
+export interface PublicReviewBrand {
+  name: string
+  handle: string
+  logoInitials: string
+}
+
+export interface PublicPostDecision {
+  postId: string
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+}
+
 export interface PublicReviewPayload {
   token?: string
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
   link: { title: string; rangeStart: string; rangeEnd: string }
+  brand?: PublicReviewBrand
   posts: PublicReviewPost[]
+  postDecisions?: PublicPostDecision[]
   comments: ReviewComment[]
 }
 
@@ -874,12 +889,12 @@ export async function reviewDecision(
   publicId: string,
   token: string,
   decision: 'approved' | 'changes_requested',
-  opts: { note?: string; name?: string } = {},
+  opts: { note?: string; name?: string; postId?: string } = {},
 ): Promise<void> {
   const res = await fetch(`${reviewBase()}/review/${publicId}/decision`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ decision, note: opts.note, name: opts.name }),
+    body: JSON.stringify({ decision, note: opts.note, name: opts.name, postId: opts.postId }),
   })
   if (res.status === 403) throw new ReviewGateError('Your review session expired. Re-enter the code.')
   if (!res.ok) throw new Error(`Could not submit decision (${res.status})`)
