@@ -367,3 +367,79 @@ reviewLinks.post('/clients/:slug/review-activity/read', requireScope(), requireR
   })
   return c.json({ ok: true, marked })
 })
+
+// ── Per-post feedback aggregation (v3 TASK-001) ──────────────────────────────
+// One call for the whole calendar: every reviewer decision and comment for the
+// client, indexed by postId, so the calendar can badge cards and the post view
+// can show the thread without per-post requests. Signals only — internal
+// approvals stay in approvals_v2.
+interface ReviewCommentRow {
+  id: string
+  slug: string
+  linkId: string
+  postId?: string
+  reviewerName?: string
+  body: string
+  status?: 'open' | 'resolved'
+  source: 'reviewer' | 'dashboard'
+  createdAt?: string
+}
+
+reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('dash', 'admin'), async (c) => {
+  const slug = c.req.param('slug')
+
+  let events: ReviewEventRow[] = []
+  let comments: ReviewCommentRow[] = []
+  try {
+    // NB: sort by the text `createdAt` we write ourselves — these collections
+    // have no autodate `created` field (see 2026-06-12 list-sort bugfix).
+    events = await withPb((pb) =>
+      pb.collection('review_events').getFullList<ReviewEventRow>({
+        filter: `slug="${slug}" && postId != "" && (kind="approved" || kind="changes_requested")`,
+        sort: 'createdAt',
+      }),
+    )
+  } catch {
+    events = []
+  }
+  try {
+    comments = await withPb((pb) =>
+      pb.collection('review_comments').getFullList<ReviewCommentRow>({ filter: `slug="${slug}"`, sort: 'createdAt' }),
+    )
+  } catch {
+    comments = []
+  }
+
+  // Latest decision per (postId, reviewer). Events are createdAt-ascending, so
+  // a plain overwrite keeps the newest.
+  const decisionsByPost = new Map<string, Map<string, { decision: string; reviewerName: string; createdAt: string }>>()
+  for (const ev of events) {
+    if (!ev.postId) continue
+    const reviewer = ev.reviewerName || 'Guest'
+    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map()
+    perReviewer.set(reviewer, {
+      decision: ev.kind,
+      reviewerName: reviewer,
+      createdAt: ev.createdAt ?? '',
+    })
+    decisionsByPost.set(ev.postId, perReviewer)
+  }
+
+  const byPost: Record<
+    string,
+    { decisions: { decision: string; reviewerName: string; createdAt: string }[]; comments: ReviewCommentRow[] }
+  > = {}
+  const bucket = (postId: string) =>
+    (byPost[postId] ??= { decisions: [], comments: [] })
+
+  for (const [postId, perReviewer] of decisionsByPost) {
+    bucket(postId).decisions = [...perReviewer.values()]
+  }
+  const general: { comments: ReviewCommentRow[] } = { comments: [] }
+  for (const cm of comments) {
+    if (cm.postId) bucket(cm.postId).comments.push(cm)
+    else general.comments.push(cm)
+  }
+
+  return c.json({ byPost, general })
+})

@@ -776,6 +776,37 @@ export async function apiMarkReviewActivityRead(
   await apiSend('POST', `/clients/${slug}/review-activity/read`, arg)
 }
 
+// Per-post external feedback for the whole client, indexed by postId. Backs the
+// calendar badges + the "External feedback" thread in the post view (v3).
+export interface ReviewFeedbackComment {
+  id: string
+  linkId: string
+  postId?: string
+  reviewerName?: string
+  body: string
+  status?: 'open' | 'resolved'
+  source: 'reviewer' | 'dashboard'
+  createdAt?: string
+}
+
+export interface ReviewPostFeedback {
+  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  comments: ReviewFeedbackComment[]
+}
+
+export interface ReviewFeedback {
+  byPost: Record<string, ReviewPostFeedback>
+  general: { comments: ReviewFeedbackComment[] }
+}
+
+export async function apiLoadReviewFeedback(slug: string): Promise<ReviewFeedback> {
+  try {
+    return await apiGet<ReviewFeedback>(`/clients/${slug}/review-feedback`)
+  } catch {
+    return { byPost: {}, general: { comments: [] } }
+  }
+}
+
 // ── GF-4: PUBLIC external-review client (no dashboard bearer token) ──────────
 // These hit the code-gated /review/* endpoints. The reviewer is NOT logged into
 // the platform; the only credential is the access code (exchanged for a rev_*
