@@ -154,3 +154,18 @@ acceptance:
 - Notion GF-4 decision log notes the v2 review page shipped to staging.
 notes:
 - Per new-task-workflow: never commit directly on experimental; PR or fast-forward merge.
+
+### TASK-010: Exempt /review/* + SPA assets from staging basicauth
+status: done
+owner: claude
+agent: claude
+area: deployment
+estimate: XS
+depends_on: [TASK-009]
+tags: [gf-4, deploy, caddy]
+acceptance:
+- GET staging.marketing.gfinnov.com/review/<id> returns the SPA without basicauth; /assets/* load.
+- All other staging paths remain behind basicauth; /api/v1/review/* still gates with the access code.
+notes:
+- Found during staging smoke test: outer Caddy catch-all gated /review/* with 401, so external reviewers could never open links on staging.
+- Code evidence: deploy/Caddyfile staging vhost; outer Caddyfile at /opt/marketing-planner/Caddyfile is hand-managed on the Hetzner box (CI does not deploy it) — applied manually + caddy reload.
