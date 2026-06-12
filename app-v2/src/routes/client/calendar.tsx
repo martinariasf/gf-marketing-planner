@@ -23,11 +23,15 @@ import { fmtDate } from '@/lib/format'
 import {
   apiLoadCalendarRange,
   apiLoadReviewActivity,
+  apiLoadReviewFeedback,
   apiPatchPost,
+  apiReplyReviewComment,
   apiSaveCalendarRange,
   apiSetApproval,
   apiUploadInspiration,
   isApiEnabled,
+  type ReviewFeedback,
+  type ReviewPostFeedback,
 } from '@/lib/api-client'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -54,6 +58,10 @@ import {
   FileType2,
   Check,
   X,
+  ThumbsUp,
+  PenLine,
+  MessageSquare,
+  Send,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -118,6 +126,21 @@ export default function CalendarView() {
   // GF-4 — review share dialog + unread external-review activity badge.
   const [shareOpen, setShareOpen] = useState(false)
   const [reviewUnread, setReviewUnread] = useState(0)
+  // GF-4 v3 — per-post external reviewer feedback (decisions + comments),
+  // loaded once for the whole calendar and indexed by postId.
+  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedback>({
+    byPost: {},
+    general: { comments: [] },
+  })
+
+  const reloadReviewFeedback = useCallback(() => {
+    if (!isApiEnabled) return
+    void apiLoadReviewFeedback(slug).then(setReviewFeedback)
+  }, [slug])
+
+  useEffect(() => {
+    reloadReviewFeedback()
+  }, [reloadReviewFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -477,6 +500,7 @@ export default function CalendarView() {
                       <CompactPostCard
                         key={p.id}
                         post={p}
+                        feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
                         onApprove={() => setApproval(p, 'approved')}
                         onReject={() => setApproval(p, 'rejected')}
@@ -526,6 +550,7 @@ export default function CalendarView() {
                       <CompactPostCard
                         key={p.id}
                         post={p}
+                        feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
                         onApprove={() => setApproval(p, 'approved')}
                         onReject={() => setApproval(p, 'rejected')}
@@ -759,8 +784,9 @@ export default function CalendarView() {
                         )}
                       </div>
                       <div className="p-2 space-y-0.5">
-                        <p className="text-[10px] text-ink-muted">
-                          {fmtDate(p.date)} Â· {p.channel}
+                        <p className="text-[10px] text-ink-muted flex items-center gap-1">
+                          <span className="truncate">{fmtDate(p.date)} Â· {p.channel}</span>
+                          <ReviewSignals feedback={reviewFeedback.byPost[p.id]} />
                         </p>
                         <p className="text-xs font-medium leading-tight line-clamp-2">
                           {p.title}
@@ -771,6 +797,16 @@ export default function CalendarView() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* GF-4 v3 — external reviewer feedback for the active post. */}
+          {isApiEnabled && (
+            <ExternalFeedbackPanel
+              slug={slug}
+              postId={activePost.id}
+              feedback={reviewFeedback.byPost[activePost.id]}
+              onReplied={reloadReviewFeedback}
+            />
           )}
 
           {/* Lightbox */}
@@ -843,7 +879,10 @@ export default function CalendarView() {
           slug={slug}
           range={calendarRange}
           open={shareOpen}
-          onOpenChange={setShareOpen}
+          onOpenChange={(v) => {
+            setShareOpen(v)
+            if (!v) reloadReviewFeedback()
+          }}
           onJumpToPost={(postId) => {
             const p = posts.find((x) => x.id === postId)
             if (p) jumpToPost(p)
@@ -861,12 +900,14 @@ export default function CalendarView() {
  */
 function CompactPostCard({
   post,
+  feedback,
   onSelect,
   onApprove,
   onReject,
   approving,
 }: {
   post: Post
+  feedback?: ReviewPostFeedback
   onSelect: () => void
   onApprove: () => void
   onReject: () => void
@@ -908,7 +949,10 @@ function CompactPostCard({
             {post.title}
           </p>
         </button>
-        <StatusBadges post={post} />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StatusBadges post={post} />
+          <ReviewSignals feedback={feedback} />
+        </div>
         {isApiEnabled && (
           <div className="flex items-center gap-1 pt-0.5">
             <Button size="sm" variant="outline" disabled={approving} onClick={onApprove} className="h-6 px-2 text-[10px]">
@@ -921,6 +965,172 @@ function CompactPostCard({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * GF-4 v3 — tiny external-reviewer indicators: ✓ n approved, ✎ n changes
+ * requested, 💬 n reviewer comments. Renders nothing without feedback. These
+ * are signals from outside reviewers — visually separate from internal status.
+ */
+function ReviewSignals({ feedback }: { feedback?: ReviewPostFeedback }) {
+  const t = useT()
+  if (!feedback) return null
+  const approved = feedback.decisions.filter((d) => d.decision === 'approved').length
+  const changes = feedback.decisions.filter((d) => d.decision === 'changes_requested').length
+  const comments = feedback.comments.filter((c) => c.source === 'reviewer').length
+  if (!approved && !changes && !comments) return null
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      {approved > 0 && (
+        <span
+          title={t('review.fb.approvedBy', { n: approved })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <ThumbsUp className="h-2.5 w-2.5" />
+          {approved}
+        </span>
+      )}
+      {changes > 0 && (
+        <span
+          title={t('review.fb.changesBy', { n: changes })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <PenLine className="h-2.5 w-2.5" />
+          {changes}
+        </span>
+      )}
+      {comments > 0 && (
+        <span
+          title={t('review.fb.commentsBy', { n: comments })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-brand-blue/10 text-brand-blue px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <MessageSquare className="h-2.5 w-2.5" />
+          {comments}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * GF-4 v3 — "External feedback" under the month-view post: reviewer decision
+ * chips + the comment thread, with a team reply box. Reviewer decisions are
+ * signals only; internal Approve/Reject stays in CopyPane.
+ */
+function ExternalFeedbackPanel({
+  slug,
+  postId,
+  feedback,
+  onReplied,
+}: {
+  slug: string
+  postId: string
+  feedback?: ReviewPostFeedback
+  onReplied: () => void
+}) {
+  const t = useT()
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const decisions = feedback?.decisions ?? []
+  const comments = feedback?.comments ?? []
+  if (decisions.length === 0 && comments.length === 0) return null
+
+  // Replies attach to a review link; thread them onto the link of the latest
+  // reviewer comment for this post.
+  const lastReviewerComment = [...comments].reverse().find((c) => c.source === 'reviewer')
+
+  const send = async () => {
+    if (!reply.trim() || !lastReviewerComment) return
+    setSending(true)
+    try {
+      await apiReplyReviewComment(slug, lastReviewerComment.linkId, reply.trim(), postId)
+      setReply('')
+      onReplied()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('review.fb.replyFailed'))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4 sm:p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-brand-blue" />
+          {t('review.fb.title')}
+        </h3>
+
+        {decisions.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {decisions.map((d) => (
+              <span
+                key={`${d.reviewerName}-${d.createdAt}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  d.decision === 'approved'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700',
+                )}
+              >
+                {d.decision === 'approved' ? (
+                  <ThumbsUp className="h-3 w-3" />
+                ) : (
+                  <PenLine className="h-3 w-3" />
+                )}
+                {d.reviewerName}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {comments.length > 0 && (
+          <div className="space-y-1.5">
+            {comments.map((c) => (
+              <div
+                key={c.id}
+                className={cn(
+                  'text-xs rounded-md px-2.5 py-1.5',
+                  c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
+                )}
+              >
+                <span className="font-medium">
+                  {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
+                </span>
+                {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
+                <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {lastReviewerComment && (
+          <div className="flex items-center gap-2">
+            <input
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send()
+                }
+              }}
+              placeholder={t('review.fb.replyPlaceholder')}
+              className="flex-1 min-w-0 rounded-md border border-border-subtle bg-paper px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+            />
+            <Button size="sm" onClick={send} disabled={sending || !reply.trim()}>
+              {sending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
