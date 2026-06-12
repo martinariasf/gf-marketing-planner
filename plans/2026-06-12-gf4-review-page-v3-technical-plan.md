@@ -8,6 +8,7 @@ code_reviewed: true
 default_group: item
 items:
   - gf-4: Collaboration layer | priority: high
+  - gf-17: Calendar export (PDF/Word) | priority: medium
 ---
 
 # Plan
@@ -153,7 +154,7 @@ notes:
 - Mirror the v2 stub-API verification approach (node http stub + vite dev with VITE_API_BASE).
 
 ### TASK-009: Merge to experimental, deploy, staging smoke test
-status: todo
+status: done
 owner: claude
 agent: claude
 area: deployment
@@ -165,3 +166,37 @@ acceptance:
 - Notion GF-4 decision log updated.
 notes:
 - Per new-task-workflow: never commit directly on experimental.
+
+## GF-17 follow-up — pictures in the export (Martin, 2026-06-12)
+
+### TASK-010: Embed post images in the PDF and Word calendar export
+status: done
+owner: claude
+agent: claude
+area: frontend
+estimate: M
+depends_on: []
+tags: [gf-17, export]
+acceptance:
+- Each exported post shows its picture (cover image; carousels additionally show a small strip of all slides).
+- PDF: images are inlined as data URIs and the print dialog only opens after they have loaded (with a timeout fallback).
+- Word: the .doc is emitted as MHTML (multipart/related) with images embedded as base64 parts so they render inside Word without network access.
+- Posts without an image, and images that fail to fetch, export exactly as before (no broken-image icons, export never throws because of one image).
+notes:
+- Source: GF-17 in Notion (calendar export); request from Martin 2026-06-12.
+- Code evidence: app-v2/src/lib/calendar-export.ts buildBody/exportCalendarPdf/exportCalendarWord (currently text-only HTML); caller app-v2/src/routes/client/calendar.tsx runExport.
+- exportCalendar* become async (image fetching); runExport must await and keep toasting errors.
+
+### TASK-011: Verify, merge feat/gf17-export-images to experimental, deploy
+status: done
+owner: claude
+agent: claude
+area: deployment
+estimate: S
+depends_on: [TASK-010]
+tags: [gf-17, deploy, verify]
+acceptance:
+- app-v2 build green; browser harness confirms the generated PDF HTML contains data-URI images and the Word blob is valid MHTML containing the base64 image parts.
+- Merged to experimental, CI deploy green.
+notes:
+- Word rendering itself is verified by Martin opening a downloaded .doc (no Word on the dev box).

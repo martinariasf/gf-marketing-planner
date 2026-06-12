@@ -244,7 +244,7 @@ export default function CalendarView() {
 
   // GF-17 â€” export the currently visible calendar range as PDF or Word.
   const runExport = useCallback(
-    (kind: 'pdf' | 'word') => {
+    async (kind: 'pdf' | 'word') => {
       try {
         const input = {
           clientName: plan.client.name,
@@ -263,8 +263,9 @@ export default function CalendarView() {
             generatedOn: t('export.generatedOn'),
           },
         }
-        if (kind === 'pdf') exportCalendarPdf(input)
-        else exportCalendarWord(input)
+        // Async since images are fetched + embedded into the document.
+        if (kind === 'pdf') await exportCalendarPdf(input)
+        else await exportCalendarWord(input)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t('export.failed'))
       }
