@@ -141,7 +141,10 @@ reviewLinks.get('/clients/:slug/review-links', requireScope(), requireRole('dash
   let rows: ReviewLinkRecord[] = []
   try {
     rows = await withPb((pb) =>
-      pb.collection('review_links').getFullList<ReviewLinkRecord>({ filter: `slug="${slug}"`, sort: '-created' }),
+      // NB: review_links has no autodate `created` field — only the text
+      // `createdAt` we write ourselves. Sorting by `-created` makes PB reject
+      // the whole query (and the catch below hides it as an empty list).
+      pb.collection('review_links').getFullList<ReviewLinkRecord>({ filter: `slug="${slug}"`, sort: '-createdAt' }),
     )
   } catch {
     rows = []
