@@ -151,6 +151,20 @@ export function ReviewShareDialog({
     }
   }
 
+  // Copy a ready-to-paste block with BOTH the link and the access code, so the
+  // user can drop it straight into WhatsApp/email. Only offered while the code
+  // is still on screen (it is hashed server-side and shown only once).
+  const copyBoth = async (key: string, url: string, code: string) => {
+    try {
+      await navigator.clipboard.writeText(t('review.copyBothTemplate', { url, code }))
+      setCopied(key)
+      setTimeout(() => setCopied((k) => (k === key ? null : k)), 1500)
+      toast.success(t('review.copiedBoth'))
+    } catch {
+      toast.error(t('review.copyFailed'))
+    }
+  }
+
   const markAllRead = async () => {
     try {
       await apiMarkReviewActivityRead(slug, { all: true })
@@ -179,32 +193,46 @@ export function ReviewShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Link2 className="h-4 w-4 text-brand-blue" />
-            {t('review.title')}
-          </DialogTitle>
-          <DialogDescription>{t('review.subtitle')}</DialogDescription>
-        </DialogHeader>
-
-        <Tabs defaultValue="links" className="w-full">
-          <TabsList className="w-full">
-            <TabsTrigger value="links" className="flex-1">
-              {t('review.tabLinks')}
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="flex-1 gap-1.5">
-              {t('review.tabActivity')}
-              {unread > 0 && (
-                <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-green-100 px-1 text-[10px] font-semibold text-brand-green-600">
-                  {unread}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+      {/*
+       * Mobile: a bottom sheet anchored to the bottom edge, full width, capped to
+       * the visible viewport (dvh) so it never clips behind the browser chrome.
+       * Desktop (sm+): the original centered max-w-2xl dialog. tailwind-merge lets
+       * these responsive classes override the primitive's centering cleanly.
+       */}
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-0 overflow-hidden p-0',
+          'top-auto bottom-0 translate-y-0 max-w-full max-h-[92dvh] rounded-b-none rounded-t-2xl',
+          'sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2 sm:max-w-2xl sm:max-h-[85vh] sm:rounded-xl',
+        )}
+      >
+        <Tabs defaultValue="links" className="flex min-h-0 w-full flex-1 flex-col">
+          {/* Pinned header: title + tabs stay put while the body scrolls. */}
+          <div className="shrink-0 border-b border-border-subtle px-4 pt-4 pb-3 space-y-3">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-brand-blue" />
+                {t('review.title')}
+              </DialogTitle>
+              <DialogDescription>{t('review.subtitle')}</DialogDescription>
+            </DialogHeader>
+            <TabsList className="w-full">
+              <TabsTrigger value="links" className="flex-1">
+                {t('review.tabLinks')}
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="flex-1 gap-1.5">
+                {t('review.tabActivity')}
+                {unread > 0 && (
+                  <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-green-100 px-1 text-[10px] font-semibold text-brand-green-600">
+                    {unread}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ── Links ── */}
-          <TabsContent value="links" className="space-y-3 pt-2">
+          <TabsContent value="links" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-ink-muted">
                 {t('review.rangeHint', { start: range.startMonth, end: range.endMonth })}
@@ -226,7 +254,7 @@ export function ReviewShareDialog({
             ) : links.length === 0 ? (
               <p className="py-8 text-center text-sm text-ink-muted">{t('review.noLinks')}</p>
             ) : (
-              <div className="space-y-2 max-h-[46vh] overflow-y-auto -mx-1 px-1">
+              <div className="space-y-2 -mx-1 px-1">
                 {links.map((link) => {
                   const url = reviewUrl(link.reviewPath)
                   const code = revealed[link.id]
@@ -294,6 +322,20 @@ export function ReviewShareDialog({
                         </div>
                       )}
                       {code && (
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          onClick={() => copyBoth(`both-${link.id}`, url, code)}
+                        >
+                          {copied === `both-${link.id}` ? (
+                            <Check className="h-3.5 w-3.5 mr-1.5 text-brand-green-100" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          {t('review.copyBoth')}
+                        </Button>
+                      )}
+                      {code && (
                         <p className="text-[10px] text-amber-700">{t('review.codeOnce')}</p>
                       )}
 
@@ -329,7 +371,7 @@ export function ReviewShareDialog({
           </TabsContent>
 
           {/* ── Activity ── */}
-          <TabsContent value="activity" className="space-y-3 pt-2">
+          <TabsContent value="activity" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-ink-muted">{t('review.activityHint')}</p>
               {unread > 0 && (
@@ -346,7 +388,7 @@ export function ReviewShareDialog({
             ) : events.length === 0 ? (
               <p className="py-8 text-center text-sm text-ink-muted">{t('review.noActivity')}</p>
             ) : (
-              <div className="space-y-1.5 max-h-[46vh] overflow-y-auto -mx-1 px-1">
+              <div className="space-y-1.5 -mx-1 px-1">
                 {events.map((ev) => (
                   <button
                     key={ev.id}
