@@ -17,6 +17,8 @@ import type {
   ClientIndexEntry,
   Performance,
   Post,
+  Channel,
+  PostStatus,
   ApprovalLogEntry,
   AssetsManifest,
   Suggestions,
@@ -299,6 +301,27 @@ export async function apiPatchPost(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
+}
+
+// GF-15 — create a new dashboard-originated post. `date` + `title` are the only
+// required fields (the backend coalesces the rest); the API returns the built
+// Post (201), which we normalize like every other read.
+export type CreatePostInput = {
+  date: string
+  title: string
+  channel?: Channel
+  format?: string
+  pillar?: string
+  status?: PostStatus
+  copy?: string
+}
+
+export async function apiCreatePost(
+  slug: string,
+  input: CreatePostInput,
+): Promise<Post> {
+  const raw = await apiSend<unknown>('POST', `/clients/${slug}/posts`, input)
+  return normalizePost(raw)
 }
 
 export async function apiLoadCalendarRange(slug: string): Promise<CalendarRangeConfig | null> {

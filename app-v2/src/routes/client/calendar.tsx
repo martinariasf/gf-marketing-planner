@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { fmtDate } from '@/lib/format'
 import {
+  apiCreatePost,
   apiLoadCalendarRange,
   apiLoadReviewActivity,
   apiLoadReviewFeedback,
@@ -33,6 +34,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
 import {
@@ -56,6 +58,8 @@ import {
   Download,
   FileText,
   FileType2,
+  Plus,
+  PieChart as PieChartIcon,
   Check,
   X,
   ThumbsUp,
@@ -99,6 +103,17 @@ function weekOfMonth(iso: string) {
   return Math.ceil(new Date(iso).getDate() / 7)
 }
 
+/**
+ * GF-16 — normalize a stored post date (full ISO or plain YYYY-MM-DD) to the
+ * `YYYY-MM-DD` value an `<input type="date">` expects. Empty string if unparseable.
+ */
+function toDateInputValue(iso: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso ?? '')
+  if (m) return m[1]
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+}
+
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
 function requestPictureChange(message: string) {
   window.dispatchEvent(new CustomEvent('mp:open-chat', { detail: { message } }))
@@ -123,6 +138,10 @@ export default function CalendarView() {
   const [rangeOpen, setRangeOpen] = useState(false)
   const [savingRange, setSavingRange] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  // GF-15 — manual post creation from the calendar.
+  const [creating, setCreating] = useState(false)
+  // Post id to focus once `posts` refreshes after a create (jump to the new post).
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null)
   // GF-4 — review share dialog + unread external-review activity badge.
   const [shareOpen, setShareOpen] = useState(false)
   const [reviewUnread, setReviewUnread] = useState(0)
@@ -184,6 +203,48 @@ export default function CalendarView() {
     return m
   }, [posts, monthKeys])
 
+  // GF-9 — content-mix vs strategy for the visible range: actual share of posts
+  // per content pillar against each pillar's target weight. Posts whose pillar
+  // isn't a known strategy pillar are grouped under "Other".
+  const contentMix = useMemo(() => {
+    const inRange = posts.filter((p) => monthKeys.includes(monthKeyFromIso(p.date)))
+    const total = inRange.length
+    const byPillar = new Map<string, number>()
+    inRange.forEach((p) => {
+      const name = p.pillar || '—'
+      byPillar.set(name, (byPillar.get(name) ?? 0) + 1)
+    })
+    const targetTotal = plan.pillars.reduce((s, p) => s + (p.weight || 0), 0) || 1
+    const known = plan.pillars.map((p) => {
+      const count = byPillar.get(p.name) ?? 0
+      return {
+        name: p.name,
+        value: count,
+        color: p.color,
+        actualPct: total ? Math.round((count / total) * 100) : 0,
+        targetPct: Math.round(((p.weight || 0) / targetTotal) * 100),
+      }
+    })
+    let other = 0
+    byPillar.forEach((count, name) => {
+      if (!plan.pillars.some((p) => p.name === name)) other += count
+    })
+    const data =
+      other > 0
+        ? [
+            ...known,
+            {
+              name: t('calendar.mixOther'),
+              value: other,
+              color: '#cbd5e1',
+              actualPct: total ? Math.round((other / total) * 100) : 0,
+              targetPct: 0,
+            },
+          ]
+        : known
+    return { data, total }
+  }, [posts, monthKeys, plan.pillars, t])
+
   // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
   const [activeMonth, setActiveMonth] = useState(rangeMonths[0]?.key ?? defaultRange.startMonth)
@@ -241,6 +302,40 @@ export default function CalendarView() {
       setApprovingId(null)
     }
   }
+
+  // GF-15 — create a blank draft post in the active month, then jump to it.
+  const createPost = useCallback(async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      const date = `${activeMonth}-01`
+      const created = await apiCreatePost(slug, {
+        date,
+        title: t('calendar.newPostTitle'),
+        status: 'idea',
+      })
+      toast(t('calendar.postCreated'), { duration: 1600 })
+      setViewMode('month')
+      setActiveMonth(monthKeyFromIso(created.date))
+      setPendingSelectId(created.id)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('calendar.createFailed'))
+    } finally {
+      setCreating(false)
+    }
+  }, [creating, activeMonth, slug, t, refetch])
+
+  // Once a freshly-created post lands in the refreshed `posts`, select it.
+  useEffect(() => {
+    if (!pendingSelectId) return
+    const idx = (postsByMonth[activeMonth] ?? []).findIndex((p) => p.id === pendingSelectId)
+    if (idx >= 0) {
+      setSlideIndex(idx)
+      setDirection(0)
+      setPendingSelectId(null)
+    }
+  }, [pendingSelectId, postsByMonth, activeMonth])
 
   // GF-17 â€” export the currently visible calendar range as PDF or Word.
   const runExport = useCallback(
@@ -836,6 +931,34 @@ export default function CalendarView() {
         </>
       ) : null)}
 
+      {/* GF-15 — add a post manually, at the bottom of the calendar. */}
+      {isApiEnabled && (
+        <div className="flex justify-center pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={createPost}
+            disabled={creating}
+            className="gap-1.5"
+          >
+            {creating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5 text-brand-blue" />
+            )}
+            {t('calendar.addPost')}
+          </Button>
+        </div>
+      )}
+
+      {/* GF-9 — content-mix pie chart vs strategy, for the visible quarter/range. */}
+      <ContentMixChart
+        quarterLabel={plan.quarter.label || String(plan.quarter.year ?? '')}
+        rangeLabel={`${rangeMonths[0]?.label ?? ''} - ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`}
+        data={contentMix.data}
+        total={contentMix.total}
+      />
+
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
           <DialogTitle>Calendar range</DialogTitle>
@@ -892,6 +1015,77 @@ export default function CalendarView() {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * GF-9 — content-mix pie chart. Shows the quarter plus the actual distribution
+ * of posts across content pillars (in the visible range) against each pillar's
+ * strategy target weight.
+ */
+function ContentMixChart({
+  quarterLabel,
+  rangeLabel,
+  data,
+  total,
+}: {
+  quarterLabel: string
+  rangeLabel: string
+  data: Array<{ name: string; value: number; color: string; actualPct: number; targetPct: number }>
+  total: number
+}) {
+  const t = useT()
+  const slices = data.filter((d) => d.value > 0)
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PieChartIcon className="h-4 w-4 text-brand-blue" />
+          <h3 className="text-sm font-semibold text-brand-blue">{t('calendar.contentMixTitle')}</h3>
+          <span className="text-[11px] text-ink-muted">
+            {[quarterLabel, rangeLabel].filter(Boolean).join(' Â· ')}
+          </span>
+        </div>
+        {total === 0 ? (
+          <p className="text-xs text-ink-muted py-6 text-center">{t('calendar.contentMixEmpty')}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6 items-center">
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={slices}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={88}
+                    paddingAngle={2}
+                  >
+                    {slices.map((d) => (
+                      <Cell key={d.name} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {data.map((d) => (
+                <div key={d.name} className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                  <span className="flex-1 truncate">{d.name}</span>
+                  <span className="font-medium tabular-nums">{d.actualPct}%</span>
+                  <span className="text-ink-muted tabular-nums">
+                    {t('calendar.mixTarget', { pct: d.targetPct })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -1171,17 +1365,21 @@ function CopyPane({
 }) {
   const t = useT()
   const initialHashtags = (post.hashtags ?? []).join(' ')
+  const initialDate = toDateInputValue(post.date)
   const [title, setTitle] = useState(post.title ?? '')
   const [copy, setCopy] = useState(post.copy ?? '')
   const [hashtags, setHashtags] = useState(initialHashtags)
   const [cta, setCta] = useState(post.cta ?? '')
+  // GF-16 — editable publication date (YYYY-MM-DD for the date input).
+  const [date, setDate] = useState(initialDate)
   const [saving, setSaving] = useState(false)
 
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
-    cta !== (post.cta ?? '')
+    cta !== (post.cta ?? '') ||
+    date !== initialDate
 
   const save = async () => {
     if (!dirty || saving) return
@@ -1193,6 +1391,15 @@ function CopyPane({
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
+    // GF-16 — only send the date when it actually changed and is non-empty
+    // (the API rejects an empty date with a 422).
+    if (date !== initialDate) {
+      if (!date) {
+        toast.error(t('calendar.dateRequired'))
+        return
+      }
+      patch.date = date
+    }
     setSaving(true)
     try {
       await apiPatchPost(slug, post.id, patch)
@@ -1210,6 +1417,7 @@ function CopyPane({
     setCopy(post.copy ?? '')
     setHashtags(initialHashtags)
     setCta(post.cta ?? '')
+    setDate(initialDate)
   }
 
   return (
@@ -1235,6 +1443,21 @@ function CopyPane({
           <h2 className="text-2xl font-bold text-ink leading-tight">{post.title}</h2>
         )}
       </div>
+
+      {/* GF-16 — editable publication date. */}
+      {isApiEnabled && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.publishDate')}
+          </p>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <Pillar name={post.pillar} color={pillarColor} />

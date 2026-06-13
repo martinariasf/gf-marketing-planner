@@ -74,7 +74,7 @@ const NAV: NavItem[] = [
   { to: 'calendar',    labelKey: 'nav.calendar',    icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
   { to: 'approvals',   labelKey: 'nav.approvals',   icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
   { to: 'assets',      labelKey: 'nav.assets',      icon: Images,        phase: 'prepare' as WorkflowPhase },
-  { to: 'videos',      labelKey: 'nav.videos',      icon: Video,         phase: 'prepare' as WorkflowPhase },
+  { to: 'videos',      labelKey: 'nav.videos',      icon: Video,         phase: 'prepare' as WorkflowPhase, disabled: true },
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
@@ -512,7 +512,7 @@ function NavContent({
                     </span>
                   )}
                   {n.disabled && (
-                    <span className="text-[10px] uppercase tracking-wider opacity-70">
+                    <span className="text-[10px] tracking-wide opacity-70">
                       {t('nav.soon')}
                     </span>
                   )}
