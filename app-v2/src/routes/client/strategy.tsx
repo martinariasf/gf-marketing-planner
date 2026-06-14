@@ -314,6 +314,22 @@ export default function StrategyView() {
     [plan.keyDates, planningRange],
   )
 
+  // GF-8: period wording follows the planning range. The default range is a
+  // 3-month quarter (12 weeks); keep the fixed "this quarter" / "12 weeks"
+  // wording in that case, and switch to range-driven labels only when a
+  // different range is configured.
+  const isDefaultQuarter = planningMonths.length === 3
+  const periodLabel =
+    planningMonths.length > 0
+      ? `${planningMonths[0].label} – ${planningMonths[planningMonths.length - 1].label}`
+      : ''
+  const positioningLabel = isDefaultQuarter
+    ? t('strategy.positioning')
+    : t('strategy.positioningPeriod', { period: periodLabel })
+  const roadmapLabel = isDefaultQuarter
+    ? t('strategy.campaignRoadmap')
+    : t('strategy.campaignRoadmapWeeks', { weeks: totalWeeks })
+
   /** Write a lastModified timestamp for a given block key. */
   const stampBlock = (blockKey: string) => {
     setField(slug, 'plan', ['lastModified', blockKey], new Date().toISOString())
@@ -405,7 +421,7 @@ export default function StrategyView() {
               <div className="flex items-center gap-1.5">
                 <SECTION_META.positioning.icon className={`h-4 w-4 ${SECTION_META.positioning.iconCls}`} />
                 <p className={`text-xs uppercase tracking-wider font-medium ${SECTION_META.positioning.labelCls}`}>
-                  {t('strategy.positioning')}
+                  {positioningLabel}
                 </p>
               </div>
               <ReviewButton
@@ -570,7 +586,7 @@ export default function StrategyView() {
             </span>
           }
         >
-          {t('strategy.campaignRoadmap')}
+          {roadmapLabel}
         </SectionHeading>
         <Card>
           <CardContent className="p-5">
