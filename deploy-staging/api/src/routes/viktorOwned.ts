@@ -9,7 +9,7 @@ import { withPb } from '../pb.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { audit } from '../audit.js'
 import { disk } from '../diskData.js'
-import { loadSuggestionStates, loadApprovalsV2 } from '../overlays.js'
+import { loadSuggestionStates, loadDeletedAssetIds, loadApprovalsV2 } from '../overlays.js'
 import { buildPost, listPostIds, type PostBase } from '../posts.js'
 import { problem } from '../problem.js'
 import {
@@ -19,6 +19,10 @@ import {
   approvalCreateSchema,
   zodDetail,
 } from '../schemas/post.js'
+
+type AssetManifest = {
+  items?: Array<{ id?: unknown } & Record<string, unknown>>
+}
 
 export const viktorOwned = new OpenAPIHono<AppEnv>()
 viktorOwned.use('*', requireAuth)
@@ -246,8 +250,56 @@ viktorOwned.get('/clients/:slug/performance', requireScope(), async (c) => {
 })
 
 viktorOwned.get('/clients/:slug/assets/manifest', requireScope(), async (c) => {
-  return c.json((await disk.assetsManifest(c.req.param('slug'))) ?? { items: [] })
+  const slug = c.req.param('slug')
+  const manifest = ((await disk.assetsManifest(slug)) ?? { items: [] }) as AssetManifest
+  const deleted = await loadDeletedAssetIds(slug)
+  const items = (manifest.items ?? []).filter((item) => {
+    const id = typeof item.id === 'string' ? item.id : ''
+    return !id || !deleted.has(id)
+  })
+  return c.json({ ...manifest, items })
 })
+
+viktorOwned.delete(
+  '/clients/:slug/assets/:id',
+  requireScope(),
+  requireRole('dash', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const assetId = c.req.param('id')
+    const manifest = ((await disk.assetsManifest(slug)) ?? { items: [] }) as AssetManifest
+    const asset = (manifest.items ?? []).find((item) => item.id === assetId)
+    if (!asset) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'No such asset' })
+    }
+    const principal = c.get('principal')
+    const payload = {
+      slug,
+      assetId,
+      status: 'deleted',
+      ts: new Date().toISOString(),
+      actor: principal.label ?? principal.token.slice(0, 12),
+    }
+    await withPb(async (pb) => {
+      try {
+        const existing = await pb
+          .collection('asset_states')
+          .getFirstListItem<{ id: string }>(`slug="${slug}" && assetId="${assetId}"`)
+        await pb.collection('asset_states').update(existing.id, payload)
+      } catch {
+        await pb.collection('asset_states').create(payload)
+      }
+    })
+    await audit(principal, {
+      action: 'asset.delete',
+      slug,
+      resourceId: assetId,
+      before: asset,
+      after: { status: 'deleted' },
+    })
+    return c.json({ ok: true, id: assetId })
+  },
+)
 
 // ── Approvals: disk log + PB overlay merge, plus POST decision ──────────────
 

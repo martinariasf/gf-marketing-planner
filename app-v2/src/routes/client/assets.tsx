@@ -46,6 +46,7 @@ import {
   apiListInformationSources,
   apiPatchInformationSource,
   apiUploadInformationSourceFile,
+  apiDeleteManifestAsset,
   INFO_SOURCE_MAX_BYTES,
   type InspirationItem,
   type InformationSource,
@@ -116,6 +117,9 @@ export default function AssetsView() {
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [selected, setSelected] = useState<AssetItem | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<AssetItem | null>(null)
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
+  const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(() => new Set())
 
   const pillarByPost = useMemo(() => {
     const m: Record<string, string> = {}
@@ -129,7 +133,29 @@ export default function AssetsView() {
     return m
   }, [plan.pillars])
 
-  const items = assets?.items ?? []
+  const items = useMemo(
+    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id)),
+    [assets?.items, deletedAssetIds],
+  )
+
+  const deleteManifestAsset = async (item: AssetItem) => {
+    setDeletingAssetId(item.id)
+    try {
+      await apiDeleteManifestAsset(routeSlug, item.id)
+      setDeletedAssetIds((prev) => {
+        const next = new Set(prev)
+        next.add(item.id)
+        return next
+      })
+      setSelected(null)
+      setConfirmDelete(null)
+      toast(t('assets.deleted'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('assets.deleteFailed'))
+    } finally {
+      setDeletingAssetId(null)
+    }
+  }
 
   // Partition manifest items into two folders
   const viktorItems = useMemo(
@@ -459,14 +485,67 @@ export default function AssetsView() {
                   )}
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
+                <div className="flex justify-between items-center gap-3 pt-2">
                   <p className="text-[10px] text-ink-muted font-mono">
                     {t('assets.assetId', { id: selected.id })}
                   </p>
-                  <Button asChild size="sm" variant="outline">
-                    <a href={selected.url} target="_blank" rel="noreferrer">
-                      {t('assets.openFullSize')}
-                    </a>
+                  <div className="flex items-center gap-2">
+                    {isApiEnabled && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="text-rose-700 hover:text-rose-800 hover:border-rose-300"
+                        onClick={() => setConfirmDelete(selected)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        {t('assets.delete')}
+                      </Button>
+                    )}
+                    <Button asChild size="sm" variant="outline">
+                      <a href={selected.url} target="_blank" rel="noreferrer">
+                        {t('assets.openFullSize')}
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+          <DialogContent className="sm:max-w-md">
+            {confirmDelete && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t('assets.deleteConfirmTitle')}</DialogTitle>
+                  <DialogDescription>
+                    {t('assets.deleteConfirmBody', { name: confirmDelete.filename })}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmDelete(null)}
+                    disabled={deletingAssetId === confirmDelete.id}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-rose-700 hover:text-rose-800 hover:border-rose-300"
+                    onClick={() => void deleteManifestAsset(confirmDelete)}
+                    disabled={deletingAssetId === confirmDelete.id}
+                  >
+                    {deletingAssetId === confirmDelete.id ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {deletingAssetId === confirmDelete.id ? t('assets.deleting') : t('assets.delete')}
                   </Button>
                 </div>
               </>
