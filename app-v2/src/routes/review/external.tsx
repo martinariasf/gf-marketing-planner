@@ -13,9 +13,9 @@
 // end. The classic scroll list stays available behind a header toggle. All
 // decisions remain signals only (review_events) — the team approves internally.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
-import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion'
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion'
 import {
   Lock,
   Loader2,
@@ -56,9 +56,14 @@ import {
 // falls back to the plain details card.
 const MOCKUP_CHANNELS = new Set(['instagram', 'linkedin'])
 
-// Swipe commits past this drag distance (px) or fling velocity (px/s).
-const SWIPE_OFFSET = 120
-const SWIPE_VELOCITY = 600
+// Swipe commits past ~25% of the card width (with a sane minimum) OR a fling.
+// A low, width-relative threshold + snap-back is what makes the gesture feel
+// crisp on a phone instead of "dead" (the old fixed 120px was too far).
+const SWIPE_OFFSET_RATIO = 0.25
+const SWIPE_OFFSET_MIN = 72
+const SWIPE_VELOCITY = 500
+// Drag distance over which the tint + LIKE/NEEDS-CHANGES stamps reach full size.
+const HINT_RANGE = 110
 
 type T = (k: string, vars?: Record<string, string | number>) => string
 
@@ -731,14 +736,23 @@ function DeckCard({
 }) {
   const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
   const [tab, setTab] = useState<'preview' | 'details'>(hasMockup ? 'preview' : 'details')
+  const reduced = useReducedMotion()
+  const cardRef = useRef<HTMLElement | null>(null)
 
   const x = useMotionValue(0)
-  const rotate = useTransform(x, [-240, 240], [-9, 9])
-  const acceptHint = useTransform(x, [40, SWIPE_OFFSET], [0, 1])
-  const rejectHint = useTransform(x, [-SWIPE_OFFSET, -40], [1, 0])
+  // Card follows the finger ~1:1 with a slight tilt (disabled if reduced-motion).
+  const rotate = useTransform(x, [-240, 240], [-11, 11])
+  // Feedback grows with drag distance: a colour wash + an enlarging stamp.
+  const acceptTint = useTransform(x, [0, HINT_RANGE], [0, 0.22])
+  const rejectTint = useTransform(x, [-HINT_RANGE, 0], [0.22, 0])
+  const acceptHint = useTransform(x, [20, HINT_RANGE], [0, 1])
+  const rejectHint = useTransform(x, [-HINT_RANGE, -20], [1, 0])
+  const acceptScale = useTransform(x, [20, HINT_RANGE], [0.7, 1.15])
+  const rejectScale = useTransform(x, [-HINT_RANGE, -20], [1.15, 0.7])
 
   return (
     <motion.article
+      ref={cardRef}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{
@@ -748,25 +762,42 @@ function DeckCard({
         transition: { duration: 0.28, ease: 'easeIn' },
       }}
       drag={busy ? false : 'x'}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.9}
-      style={{ x, rotate }}
+      dragSnapToOrigin
+      dragElastic={0.65}
+      whileDrag={reduced ? undefined : { scale: 1.02 }}
+      style={reduced ? { x } : { x, rotate }}
       onDragEnd={(_, info) => {
-        if (info.offset.x > SWIPE_OFFSET || info.velocity.x > SWIPE_VELOCITY) onAccept()
-        else if (info.offset.x < -SWIPE_OFFSET || info.velocity.x < -SWIPE_VELOCITY) onReject()
+        const width = cardRef.current?.offsetWidth ?? 320
+        const threshold = Math.max(SWIPE_OFFSET_MIN, width * SWIPE_OFFSET_RATIO)
+        if (info.offset.x > threshold || info.velocity.x > SWIPE_VELOCITY) onAccept()
+        else if (info.offset.x < -threshold || info.velocity.x < -SWIPE_VELOCITY) onReject()
       }}
       className="absolute inset-0 rounded-xl border border-border-subtle bg-paper overflow-hidden flex flex-col cursor-grab active:cursor-grabbing touch-pan-y"
     >
-      {/* Swipe hints */}
+      {/* Colour wash that deepens as the card is dragged toward a decision. */}
+      {!reduced && (
+        <>
+          <motion.div
+            style={{ opacity: acceptTint }}
+            className="pointer-events-none absolute inset-0 z-[5] bg-emerald-500"
+          />
+          <motion.div
+            style={{ opacity: rejectTint }}
+            className="pointer-events-none absolute inset-0 z-[5] bg-amber-500"
+          />
+        </>
+      )}
+
+      {/* Swipe stamps — grow with drag distance for a clear Tinder-style cue. */}
       <motion.div
-        style={{ opacity: acceptHint }}
-        className="pointer-events-none absolute top-4 left-4 z-10 rounded-lg border-2 border-emerald-500 text-emerald-600 px-3 py-1 text-sm font-bold rotate-[-8deg] bg-paper/80"
+        style={{ opacity: acceptHint, scale: acceptScale }}
+        className="pointer-events-none absolute top-5 left-5 z-10 rounded-xl border-[3px] border-emerald-500 text-emerald-600 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide rotate-[-12deg] bg-paper/85 shadow-sm"
       >
         {t('review.ext.acceptPost')}
       </motion.div>
       <motion.div
-        style={{ opacity: rejectHint }}
-        className="pointer-events-none absolute top-4 right-4 z-10 rounded-lg border-2 border-amber-500 text-amber-600 px-3 py-1 text-sm font-bold rotate-[8deg] bg-paper/80"
+        style={{ opacity: rejectHint, scale: rejectScale }}
+        className="pointer-events-none absolute top-5 right-5 z-10 rounded-xl border-[3px] border-amber-500 text-amber-600 px-4 py-1.5 text-lg font-extrabold uppercase tracking-wide rotate-[12deg] bg-paper/85 shadow-sm"
       >
         {t('review.ext.rejectPost')}
       </motion.div>
