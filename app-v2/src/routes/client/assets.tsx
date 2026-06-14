@@ -389,7 +389,10 @@ export default function AssetsView() {
 
         {/* Asset detail Dialog — preserved */}
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent
+            className="sm:max-w-2xl bg-paper"
+            overlayClassName="bg-black/80 supports-backdrop-filter:backdrop-blur-sm"
+          >
             {selected && (
               <>
                 <DialogHeader>
