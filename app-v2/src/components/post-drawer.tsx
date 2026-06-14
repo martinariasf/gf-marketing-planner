@@ -15,13 +15,11 @@ import {
   SheetClose,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Loader2, Save, Check } from 'lucide-react'
+import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiPatchPost } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
-import type { Post, Channel } from '@/types'
-import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER } from '@/components/channel-icon'
-import { cn } from '@/lib/utils'
+import type { Post } from '@/types'
 
 export function PostDrawer({
   slug,
@@ -40,8 +38,6 @@ export function PostDrawer({
   const [title, setTitle] = useState('')
   const [copy, setCopy] = useState('')
   const [date, setDate] = useState('')
-  const [channel, setChannel] = useState<Channel>('linkedin')
-  const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -49,8 +45,6 @@ export function PostDrawer({
     setTitle(post.title ?? '')
     setCopy(post.copy ?? '')
     setDate(post.date ?? '')
-    setChannel(post.channel)
-    setChannelOpen(false)
   }, [post])
 
   async function save() {
@@ -59,7 +53,6 @@ export function PostDrawer({
     if (title !== post.title) patch.title = title
     if (copy !== post.copy) patch.copy = copy
     if (date !== post.date) patch.date = date
-    if (channel !== post.channel) patch.channel = channel
     if (Object.keys(patch).length === 0) {
       onOpenChange(false)
       return
@@ -90,7 +83,7 @@ export function PostDrawer({
         {post && (
           <div className="px-4 flex-1 overflow-y-auto space-y-4 py-4">
             <div className="text-[11px] text-ink-muted font-mono">
-              {post.id} · {CHANNEL_LABEL[channel] ?? channel} · {post.pillar}
+              {post.id} · {post.channel} · {post.pillar}
             </div>
             <label className="block space-y-1">
               <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.title')}</span>
@@ -109,60 +102,15 @@ export function PostDrawer({
                 className="border border-border-subtle rounded-md px-2 py-1.5 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
               />
             </label>
-            <div className="block space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.copy')}</span>
-                {/* GF-20: click the network icon at the top-right of the copy to
-                    switch which social network this post targets. */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setChannelOpen((o) => !o)}
-                    className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                    aria-haspopup="listbox"
-                    aria-expanded={channelOpen}
-                    aria-label={t('postDrawer.channel')}
-                  >
-                    <ChannelIcon channel={channel} className="h-4 w-4" />
-                    <span className="font-medium">{CHANNEL_LABEL[channel] ?? channel}</span>
-                  </button>
-                  {channelOpen && (
-                    <ul
-                      role="listbox"
-                      className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
-                    >
-                      {CHANNEL_ORDER.map((c) => (
-                        <li key={c}>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={c === channel}
-                            onClick={() => {
-                              setChannel(c)
-                              setChannelOpen(false)
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
-                              c === channel && 'font-medium',
-                            )}
-                          >
-                            <ChannelIcon channel={c} className="h-4 w-4" />
-                            <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
-                            {c === channel && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
+            <label className="block space-y-1">
+              <span className="text-[11px] uppercase tracking-wider text-ink-muted">{t('postDrawer.copy')}</span>
               <textarea
                 value={copy}
                 onChange={(e) => setCopy(e.target.value)}
                 rows={10}
                 className="w-full border border-border-subtle rounded-md px-2 py-1.5 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 font-mono"
               />
-            </div>
+            </label>
           </div>
         )}
 

@@ -11,6 +11,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
+import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER } from '@/components/channel-icon'
 import { Pillar } from '@/components/pillar'
 import { ReviewShareDialog } from '@/components/review-share-dialog'
 import {
@@ -42,6 +43,7 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Tag,
   ImageIcon,
   Maximize2,
@@ -79,7 +81,7 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
-import type { Post } from '@/types'
+import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -881,7 +883,8 @@ export default function CalendarView() {
                       </div>
                       <div className="p-2 space-y-0.5">
                         <p className="text-[10px] text-ink-muted flex items-center gap-1">
-                          <span className="truncate">{fmtDate(p.date)} Â· {p.channel}</span>
+                          <ChannelIcon channel={p.channel} className="h-3 w-3" />
+                          <span className="truncate">{fmtDate(p.date)}</span>
                           <ReviewSignals feedback={reviewFeedback.byPost[p.id]} />
                         </p>
                         <p className="text-xs font-medium leading-tight line-clamp-2">
@@ -1135,10 +1138,12 @@ function CompactPostCard({
       </button>
       <div className="min-w-0 flex-1 space-y-1">
         <button onClick={onSelect} className="block w-full text-left">
-          <p className="text-[10px] text-ink-muted truncate">
-            {fmtDate(post.date)} · {post.channel}
-            {timing === 'past' && ' · Past'}
-            {timing === 'today' && ' · Today'}
+          <p className="text-[10px] text-ink-muted truncate flex items-center gap-1">
+            <ChannelIcon channel={post.channel} className="h-3 w-3" />
+            <span>{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
+            <span>· {fmtDate(post.date)}</span>
+            {timing === 'past' && <span>· Past</span>}
+            {timing === 'today' && <span>· Today</span>}
           </p>
           <p className="text-xs font-medium leading-tight line-clamp-2 group-hover:text-brand-blue transition-colors">
             {post.title}
@@ -1372,6 +1377,9 @@ function CopyPane({
   const [cta, setCta] = useState(post.cta ?? '')
   // GF-16 — editable publication date (YYYY-MM-DD for the date input).
   const [date, setDate] = useState(initialDate)
+  // GF-20 — editable target social network (picked via the icon by the copy).
+  const [channel, setChannel] = useState<Channel>(post.channel)
+  const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const dirty =
@@ -1379,7 +1387,8 @@ function CopyPane({
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
     cta !== (post.cta ?? '') ||
-    date !== initialDate
+    date !== initialDate ||
+    channel !== post.channel
 
   const save = async () => {
     if (!dirty || saving) return
@@ -1391,6 +1400,7 @@ function CopyPane({
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
+    if (channel !== post.channel) patch.channel = channel
     // GF-16 — only send the date when it actually changed and is non-empty
     // (the API rejects an empty date with a 422).
     if (date !== initialDate) {
@@ -1418,6 +1428,8 @@ function CopyPane({
     setHashtags(initialHashtags)
     setCta(post.cta ?? '')
     setDate(initialDate)
+    setChannel(post.channel)
+    setChannelOpen(false)
   }
 
   return (
@@ -1429,8 +1441,10 @@ function CopyPane({
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-          {fmtDate(post.date)} Â· {post.channel} Â· {post.format}
+        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1">
+          <ChannelIcon channel={channel} className="h-3 w-3" />
+          <span>{CHANNEL_LABEL[channel] ?? channel}</span>
+          <span>· {fmtDate(post.date)} · {post.format}</span>
         </p>
         {isApiEnabled ? (
           <input
@@ -1470,7 +1484,65 @@ function CopyPane({
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.copyLabel')}</p>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted">{t('calendar.copyLabel')}</p>
+          {/* GF-20 — social-network icon at the top-right of the copy. In API
+              (edit) mode it's a button that opens a picker to change the target
+              network; read-only mode just shows the icon + label. */}
+          {isApiEnabled ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setChannelOpen((o) => !o)}
+                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                aria-haspopup="listbox"
+                aria-expanded={channelOpen}
+                aria-label={t('context.selectNetwork')}
+              >
+                <ChannelIcon channel={channel} className="h-4 w-4" />
+                <span className="font-medium">{CHANNEL_LABEL[channel] ?? channel}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </button>
+              {channelOpen && (
+                <>
+                  {/* click-away backdrop */}
+                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
+                  <ul
+                    role="listbox"
+                    className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
+                  >
+                    {CHANNEL_ORDER.map((c) => (
+                      <li key={c}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={c === channel}
+                          onClick={() => {
+                            setChannel(c)
+                            setChannelOpen(false)
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
+                            c === channel && 'font-medium',
+                          )}
+                        >
+                          <ChannelIcon channel={c} className="h-4 w-4" />
+                          <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
+                          {c === channel && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+              <ChannelIcon channel={post.channel} className="h-4 w-4" />
+              <span className="font-medium">{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
+            </span>
+          )}
+        </div>
         {isApiEnabled ? (
           <textarea
             value={copy}

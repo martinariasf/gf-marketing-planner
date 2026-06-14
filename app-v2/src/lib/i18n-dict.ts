@@ -680,7 +680,6 @@ const en: Dict = {
   'postDrawer.title':          'Title',
   'postDrawer.date':           'Date',
   'postDrawer.copy':           'Copy',
-  'postDrawer.channel':        'Network',
   'postDrawer.patchFailed':    'Patch failed',
 
   // Brand Identity Kit page
@@ -1455,7 +1454,6 @@ const de: Dict = {
   'postDrawer.title':          'Titel',
   'postDrawer.date':           'Datum',
   'postDrawer.copy':           'Text',
-  'postDrawer.channel':        'Netzwerk',
   'postDrawer.patchFailed':    'Patch fehlgeschlagen',
 
   // Sync indicator (viktor.notify audit trail)
@@ -2230,7 +2228,6 @@ const es: Dict = {
   'postDrawer.title':          'Título',
   'postDrawer.date':           'Fecha',
   'postDrawer.copy':           'Texto',
-  'postDrawer.channel':        'Red',
   'postDrawer.patchFailed':    'Patch falló',
 
   // Sync indicator (viktor.notify audit trail)
