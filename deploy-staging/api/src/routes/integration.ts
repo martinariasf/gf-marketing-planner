@@ -16,11 +16,52 @@
 // through this route.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
+import type { Context } from 'hono'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { env } from '../env.js'
+import { withPb } from '../pb.js'
+import { audit } from '../audit.js'
+import { problem } from '../problem.js'
+import { decryptSecret, encryptSecret, last4 } from '../secrets.js'
 
 export const integration = new OpenAPIHono<AppEnv>()
 integration.use('*', requireAuth)
+
+type IntegrationSecretRec = {
+  id: string
+  slug: string
+  postizApiKeyEnc?: string
+  postizLast4?: string
+  updatedAt?: string
+}
+
+/** Masked, SPA-safe status for the Postiz key — never includes the secret. */
+export type PostizStatus = {
+  configured: boolean
+  last4: string | null
+  updatedAt: string | null
+}
+
+async function loadSecretRecord(slug: string): Promise<IntegrationSecretRec | null> {
+  try {
+    return await withPb((pb) =>
+      pb.collection('integration_secrets').getFirstListItem<IntegrationSecretRec>(`slug="${slug}"`),
+    )
+  } catch {
+    return null
+  }
+}
+
+async function loadPostizStatus(slug: string): Promise<PostizStatus> {
+  const rec = await loadSecretRecord(slug)
+  if (!rec || !rec.postizApiKeyEnc) return { configured: false, last4: null, updatedAt: null }
+  return { configured: true, last4: rec.postizLast4 ?? null, updatedAt: rec.updatedAt ?? null }
+}
+
+function principalLabel(c: Context<AppEnv>): string {
+  const principal = c.get('principal')
+  return principal.label ?? principal.token.slice(0, 12)
+}
 
 integration.get(
   '/clients/:slug/integration',
@@ -52,6 +93,8 @@ integration.get(
       }
     }
 
+    const postiz = await loadPostizStatus(slug)
+
     return c.json({
       slug,
       apiBase,
@@ -68,6 +111,118 @@ integration.get(
       },
       assetsDir: `clients/${slug}/assets/`,
       assetsManifestPath: `clients/${slug}/assets/manifest.json`,
+      // GF-11: masked-only — the raw key is never serialised here.
+      postiz,
     })
+  },
+)
+
+// ── Postiz API key (GF-11) ──────────────────────────────────────────────────
+//
+// "Viktor should be able to get this key but never actually see it":
+//   • PUT/DELETE below are dash/admin only and accept/clear the plaintext key.
+//   • The masked status (configured + last4) rides on GET /integration above —
+//     the SPA never receives the raw key, even right after saving.
+//   • GET /integration/postiz/key is the ONLY route that returns plaintext, and
+//     it is agent/admin only. The Viktor runtime calls it server-side to feed
+//     the `postiz` CLI; the model never sees the response.
+
+// Save / rotate the Postiz API key. dash/admin only.
+integration.put(
+  '/clients/:slug/integration/postiz',
+  requireScope(),
+  requireRole('dash', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    let body: { apiKey?: unknown }
+    try {
+      body = await c.req.json()
+    } catch {
+      return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
+    }
+    const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
+    if (!apiKey) {
+      return problem(c, {
+        title: 'Unprocessable Entity',
+        status: 422,
+        detail: 'apiKey is required and must be a non-empty string.',
+      })
+    }
+
+    const updatedAt = new Date().toISOString()
+    const actor = principalLabel(c)
+    const fields = {
+      slug,
+      postizApiKeyEnc: encryptSecret(apiKey),
+      postizLast4: last4(apiKey),
+      updatedAt,
+      actor,
+    }
+    const existing = await loadSecretRecord(slug)
+    await withPb(async (pb) => {
+      const coll = pb.collection('integration_secrets')
+      if (existing) await coll.update(existing.id, fields)
+      else await coll.create(fields)
+    })
+    // Audit the change WITHOUT the secret — only the masked tail is recorded.
+    await audit(c.get('principal'), {
+      action: 'integration.postiz.update',
+      slug,
+      before: { configured: Boolean(existing?.postizApiKeyEnc), last4: existing?.postizLast4 ?? null },
+      after: { configured: true, last4: fields.postizLast4 },
+    })
+    return c.json({ configured: true, last4: fields.postizLast4, updatedAt } satisfies PostizStatus)
+  },
+)
+
+// Remove the Postiz API key. dash/admin only.
+integration.delete(
+  '/clients/:slug/integration/postiz',
+  requireScope(),
+  requireRole('dash', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const existing = await loadSecretRecord(slug)
+    if (existing) {
+      await withPb((pb) => pb.collection('integration_secrets').delete(existing.id))
+      await audit(c.get('principal'), {
+        action: 'integration.postiz.delete',
+        slug,
+        before: { configured: true, last4: existing.postizLast4 ?? null },
+        after: { configured: false, last4: null },
+      })
+    }
+    return c.json({ configured: false, last4: null, updatedAt: null } satisfies PostizStatus)
+  },
+)
+
+// Plaintext fetch — agent/admin ONLY. This is the "Viktor gets it" path; the
+// dashboard never calls this. The agent runtime injects the returned key into
+// the `postiz` CLI subprocess env and must never echo it to chat/tool output.
+integration.get(
+  '/clients/:slug/integration/postiz/key',
+  requireScope(),
+  requireRole('agent', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    const rec = await loadSecretRecord(slug)
+    if (!rec || !rec.postizApiKeyEnc) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'No Postiz API key configured for this client.' })
+    }
+    const apiKey = decryptSecret(rec.postizApiKeyEnc)
+    if (!apiKey) {
+      return problem(c, {
+        title: 'Internal Server Error',
+        status: 500,
+        detail: 'Stored Postiz key could not be decrypted (INTEGRATION_SECRET_KEY changed?).',
+      })
+    }
+    // Audit the retrieval (who/when) but never the value.
+    await audit(c.get('principal'), {
+      action: 'integration.postiz.retrieve',
+      slug,
+      after: { last4: rec.postizLast4 ?? null },
+    })
+    return c.json({ apiKey })
   },
 )

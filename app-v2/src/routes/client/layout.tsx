@@ -248,6 +248,9 @@ export default function ClientLayout() {
             to="/"
             className="flex items-center gap-3 min-w-0 flex-1 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-md"
           >
+            {/* GF Innovative Solutions brand mark (GF-1) */}
+            <GFLogo size="sm" className="shrink-0" />
+            <div className="h-6 w-px bg-border-subtle shrink-0 hidden sm:block" aria-hidden />
             <motion.div
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.15 }}

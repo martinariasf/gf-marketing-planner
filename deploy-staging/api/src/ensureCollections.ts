@@ -197,6 +197,24 @@ const collections: CollectionSpec[] = [
     indexes: ['CREATE UNIQUE INDEX `idx_org_configs_slug` ON `org_configs` (`slug`)'],
   },
   {
+    // GF-11: integration credentials (e.g. Postiz API key). Deliberately a
+    // SEPARATE collection from org_configs because org_configs is agent-readable
+    // (no role gate on its GET). Secrets here are stored as an encrypted envelope
+    // (see secrets.ts) and are NEVER returned to the dashboard — only the masked
+    // last4 is. The plaintext is decrypted server-side solely for the agent
+    // runtime fetch path. Default deny on all PB rules so only the admin API
+    // (withPb superuser) can touch it.
+    name: 'integration_secrets',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postizApiKeyEnc', type: 'text', maxSize: 5_000 },
+      { name: 'postizLast4', type: 'text', max: 8 },
+      { name: 'updatedAt', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: ['CREATE UNIQUE INDEX `idx_integration_secrets_slug` ON `integration_secrets` (`slug`)'],
+  },
+  {
     name: 'information_sources',
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },
