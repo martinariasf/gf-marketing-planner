@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import type { Post } from '@/types'
 import { fmtDate } from '@/lib/format'
 import { Pillar } from './pillar'
+import { ChannelIcon, CHANNEL_LABEL } from './channel-icon'
 
 const STATUS_STYLES: Record<string, string> = {
   idea:           'bg-neutral-100 text-neutral-700 border-neutral-200',
@@ -28,8 +29,10 @@ export function PostCard({ post, pillarColor }: Props) {
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-              {fmtDate(post.date)} &middot; {post.channel} &middot; {post.format}
+            <p className="text-[10px] uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+              <ChannelIcon channel={post.channel} className="h-3.5 w-3.5" />
+              <span>{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
+              &middot; {fmtDate(post.date)} &middot; {post.format}
             </p>
             <h3 className="text-base font-semibold mt-1">{post.title}</h3>
           </div>
