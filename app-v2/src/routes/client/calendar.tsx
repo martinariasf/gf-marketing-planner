@@ -23,6 +23,7 @@ import {
 import { fmtDate } from '@/lib/format'
 import {
   apiCreatePost,
+  apiDeletePost,
   apiLoadCalendarRange,
   apiLoadReviewActivity,
   apiLoadReviewFeedback,
@@ -32,9 +33,11 @@ import {
   apiSetApproval,
   apiUploadInspiration,
   isApiEnabled,
+  type ApprovalDecision,
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
+import { WORKFLOW, isPublished, laneFor, publishedUrl } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -63,11 +66,12 @@ import {
   Plus,
   PieChart as PieChartIcon,
   Check,
-  X,
   ThumbsUp,
   PenLine,
   MessageSquare,
   Send,
+  Trash2,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -140,6 +144,9 @@ export default function CalendarView() {
   const [rangeOpen, setRangeOpen] = useState(false)
   const [savingRange, setSavingRange] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  // GF-22 — post pending delete-confirmation, and the in-flight delete state.
+  const [deleteTarget, setDeleteTarget] = useState<Post | null>(null)
+  const [deleting, setDeleting] = useState(false)
   // GF-15 — manual post creation from the calendar.
   const [creating, setCreating] = useState(false)
   // Post id to focus once `posts` refreshes after a create (jump to the new post).
@@ -300,16 +307,35 @@ export default function CalendarView() {
     }
   }
 
-  const setApproval = async (post: Post, decision: 'approved' | 'rejected') => {
+  // GF-23 — set a post to any workflow status (Draft/Review/Approved/
+  // Programmed/Rechecked/Rejected). Published is terminal and never set here.
+  const setStatus = async (post: Post, decision: ApprovalDecision) => {
     setApprovingId(post.id)
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(decision === 'approved' ? `Approved ${post.id}` : `Rejected ${post.id}`, { duration: 1600 })
+      toast(t('calendar.statusSet', { id: post.id, status: t(`status.${decision}`) }), { duration: 1600 })
       refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update approval')
+      toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
     } finally {
       setApprovingId(null)
+    }
+  }
+
+  // GF-22 — delete after the confirmation dialog is accepted.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await apiDeletePost(slug, deleteTarget.id)
+      toast(t('calendar.deleted', { id: deleteTarget.id }), { duration: 1600 })
+      setDeleteTarget(null)
+      setSlideIndex(0)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('calendar.deleteFailed'))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -608,8 +634,8 @@ export default function CalendarView() {
                         post={p}
                         feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
-                        onApprove={() => setApproval(p, 'approved')}
-                        onReject={() => setApproval(p, 'rejected')}
+                        onSetStatus={(d) => setStatus(p, d)}
+                        onDelete={() => setDeleteTarget(p)}
                         onSelect={() => jumpToPost(p)}
                       />
                     ))}
@@ -658,8 +684,8 @@ export default function CalendarView() {
                         post={p}
                         feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
-                        onApprove={() => setApproval(p, 'approved')}
-                        onReject={() => setApproval(p, 'rejected')}
+                        onSetStatus={(d) => setStatus(p, d)}
+                        onDelete={() => setDeleteTarget(p)}
                         onSelect={() => jumpToPost(p)}
                       />
                     ))}
@@ -702,8 +728,8 @@ export default function CalendarView() {
                     pillarColor={pillarColor[activePost.pillar]}
                     onSaved={refetch}
                     approving={approvingId === activePost.id}
-                    onApprove={() => setApproval(activePost, 'approved')}
-                    onReject={() => setApproval(activePost, 'rejected')}
+                    onSetStatus={(d) => setStatus(activePost, d)}
+                    onDelete={() => setDeleteTarget(activePost)}
                   />
 
                   {/* Vertical divider */}
@@ -1033,6 +1059,29 @@ export default function CalendarView() {
         </DialogContent>
       </Dialog>
 
+      {/* GF-22 — delete a post, with an explicit confirmation window. */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && !deleting && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogTitle>{t('calendar.deleteTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('calendar.deleteBody', { id: deleteTarget?.id ?? '', title: deleteTarget?.title ?? '' })}
+          </DialogDescription>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+              {t('calendar.deleteConfirm')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* GF-4 â€” share-for-review + external-review activity. */}
       {isApiEnabled && (
         <ReviewShareDialog
@@ -1126,6 +1175,92 @@ function ContentMixChart({
 }
 
 /**
+ * GF-23 — workflow status control. For a live (non-published) post it is a
+ * dropdown over the full workflow (Draft/Review/Approved/Programmed/Rechecked/
+ * Rejected). A published post is read-only: it shows the Published badge and a
+ * link to the live Postiz post when one is known.
+ */
+function StatusSelect({
+  post,
+  busy,
+  onSetStatus,
+  size = 'sm',
+}: {
+  post: Post
+  busy: boolean
+  onSetStatus: (decision: ApprovalDecision) => void
+  size?: 'sm' | 'xs'
+}) {
+  const t = useT()
+
+  if (isPublished(post)) {
+    const url = publishedUrl(post)
+    return (
+      <span className="inline-flex items-center gap-1.5 flex-wrap">
+        <Badge variant="secondary" className={cn(size === 'xs' ? 'text-[9px]' : 'text-[10px]', STATUS_STYLES.published)}>
+          <Send className={cn(size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3', 'mr-1')} />
+          {t('status.published')}
+        </Badge>
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'inline-flex items-center gap-1 font-medium text-brand-blue hover:underline',
+              size === 'xs' ? 'text-[10px]' : 'text-xs',
+            )}
+          >
+            <ExternalLink className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+            {t('calendar.viewPublished')}
+          </a>
+        )}
+      </span>
+    )
+  }
+
+  const current = laneFor(post) as ApprovalDecision
+  const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
+  const StepIcon = step.Icon
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
+        >
+          {busy ? (
+            <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
+          ) : (
+            <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+          )}
+          {t(step.labelKey)}
+          <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {WORKFLOW.map((s) => {
+          const Icon = s.Icon
+          return (
+            <DropdownMenuItem
+              key={s.key}
+              disabled={s.key === current}
+              onClick={() => onSetStatus(s.key)}
+            >
+              <Icon className="h-3.5 w-3.5 mr-2" />
+              {t(s.labelKey)}
+              {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
  * CAL1 â€” compact post card reused by Week + Quarter overviews. Small thumbnail,
  * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
@@ -1133,17 +1268,18 @@ function CompactPostCard({
   post,
   feedback,
   onSelect,
-  onApprove,
-  onReject,
+  onSetStatus,
+  onDelete,
   approving,
 }: {
   post: Post
   feedback?: ReviewPostFeedback
   onSelect: () => void
-  onApprove: () => void
-  onReject: () => void
+  onSetStatus: (decision: ApprovalDecision) => void
+  onDelete: () => void
   approving: boolean
 }) {
+  const t = useT()
   const slideCount = isCarousel(post) ? post.slides.length : 0
   const timing = dateTiming(post.date)
   return (
@@ -1188,11 +1324,17 @@ function CompactPostCard({
         </div>
         {isApiEnabled && (
           <div className="flex items-center gap-1 pt-0.5">
-            <Button size="sm" variant="outline" disabled={approving} onClick={onApprove} className="h-6 px-2 text-[10px]">
-              <Check className="h-3 w-3 mr-1" /> Approve
-            </Button>
-            <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="h-6 px-2 text-[10px] text-rose-700">
-              <X className="h-3 w-3 mr-1" /> Reject
+            <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} size="xs" />
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={approving}
+              onClick={onDelete}
+              aria-label={t('calendar.deletePost')}
+              title={t('calendar.deletePost')}
+              className="h-6 w-6 p-0 text-ink-muted hover:text-rose-700"
+            >
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         )}
@@ -1390,16 +1532,16 @@ function CopyPane({
   pillarColor,
   onSaved,
   approving,
-  onApprove,
-  onReject,
+  onSetStatus,
+  onDelete,
 }: {
   slug: string
   post: Post
   pillarColor?: string
   onSaved: () => void
   approving: boolean
-  onApprove: () => void
-  onReject: () => void
+  onSetStatus: (decision: ApprovalDecision) => void
+  onDelete: () => void
 }) {
   const t = useT()
   const initialHashtags = (post.hashtags ?? []).join(' ')
@@ -1666,14 +1808,20 @@ function CopyPane({
         </div>
       )}
       {isApiEnabled && (
-        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle">
-          <Button size="sm" variant="outline" disabled={approving} onClick={onApprove}>
-            <Check className="h-3.5 w-3.5 mr-1.5" />
-            Approve
-          </Button>
-          <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="text-rose-700">
-            <X className="h-3.5 w-3.5 mr-1.5" />
-            Reject
+        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            {t('calendar.statusLabel')}
+          </span>
+          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} />
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={approving}
+            onClick={onDelete}
+            className="ml-auto text-ink-muted hover:text-rose-700"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+            {t('calendar.deletePost')}
           </Button>
         </div>
       )}
