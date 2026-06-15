@@ -270,7 +270,16 @@ export async function apiSave(slug: string, file: string, data: unknown): Promis
 
 // ── Phase 4 mutations ────────────────────────────────────────────────────────
 
-export type ApprovalDecision = 'in_review' | 'approved' | 'scheduled' | 'rejected'
+// GF-23 — the full content workflow a dashboard user can set from the calendar
+// or the kanban. Mirrors APPROVAL_DECISIONS on the API. `published` is omitted
+// on purpose: it is derived from the Postiz publish result, not user-settable.
+export type ApprovalDecision =
+  | 'drafting'
+  | 'in_review'
+  | 'approved'
+  | 'scheduled'
+  | 'needs_revision'
+  | 'rejected'
 
 export async function apiSetApproval(
   slug: string,
@@ -301,6 +310,14 @@ export async function apiPatchPost(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
+}
+
+// GF-22 — soft-delete a post. The API appends a `{ status: 'deleted' }` patch
+// and the list endpoint filters it out; recovery is a PATCH back to any status.
+export async function apiDeletePost(slug: string, postId: string): Promise<void> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(`/clients/${slug}/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /clients/${slug}/posts/${postId} failed: ${res.status}`)
 }
 
 // GF-15 — create a new dashboard-originated post. `date` + `title` are the only

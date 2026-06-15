@@ -26,7 +26,19 @@ export const POST_STATUSES = [
 
 export const CHANNELS = ['instagram', 'linkedin', 'tiktok', 'x', 'facebook'] as const
 
-export const APPROVAL_DECISIONS = ['in_review', 'approved', 'scheduled', 'rejected'] as const
+// GF-23 — the dashboard now drives the full content workflow (not just
+// accept/reject), so a status change can move a post into any settable state.
+// `published` is intentionally NOT here: it is terminal and derived from the
+// Postiz publish result (`publishing.publishedAt`/`publicUrl`), never set by a
+// dashboard user.
+export const APPROVAL_DECISIONS = [
+  'drafting',
+  'in_review',
+  'approved',
+  'scheduled',
+  'needs_revision',
+  'rejected',
+] as const
 
 // Accept either a full ISO datetime or a plain calendar date (YYYY-MM-DD) — both
 // appear in the agent's and the dashboard's writes. Reject anything Date can't parse.

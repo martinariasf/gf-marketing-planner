@@ -107,7 +107,9 @@ export async function loadDeletedAssetIds(slug: string): Promise<Set<string>> {
 
 interface ApprovalV2Row {
   postId: string
-  decision: 'in_review' | 'approved' | 'scheduled' | 'rejected'
+  // GF-23 — the full settable workflow (see APPROVAL_DECISIONS). Older rows may
+  // still carry only the original four values; both read back fine.
+  decision: 'drafting' | 'in_review' | 'approved' | 'scheduled' | 'needs_revision' | 'rejected'
   note?: string
   actor?: string
   ts?: string
