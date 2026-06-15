@@ -360,6 +360,44 @@ chat.post(
   },
 )
 
+// Session list — distinct threads for a client, newest activity first. Powers
+// the dashboard chat's session switcher. We derive a human title from each
+// session's opening user message and report last activity + message count.
+chat.get('/clients/:slug/chat/threads', requireScope(), requireRole('dash', 'admin'), async (c) => {
+  const slug = c.req.param('slug')
+  const rows = await withPb((pb) =>
+    pb.collection('chat_messages').getList(1, 500, {
+      filter: `slug="${slug}"`,
+      sort: '-created',
+      fields: 'thread,role,content,created',
+    }),
+  )
+  interface Row { thread: string; role: string; content: string; created: string }
+  const byThread = new Map<
+    string,
+    { thread: string; lastActivity: string; title: string; count: number }
+  >()
+  for (const row of rows.items as unknown as Row[]) {
+    if (!row.thread) continue
+    const cur = byThread.get(row.thread)
+    if (!cur) {
+      byThread.set(row.thread, {
+        thread: row.thread,
+        lastActivity: row.created, // rows are newest-first, so first seen = latest
+        title: row.role === 'user' ? row.content.slice(0, 80) : '',
+        count: 1,
+      })
+    } else {
+      cur.count++
+      // Newest-first order means the LAST user row we encounter is the oldest —
+      // that opening message makes the most intuitive session title.
+      if (row.role === 'user') cur.title = row.content.slice(0, 80)
+    }
+  }
+  const items = [...byThread.values()].sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))
+  return c.json({ items })
+})
+
 // Thread history fetch — unchanged.
 chat.get('/clients/:slug/chat/messages', requireScope(), requireRole('dash', 'admin'), async (c) => {
   const slug = c.req.param('slug')
