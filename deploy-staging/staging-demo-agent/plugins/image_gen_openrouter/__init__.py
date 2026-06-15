@@ -1296,4 +1296,5 @@ def register(ctx) -> None:
         is_async=False,
         description="Generate a Seedance 2.0 MP4 via OpenRouter and publish it as a dashboard video asset.",
         emoji="video",
+        override=True,
     )
