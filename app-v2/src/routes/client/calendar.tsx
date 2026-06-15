@@ -985,13 +985,15 @@ export default function CalendarView() {
         </div>
       )}
 
-      {/* GF-9 — content-mix pie chart vs strategy, for the visible quarter/range. */}
-      <ContentMixChart
-        quarterLabel={plan.quarter.label || String(plan.quarter.year ?? '')}
-        rangeLabel={`${rangeMonths[0]?.label ?? ''} - ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`}
-        data={contentMix.data}
-        total={contentMix.total}
-      />
+      {/* GF-9 — content-mix pie chart vs strategy. Shown only in Quarter view. */}
+      {viewMode === 'quarter' && (
+        <ContentMixChart
+          quarterLabel={plan.quarter.label || String(plan.quarter.year ?? '')}
+          rangeLabel={`${rangeMonths[0]?.label ?? ''} - ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`}
+          data={contentMix.data}
+          total={contentMix.total}
+        />
+      )}
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
