@@ -9,6 +9,17 @@ import { cn } from '@/lib/utils'
 
 export const CHANNEL_ORDER: Channel[] = ['linkedin', 'instagram', 'facebook', 'x', 'tiktok']
 
+/**
+ * The networks a post targets. GF-20: posts may carry a `channels` array; legacy
+ * posts only have the single `channel`. Always returns at least one network,
+ * de-duplicated and ordered by CHANNEL_ORDER for stable rendering.
+ */
+export function effectiveChannels(post: { channel: Channel; channels?: Channel[] }): Channel[] {
+  const list = post.channels && post.channels.length > 0 ? post.channels : [post.channel]
+  const seen = new Set(list)
+  return CHANNEL_ORDER.filter((c) => seen.has(c))
+}
+
 export const CHANNEL_LABEL: Record<Channel, string> = {
   linkedin:  'LinkedIn',
   instagram: 'Instagram',

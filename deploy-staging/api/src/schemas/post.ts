@@ -73,6 +73,9 @@ const postFields = {
   id: z.string().min(1).optional(),
   date: dateLike,
   channel: z.enum(CHANNELS).optional(),
+  // GF-20: a post can target several networks. Additive + optional; `channel`
+  // stays the primary (coalescePost keeps it = channels[0]).
+  channels: z.array(z.enum(CHANNELS)).max(5).optional(),
   format: z.string().optional(),
   pillar: z.string().optional(),
   campaign: z.string().optional(),
@@ -148,6 +151,22 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
   const p = { ...post } as Record<string, unknown>
   if (typeof p.status !== 'string') p.status = 'idea'
   if (typeof p.title !== 'string') p.title = ''
+  // GF-20: keep `channel` (primary) and `channels` (multi) coherent. If a valid
+  // channels array is present, the primary is its first entry; otherwise leave
+  // the scalar channel as-is. Drop unknown/empty arrays so the strict read shape
+  // never carries junk.
+  if (Array.isArray(p.channels)) {
+    const valid = (p.channels as unknown[]).filter(
+      (c): c is string => typeof c === 'string' && (CHANNELS as readonly string[]).includes(c),
+    )
+    const deduped = Array.from(new Set(valid))
+    if (deduped.length > 0) {
+      p.channel = deduped[0]
+      p.channels = deduped
+    } else {
+      delete p.channels
+    }
+  }
   if (typeof p.copy !== 'string') p.copy = ''
   if (typeof p.cta !== 'string') p.cta = ''
   if (typeof p.date !== 'string') p.date = ''
