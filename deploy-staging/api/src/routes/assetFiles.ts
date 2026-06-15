@@ -1,6 +1,6 @@
-// Public, read-only image file serving for client assets.
+// Public, read-only media file serving for client assets.
 //
-// Hermes (the agent) generates an image, then copies the PNG/JPG into its
+// Hermes (the agent) generates an image/video, then copies the media file into its
 // writable client mount at clients/<slug>/assets/<name>. This API container
 // mounts the same clients/ dir read-only at /data/clients, so we can stream
 // those bytes back out at a stable URL that the dashboard <img> tags and
@@ -25,9 +25,9 @@ import { env } from '../env.js'
 const ROOT = process.env.DATA_ROOT ?? '/data'
 
 // slug: lowercase letters, digits, hyphens. name: a single filename segment
-// with a known image extension. No slashes, no dots-dots, no leading dot.
+// with a known media extension. No slashes, no dots-dots, no leading dot.
 const SLUG_RE = /^[a-z0-9-]{1,100}$/
-const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.(png|jpe?g|webp|gif|svg)$/
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.(png|jpe?g|webp|gif|svg|mp4|webm|mov)$/
 
 const CONTENT_TYPE: Record<string, string> = {
   png: 'image/png',
@@ -36,6 +36,9 @@ const CONTENT_TYPE: Record<string, string> = {
   webp: 'image/webp',
   gif: 'image/gif',
   svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
 }
 
 export const assetFiles = new OpenAPIHono()

@@ -34,6 +34,20 @@ Enfoque central: **Producción de activos para LinkedIn y redes sociales utiliza
 - **No duplicidad:** No envíes la imagen dos veces (previsualización + URL). Una sola vez es suficiente para confirmar el cambio.
 - **Acción sobre descripción:** No pidas permiso para arreglar una imagen que no cumple con el branding; arréglala inmediatamente aplicando los parámetros corregidos.
 
+## Generacion de Videos
+- **Modelo:** `bytedance/seedance-2.0` via OpenRouter.
+- **Herramienta unica:** crea videos SOLO con `video_generate`. Nunca uses
+  terminal, curl, llamadas OpenRouter directas ni otro API de video.
+- **Branding primero:** lee `GET /clients/staging-demo/brief` y mete colores,
+  tipografia y tono en el prompt.
+- **Defaults:** `duration=5`, `resolution="720p"`, `aspect_ratio="landscape"`,
+  `generate_audio=false` si el usuario no especifica.
+- **Referencias:** usa `input_references` para estilo/producto/personaje, o
+  `first_frame` / `last_frame` cuando el video deba empezar o terminar en una
+  imagen exacta del asset library.
+- **Resultado:** la herramienta espera el job, guarda el MP4 en assets, crea un
+  manifest item `kind:"video"` y devuelve la URL publica en `video`.
+
 ## Context & Auth
 - **Client Slug:** `staging-demo`
 - **Dashboard URL:** `https://staging.marketing.gfinnov.com`

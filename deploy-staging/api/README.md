@@ -69,7 +69,7 @@ client — regardless of which dashboard URL opened the chat.
 | `POST /clients/:slug/approvals` | agent/dash/admin | Record an approval decision. |
 | `GET /clients/:slug/performance` | any (scoped) | Read performance JSON. |
 | `GET /clients/:slug/assets/manifest` | any (scoped) | Read the asset manifest. |
-| `GET /clients/:slug/assets/files/:name` | **none** (public) | Stream a generated image. Use this URL form in `post.image`. |
+| `GET /clients/:slug/assets/files/:name` | **none** (public) | Stream a generated image/video asset. Use this URL form in `post.image` for images and in video manifest items for clips. |
 | `GET /clients/:slug/inspiration/:id/file` | **none** (public) | Stream an uploaded inspiration image. |
 
 **Branding body** (`PATCH /clients/:slug/branding`) — top-level fields
