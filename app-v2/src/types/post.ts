@@ -22,7 +22,13 @@ export interface Slide {
 export interface Post {
   id: string
   date: string
+  // Primary network. Kept as the single source for all single-channel consumers
+  // (calendar list icon, exports, mockups). Always equals channels[0].
   channel: Channel
+  // GF-20: a post can target several networks at once. Optional + additive so
+  // legacy single-channel posts and every `post.channel` reader keep working.
+  // When present it includes `channel` as its first entry.
+  channels?: Channel[]
   format: string
   pillar: string
   campaign?: string

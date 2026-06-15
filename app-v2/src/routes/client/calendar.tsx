@@ -11,7 +11,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
-import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER } from '@/components/channel-icon'
+import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER, effectiveChannels } from '@/components/channel-icon'
 import { Pillar } from '@/components/pillar'
 import { ReviewShareDialog } from '@/components/review-share-dialog'
 import {
@@ -254,6 +254,8 @@ export default function CalendarView() {
   const [direction, setDirection] = useState(0)
   // Right-pane mode: the full picture (default) or the social-platform mockup.
   const [rightView, setRightView] = useState<'picture' | 'preview'>('picture')
+  // GF-20 — which selected network's mockup the Preview tab is showing.
+  const [previewChannel, setPreviewChannel] = useState<Channel | null>(null)
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
@@ -264,6 +266,12 @@ export default function CalendarView() {
   const monthPosts = postsByMonth[activeMonth] ?? []
   const activePost = monthPosts[slideIndex]
   const activeMonthLabel = rangeMonths.find((m) => m.key === activeMonth)?.name ?? activeMonth
+  // GF-20 — the networks the active post targets, and which one the Preview tab
+  // currently shows (defaults to the first; tolerates a stale selection when the
+  // active post changes without needing an effect).
+  const previewChannels = activePost ? effectiveChannels(activePost) : []
+  const activePreviewChannel =
+    previewChannel && previewChannels.includes(previewChannel) ? previewChannel : previewChannels[0]
 
   useEffect(() => {
     if (!rangeMonths.some((m) => m.key === activeMonth)) {
@@ -726,10 +734,33 @@ export default function CalendarView() {
                       </div>
                     </div>
 
+                    {/* GF-20 — when the post targets several networks, the Preview
+                        tab offers one sub-tab per network so each gets its own mockup. */}
+                    {rightView === 'preview' && previewChannels.length > 1 && (
+                      <div className="flex items-center justify-center gap-1 mb-3 flex-wrap">
+                        {previewChannels.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setPreviewChannel(c)}
+                            aria-pressed={c === activePreviewChannel}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                              c === activePreviewChannel
+                                ? 'border-brand-blue bg-brand-blue text-white'
+                                : 'border-border-subtle text-ink-muted hover:bg-paper-muted',
+                            )}
+                          >
+                            <ChannelIcon channel={c} className="h-3.5 w-3.5" tinted={c !== activePreviewChannel} />
+                            {CHANNEL_LABEL[c]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="flex-1 flex items-center justify-center">
                       <AnimatePresence mode="wait" custom={direction}>
                         <motion.div
-                          key={`${activePost.id}-${rightView}`}
+                          key={`${activePost.id}-${rightView}-${rightView === 'preview' ? activePreviewChannel : ''}`}
                           custom={direction}
                           initial={{ opacity: 0, x: direction === 0 ? 0 : direction * 40 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -739,7 +770,7 @@ export default function CalendarView() {
                         >
                           {rightView === 'preview' ? (
                             <ChannelMockup
-                              post={activePost}
+                              post={{ ...activePost, channel: activePreviewChannel ?? activePost.channel }}
                               clientName={plan.client.name}
                               handle={plan.client.handle}
                               logoInitials={plan.client.logoInitials}
@@ -1377,18 +1408,20 @@ function CopyPane({
   const [cta, setCta] = useState(post.cta ?? '')
   // GF-16 — editable publication date (YYYY-MM-DD for the date input).
   const [date, setDate] = useState(initialDate)
-  // GF-20 — editable target social network (picked via the icon by the copy).
-  const [channel, setChannel] = useState<Channel>(post.channel)
+  // GF-20 — editable target networks (multi-select, picked above the title).
+  const initialChannels = effectiveChannels(post)
+  const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const channelsChanged = channels.join(',') !== initialChannels.join(',')
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
     cta !== (post.cta ?? '') ||
     date !== initialDate ||
-    channel !== post.channel
+    channelsChanged
 
   const save = async () => {
     if (!dirty || saving) return
@@ -1400,7 +1433,12 @@ function CopyPane({
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
-    if (channel !== post.channel) patch.channel = channel
+    if (channelsChanged && channels.length > 0) {
+      // Persist the multi-network list and keep the primary `channel` in sync so
+      // every single-channel reader (list icon, exports, mockups) stays coherent.
+      patch.channels = channels
+      patch.channel = channels[0]
+    }
     // GF-16 — only send the date when it actually changed and is non-empty
     // (the API rejects an empty date with a 422).
     if (date !== initialDate) {
@@ -1428,8 +1466,20 @@ function CopyPane({
     setHashtags(initialHashtags)
     setCta(post.cta ?? '')
     setDate(initialDate)
-    setChannel(post.channel)
+    setChannels(initialChannels)
     setChannelOpen(false)
+  }
+
+  // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
+  const toggleChannel = (c: Channel) => {
+    setChannels((prev) => {
+      const has = prev.includes(c)
+      if (has && prev.length === 1) return prev // never empty
+      const next = new Set(prev)
+      if (has) next.delete(c)
+      else next.add(c)
+      return CHANNEL_ORDER.filter((x) => next.has(x))
+    })
   }
 
   return (
@@ -1438,14 +1488,73 @@ function CopyPane({
         <Badge variant="outline" className="font-mono text-[10px]">{post.id}</Badge>
         <StatusBadges post={post} />
         <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
+
+        {/* GF-20 — target-network selector, top-right above the title. Multi-select:
+            a post can target several networks at once (each gets its own preview). */}
+        <div className="ml-auto">
+          {isApiEnabled ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setChannelOpen((o) => !o)}
+                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                aria-haspopup="listbox"
+                aria-expanded={channelOpen}
+                aria-label={t('context.selectNetwork')}
+              >
+                {channels.map((c) => (
+                  <ChannelIcon key={c} channel={c} className="h-4 w-4" />
+                ))}
+                {channels.length === 1 && (
+                  <span className="font-medium">{CHANNEL_LABEL[channels[0]]}</span>
+                )}
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </button>
+              {channelOpen && (
+                <>
+                  {/* click-away backdrop */}
+                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
+                  <ul
+                    role="listbox"
+                    aria-multiselectable="true"
+                    className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
+                  >
+                    {CHANNEL_ORDER.map((c) => {
+                      const on = channels.includes(c)
+                      return (
+                        <li key={c}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={on}
+                            onClick={() => toggleChannel(c)}
+                            className={cn(
+                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
+                              on && 'font-medium',
+                            )}
+                          >
+                            <ChannelIcon channel={c} className="h-4 w-4" />
+                            <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
+                            {on && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-1">
+              {effectiveChannels(post).map((c) => (
+                <ChannelIcon key={c} channel={c} className="h-4 w-4" />
+              ))}
+            </span>
+          )}
+        </div>
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1">
-          <ChannelIcon channel={channel} className="h-3 w-3" />
-          <span>{CHANNEL_LABEL[channel] ?? channel}</span>
-          <span>· {fmtDate(post.date)} · {post.format}</span>
-        </p>
         {isApiEnabled ? (
           <input
             value={title}
@@ -1484,65 +1593,7 @@ function CopyPane({
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted">{t('calendar.copyLabel')}</p>
-          {/* GF-20 — social-network icon at the top-right of the copy. In API
-              (edit) mode it's a button that opens a picker to change the target
-              network; read-only mode just shows the icon + label. */}
-          {isApiEnabled ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setChannelOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                aria-haspopup="listbox"
-                aria-expanded={channelOpen}
-                aria-label={t('context.selectNetwork')}
-              >
-                <ChannelIcon channel={channel} className="h-4 w-4" />
-                <span className="font-medium">{CHANNEL_LABEL[channel] ?? channel}</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </button>
-              {channelOpen && (
-                <>
-                  {/* click-away backdrop */}
-                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
-                  <ul
-                    role="listbox"
-                    className="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
-                  >
-                    {CHANNEL_ORDER.map((c) => (
-                      <li key={c}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={c === channel}
-                          onClick={() => {
-                            setChannel(c)
-                            setChannelOpen(false)
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
-                            c === channel && 'font-medium',
-                          )}
-                        >
-                          <ChannelIcon channel={c} className="h-4 w-4" />
-                          <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
-                          {c === channel && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          ) : (
-            <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
-              <ChannelIcon channel={post.channel} className="h-4 w-4" />
-              <span className="font-medium">{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
-            </span>
-          )}
-        </div>
+        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.copyLabel')}</p>
         {isApiEnabled ? (
           <textarea
             value={copy}
