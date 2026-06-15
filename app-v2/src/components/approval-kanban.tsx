@@ -1,9 +1,13 @@
 // Approval kanban — staging-only, drag-to-move + click-button fallback.
 //
-// Four columns map to the approvals_v2 decision enum. Drag a card into another
-// column → optimistically updates the local view, fires POST /api/v1/clients/
-// :slug/approvals, asks the parent to refetch. Each card still has the
-// explicit "→ Column" buttons for keyboard / touch users.
+// GF-23: the columns are the full content workflow (Draft, Review, Approved,
+// Programmed, Rechecked, Rejected) plus a terminal, read-only **Published**
+// column a post only reaches once Postiz published it. Dragging a card into a
+// workflow column optimistically updates the local view, fires POST
+// /api/v1/clients/:slug/approvals, and asks the parent to refetch. Each card
+// still has explicit "→ Column" buttons for keyboard / touch users. The
+// Published column accepts no drops, has no move buttons, and shows a link to
+// the live post when available.
 //
 // Implementation note: native HTML5 drag-and-drop (no @dnd-kit). For the
 // click-to-move case we trade some animation polish for ~0 dependencies.
@@ -12,34 +16,20 @@ import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ShieldCheck, Calendar, Ban, Eye, Loader2 } from 'lucide-react'
+import { Loader2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fmtDateShort } from '@/lib/format'
 import { apiSetApproval, type ApprovalDecision } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
+import {
+  WORKFLOW,
+  PUBLISHED_STEP,
+  laneFor,
+  publishedUrl,
+  type Lane,
+} from '@/lib/post-status'
 import type { Post } from '@/types'
-
-const COLUMNS: Array<{
-  key: ApprovalDecision
-  labelKey: string
-  Icon: typeof Eye
-  tone: string
-  cardTone: string
-}> = [
-  { key: 'in_review', labelKey: 'status.in_review', Icon: Eye,         tone: 'text-blue-700 bg-blue-50 border-blue-200',         cardTone: 'border-blue-100' },
-  { key: 'approved',  labelKey: 'status.approved',  Icon: ShieldCheck, tone: 'text-emerald-700 bg-emerald-50 border-emerald-200', cardTone: 'border-emerald-100' },
-  { key: 'scheduled', labelKey: 'status.scheduled', Icon: Calendar,    tone: 'text-violet-700 bg-violet-50 border-violet-200',   cardTone: 'border-violet-100' },
-  { key: 'rejected',  labelKey: 'status.rejected',  Icon: Ban,         tone: 'text-rose-700 bg-rose-50 border-rose-200',         cardTone: 'border-rose-100' },
-]
-
-function columnFor(post: Post): ApprovalDecision {
-  const s = post.approval?.status ?? post.status
-  if (s === 'approved') return 'approved'
-  if (s === 'scheduled' || s === 'published') return 'scheduled'
-  if (s === 'rejected') return 'rejected'
-  return 'in_review'
-}
 
 export function ApprovalKanban({
   slug,
@@ -53,25 +43,34 @@ export function ApprovalKanban({
   onChanged: () => void
 }) {
   const t = useT()
-  // Optimistic overrides keyed by postId
+  // Optimistic overrides keyed by postId (workflow lanes only; never Published).
   const [overrides, setOverrides] = useState<Record<string, ApprovalDecision>>({})
   const [pending, setPending] = useState<Set<string>>(new Set())
   // Currently-dragged post id and the column hovered as drop target.
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<ApprovalDecision | null>(null)
 
+  const laneOf = (post: Post): Lane => {
+    // An optimistic override only applies while the post is still in a workflow
+    // lane; a published post can never be moved back out.
+    const base = laneFor(post)
+    if (base === 'published') return 'published'
+    return overrides[post.id] ?? base
+  }
+
   const grouped = useMemo(() => {
-    const out: Record<ApprovalDecision, Post[]> = {
+    const out: Record<Lane, Post[]> = {
+      drafting: [],
       in_review: [],
       approved: [],
       scheduled: [],
+      needs_revision: [],
       rejected: [],
+      published: [],
     }
-    for (const p of posts) {
-      const col = overrides[p.id] ?? columnFor(p)
-      out[col].push(p)
-    }
+    for (const p of posts) out[laneOf(p)].push(p)
     return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, overrides])
 
   async function move(post: Post, decision: ApprovalDecision) {
@@ -125,27 +124,31 @@ export function ApprovalKanban({
     if (!id) return
     const post = posts.find((p) => p.id === id)
     if (!post) return
-    const currentCol = overrides[post.id] ?? columnFor(post)
-    if (currentCol === colKey) return
+    if (laneOf(post) === colKey) return
     void move(post, colKey)
   }
 
+  // Workflow columns are interactive; the Published column is appended read-only.
+  const allColumns = [...WORKFLOW, PUBLISHED_STEP]
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-      {COLUMNS.map((col) => {
-        const items = grouped[col.key]
+    <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+      {allColumns.map((col) => {
+        const isPublishedCol = col.key === 'published'
+        const items = grouped[col.key as Lane]
         const Icon = col.Icon
-        const isDropTarget = dropTarget === col.key && draggingId !== null
+        const isDropTarget =
+          !isPublishedCol && dropTarget === col.key && draggingId !== null
         return (
           <div
             key={col.key}
             className={cn(
-              'space-y-2 rounded-lg transition-colors',
+              'shrink-0 w-60 space-y-2 rounded-lg transition-colors',
               isDropTarget && 'bg-brand-blue-50/40 ring-2 ring-brand-blue/40',
             )}
-            onDragOver={(e) => onDragOver(e, col.key)}
+            onDragOver={isPublishedCol ? undefined : (e) => onDragOver(e, col.key as ApprovalDecision)}
             onDragLeave={() => dropTarget === col.key && setDropTarget(null)}
-            onDrop={(e) => onDrop(e, col.key)}
+            onDrop={isPublishedCol ? undefined : (e) => onDrop(e, col.key as ApprovalDecision)}
           >
             <div
               className={cn(
@@ -165,18 +168,20 @@ export function ApprovalKanban({
               )}
               {items.map((post) => {
                 const isDragging = draggingId === post.id
+                const url = isPublishedCol ? publishedUrl(post) : null
                 return (
                   <Card
                     key={post.id}
-                    draggable={!pending.has(post.id)}
-                    onDragStart={(e) => onDragStart(e, post)}
+                    draggable={!isPublishedCol && !pending.has(post.id)}
+                    onDragStart={isPublishedCol ? undefined : (e) => onDragStart(e, post)}
                     onDragEnd={onDragEnd}
                     className={cn(
-                      'border cursor-grab active:cursor-grabbing select-none',
+                      'border select-none',
                       col.cardTone,
+                      isPublishedCol ? 'cursor-default' : 'cursor-grab active:cursor-grabbing',
                       isDragging && 'opacity-50 ring-2 ring-brand-blue/60',
                     )}
-                    title={t('approvals.dragToMove')}
+                    title={isPublishedCol ? t('approvals.publishedLocked') : t('approvals.dragToMove')}
                   >
                     <CardContent className="p-3 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -201,20 +206,38 @@ export function ApprovalKanban({
                           {post.pillar}
                         </span>
                       )}
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {COLUMNS.filter((c) => c.key !== col.key).map((c) => (
-                          <Button
-                            key={c.key}
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-[10px]"
-                            disabled={pending.has(post.id)}
-                            onClick={() => move(post, c.key)}
+                      {isPublishedCol ? (
+                        url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 pt-1 text-[10px] font-medium text-brand-blue hover:underline"
                           >
-                            → {t(c.labelKey)}
-                          </Button>
-                        ))}
-                      </div>
+                            <ExternalLink className="h-3 w-3" />
+                            {t('approvals.viewPost')}
+                          </a>
+                        ) : (
+                          <span className="inline-block pt-1 text-[10px] text-ink-muted">
+                            {t('approvals.publishedNoLink')}
+                          </span>
+                        )
+                      ) : (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {WORKFLOW.filter((c) => c.key !== col.key).map((c) => (
+                            <Button
+                              key={c.key}
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[10px]"
+                              disabled={pending.has(post.id)}
+                              onClick={() => move(post, c.key)}
+                            >
+                              → {t(c.labelKey)}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )

@@ -26,7 +26,19 @@ export const POST_STATUSES = [
 
 export const CHANNELS = ['instagram', 'linkedin', 'tiktok', 'x', 'facebook'] as const
 
-export const APPROVAL_DECISIONS = ['in_review', 'approved', 'scheduled', 'rejected'] as const
+// GF-23 — the dashboard now drives the full content workflow (not just
+// accept/reject), so a status change can move a post into any settable state.
+// `published` is intentionally NOT here: it is terminal and derived from the
+// Postiz publish result (`publishing.publishedAt`/`publicUrl`), never set by a
+// dashboard user.
+export const APPROVAL_DECISIONS = [
+  'drafting',
+  'in_review',
+  'approved',
+  'scheduled',
+  'needs_revision',
+  'rejected',
+] as const
 
 // Accept either a full ISO datetime or a plain calendar date (YYYY-MM-DD) — both
 // appear in the agent's and the dashboard's writes. Reject anything Date can't parse.
@@ -73,6 +85,9 @@ const postFields = {
   id: z.string().min(1).optional(),
   date: dateLike,
   channel: z.enum(CHANNELS).optional(),
+  // GF-20: a post can target several networks. Additive + optional; `channel`
+  // stays the primary (coalescePost keeps it = channels[0]).
+  channels: z.array(z.enum(CHANNELS)).max(5).optional(),
   format: z.string().optional(),
   pillar: z.string().optional(),
   campaign: z.string().optional(),
@@ -148,6 +163,22 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
   const p = { ...post } as Record<string, unknown>
   if (typeof p.status !== 'string') p.status = 'idea'
   if (typeof p.title !== 'string') p.title = ''
+  // GF-20: keep `channel` (primary) and `channels` (multi) coherent. If a valid
+  // channels array is present, the primary is its first entry; otherwise leave
+  // the scalar channel as-is. Drop unknown/empty arrays so the strict read shape
+  // never carries junk.
+  if (Array.isArray(p.channels)) {
+    const valid = (p.channels as unknown[]).filter(
+      (c): c is string => typeof c === 'string' && (CHANNELS as readonly string[]).includes(c),
+    )
+    const deduped = Array.from(new Set(valid))
+    if (deduped.length > 0) {
+      p.channel = deduped[0]
+      p.channels = deduped
+    } else {
+      delete p.channels
+    }
+  }
   if (typeof p.copy !== 'string') p.copy = ''
   if (typeof p.cta !== 'string') p.cta = ''
   if (typeof p.date !== 'string') p.date = ''
@@ -168,6 +199,14 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
     if (cover && (typeof p.image !== 'string' || p.image.length === 0)) {
       p.image = cover.image
     }
+  }
+  // GF-7: a post must always surface a type. The agent's create_post tool may
+  // omit `format` (it's optional on write), which left the calendar/chat with a
+  // blank post type. Derive a structural default from the shape (carousel when
+  // there are multiple slides, otherwise a single image) so every post — and
+  // every chat action that quotes it — carries its type.
+  if (typeof p.format !== 'string' || p.format.length === 0) {
+    p.format = Array.isArray(p.slides) && (p.slides as unknown[]).length > 1 ? 'carousel' : 'single image'
   }
   if (typeof p.approval !== 'object' || p.approval === null) {
     p.approval = { ...DEFAULT_APPROVAL, status: p.status }

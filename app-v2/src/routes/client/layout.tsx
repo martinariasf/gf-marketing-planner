@@ -74,7 +74,7 @@ const NAV: NavItem[] = [
   { to: 'calendar',    labelKey: 'nav.calendar',    icon: CalendarDays,  phase: 'draft'   as WorkflowPhase },
   { to: 'approvals',   labelKey: 'nav.approvals',   icon: ShieldCheck,   phase: 'prepare' as WorkflowPhase },
   { to: 'assets',      labelKey: 'nav.assets',      icon: Images,        phase: 'prepare' as WorkflowPhase },
-  { to: 'videos',      labelKey: 'nav.videos',      icon: Video,         phase: 'prepare' as WorkflowPhase },
+  { to: 'videos',      labelKey: 'nav.videos',      icon: Video,         phase: 'prepare' as WorkflowPhase, disabled: true },
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
@@ -248,6 +248,9 @@ export default function ClientLayout() {
             to="/"
             className="flex items-center gap-3 min-w-0 flex-1 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue rounded-md"
           >
+            {/* GF Innovative Solutions brand mark (GF-1) */}
+            <GFLogo size="sm" className="shrink-0" />
+            <div className="h-6 w-px bg-border-subtle shrink-0 hidden sm:block" aria-hidden />
             <motion.div
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.15 }}
@@ -512,7 +515,7 @@ function NavContent({
                     </span>
                   )}
                   {n.disabled && (
-                    <span className="text-[10px] uppercase tracking-wider opacity-70">
+                    <span className="text-[10px] tracking-wide opacity-70">
                       {t('nav.soon')}
                     </span>
                   )}

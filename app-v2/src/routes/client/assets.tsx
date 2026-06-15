@@ -45,6 +45,9 @@ import {
   apiCreateInformationSource,
   apiListInformationSources,
   apiPatchInformationSource,
+  apiUploadInformationSourceFile,
+  apiDeleteManifestAsset,
+  INFO_SOURCE_MAX_BYTES,
   type InspirationItem,
   type InformationSource,
   type InformationSourceType,
@@ -114,6 +117,9 @@ export default function AssetsView() {
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [selected, setSelected] = useState<AssetItem | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<AssetItem | null>(null)
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
+  const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(() => new Set())
 
   const pillarByPost = useMemo(() => {
     const m: Record<string, string> = {}
@@ -127,7 +133,29 @@ export default function AssetsView() {
     return m
   }, [plan.pillars])
 
-  const items = assets?.items ?? []
+  const items = useMemo(
+    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id)),
+    [assets?.items, deletedAssetIds],
+  )
+
+  const deleteManifestAsset = async (item: AssetItem) => {
+    setDeletingAssetId(item.id)
+    try {
+      await apiDeleteManifestAsset(routeSlug, item.id)
+      setDeletedAssetIds((prev) => {
+        const next = new Set(prev)
+        next.add(item.id)
+        return next
+      })
+      setSelected(null)
+      setConfirmDelete(null)
+      toast(t('assets.deleted'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('assets.deleteFailed'))
+    } finally {
+      setDeletingAssetId(null)
+    }
+  }
 
   // Partition manifest items into two folders
   const viktorItems = useMemo(
@@ -387,7 +415,10 @@ export default function AssetsView() {
 
         {/* Asset detail Dialog — preserved */}
         <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent
+            className="sm:max-w-2xl bg-paper"
+            overlayClassName="bg-black/80 supports-backdrop-filter:backdrop-blur-sm"
+          >
             {selected && (
               <>
                 <DialogHeader>
@@ -454,14 +485,67 @@ export default function AssetsView() {
                   )}
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
+                <div className="flex justify-between items-center gap-3 pt-2">
                   <p className="text-[10px] text-ink-muted font-mono">
                     {t('assets.assetId', { id: selected.id })}
                   </p>
-                  <Button asChild size="sm" variant="outline">
-                    <a href={selected.url} target="_blank" rel="noreferrer">
-                      {t('assets.openFullSize')}
-                    </a>
+                  <div className="flex items-center gap-2">
+                    {isApiEnabled && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="text-rose-700 hover:text-rose-800 hover:border-rose-300"
+                        onClick={() => setConfirmDelete(selected)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        {t('assets.delete')}
+                      </Button>
+                    )}
+                    <Button asChild size="sm" variant="outline">
+                      <a href={selected.url} target="_blank" rel="noreferrer">
+                        {t('assets.openFullSize')}
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+          <DialogContent className="sm:max-w-md">
+            {confirmDelete && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t('assets.deleteConfirmTitle')}</DialogTitle>
+                  <DialogDescription>
+                    {t('assets.deleteConfirmBody', { name: confirmDelete.filename })}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmDelete(null)}
+                    disabled={deletingAssetId === confirmDelete.id}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-rose-700 hover:text-rose-800 hover:border-rose-300"
+                    onClick={() => void deleteManifestAsset(confirmDelete)}
+                    disabled={deletingAssetId === confirmDelete.id}
+                  >
+                    {deletingAssetId === confirmDelete.id ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {deletingAssetId === confirmDelete.id ? t('assets.deleting') : t('assets.delete')}
                   </Button>
                 </div>
               </>
@@ -697,10 +781,24 @@ function InspirationBoard({ slug }: { slug: string }) {
   )
 }
 
+const INFO_SOURCE_MAX_MB = Math.round(INFO_SOURCE_MAX_BYTES / 1_000_000)
+const INFO_SOURCE_ACCEPT = '.txt,.md,.markdown,.vtt,.srt,.csv,.json,.log,.text,text/*,application/json'
+const INFO_SOURCE_TEXT_RE = /\.(txt|md|markdown|vtt|srt|csv|json|log|text)$/i
+
+function isUploadableSourceFile(file: File): boolean {
+  const type = (file.type || '').toLowerCase()
+  if (type.startsWith('text/')) return true
+  if (type === 'application/json') return true
+  return INFO_SOURCE_TEXT_RE.test(file.name || '')
+}
+
 function InformationSourcesBoard({ slug }: { slug: string }) {
   const [items, setItems] = useState<InformationSource[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
   const [draft, setDraft] = useState({
     title: '',
     url: '',
@@ -772,6 +870,36 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
     }
   }
 
+  const uploadFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files)
+      if (list.length === 0) return
+      const tooBig = list.find((f) => f.size > INFO_SOURCE_MAX_BYTES)
+      if (tooBig) {
+        toast.error(`"${tooBig.name}" is over ${INFO_SOURCE_MAX_MB} MB. Max ${INFO_SOURCE_MAX_MB} MB per file.`)
+        return
+      }
+      const accepted = list.filter(isUploadableSourceFile)
+      if (accepted.length === 0) {
+        toast.error('Only text files (.txt, .md, .vtt, .srt, .csv, .json) are supported.')
+        return
+      }
+      setUploading(true)
+      try {
+        for (const file of accepted) {
+          const item = await apiUploadInformationSourceFile(slug, file)
+          setItems((cur) => [item, ...cur])
+        }
+        toast(accepted.length === 1 ? 'Source uploaded.' : `${accepted.length} sources uploaded.`)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Upload failed')
+      } finally {
+        setUploading(false)
+      }
+    },
+    [slug],
+  )
+
   return (
     <section className="space-y-4">
       <div>
@@ -783,6 +911,50 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
         <p className="text-sm text-ink-muted">
           Save websites, notes, references, or news here before Viktor uses them. Approved sources are available to the agent by default.
         </p>
+      </div>
+
+      {/* Drag-and-drop upload for transcripts / extra info (GF-12) */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          if (e.dataTransfer.files?.length) void uploadFiles(e.dataTransfer.files)
+        }}
+        onClick={() => fileRef.current?.click()}
+        className={cn(
+          'rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors',
+          dragOver
+            ? 'border-brand-blue bg-brand-blue-50/50'
+            : 'border-border-subtle hover:border-brand-blue/50 hover:bg-paper-muted/50',
+        )}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept={INFO_SOURCE_ACCEPT}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length) void uploadFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+        <div className="flex flex-col items-center gap-1.5 text-ink-muted">
+          {uploading ? (
+            <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
+          ) : (
+            <Upload className="h-6 w-6" />
+          )}
+          <p className="text-sm">
+            <span className="text-brand-blue font-medium">Drag &amp; drop a transcript</span> or click to upload
+          </p>
+          <p className="text-[11px]">Text files (.txt, .md, .vtt, .srt, .csv, .json) · max {INFO_SOURCE_MAX_MB} MB each</p>
+        </div>
       </div>
 
       <Card>

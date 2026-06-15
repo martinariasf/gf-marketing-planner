@@ -16,7 +16,7 @@ import {
   Compass,
   Repeat,
   GitFork,
-  Copy,
+  MessageSquare,
   Check,
   Clock,
   X,
@@ -26,7 +26,7 @@ import { toast, Toaster } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Suggestion, SuggestionKind, SuggestionStatus, Confidence } from '@/types'
-import { isApiEnabled, apiPatchSuggestion } from '@/lib/api-client'
+import { apiPatchSuggestion } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 
 const KIND_META: Record<SuggestionKind, { Icon: typeof Sparkles; labelKey: string; tone: string }> = {
@@ -169,7 +169,6 @@ function SuggestionCard({
   onChanged: () => void
 }) {
   const t = useT()
-  const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const { Icon, labelKey, tone } = KIND_META[suggestion.kind]
   const label = t(labelKey)
@@ -188,21 +187,12 @@ function SuggestionCard({
     }
   }
 
-  const copy = () => {
-    navigator.clipboard.writeText(suggestion.suggestedAction).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-    toast(t('suggestions.copiedPaste'), {
-      description: <code className="font-mono text-xs">{suggestion.suggestedAction}</code>,
-    })
-  }
-
-  const dismiss = () => {
-    const cmd = `dismiss ${suggestion.id}`
-    navigator.clipboard.writeText(cmd).catch(() => {})
-    toast(t('suggestions.copiedDismiss'), {
-      description: <code className="font-mono text-xs">{cmd}</code>,
-    })
+  // Accept: hand the suggestion to Viktor by opening the in-app chat pre-filled
+  // with the suggested action. The agent does the actual writing from there.
+  const accept = () => {
+    window.dispatchEvent(
+      new CustomEvent('mp:open-chat', { detail: { message: suggestion.suggestedAction } }),
+    )
   }
 
   const isOpen = suggestion.status === 'open'
@@ -285,39 +275,18 @@ function SuggestionCard({
           </code>
           {isOpen && (
             <div className="flex items-center gap-2 pt-1 flex-wrap">
-              <Button size="sm" onClick={copy} className="bg-brand-blue hover:bg-brand-blue-600">
-                {copied ? (
-                  <><Check className="h-3.5 w-3.5 mr-1.5" /> {t('common.copied')}</>
-                ) : (
-                  <><Copy className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.copyAccept')}</>
-                )}
+              <Button size="sm" onClick={accept} className="bg-brand-blue hover:bg-brand-blue-600">
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.accept')}
               </Button>
-              <Button size="sm" variant="outline" onClick={dismiss}>
-                <X className="h-3.5 w-3.5 mr-1.5" />
-                {t('suggestions.dismissCopy')}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                onClick={() => setStatus('dismissed')}
+                disabled={busy}
+              >
+                <X className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.reject')}
               </Button>
-              {isApiEnabled && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    onClick={() => setStatus('accepted')}
-                    disabled={busy}
-                  >
-                    <Check className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.acceptStaging')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-                    onClick={() => setStatus('dismissed')}
-                    disabled={busy}
-                  >
-                    <X className="h-3.5 w-3.5 mr-1.5" /> {t('suggestions.dismissStaging')}
-                  </Button>
-                </>
-              )}
             </div>
           )}
         </div>

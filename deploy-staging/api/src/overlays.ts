@@ -82,9 +82,34 @@ export async function loadSuggestionStates(
   return map
 }
 
+interface AssetStateRow {
+  assetId: string
+  status?: 'active' | 'deleted'
+}
+
+export async function loadDeletedAssetIds(slug: string): Promise<Set<string>> {
+  const deleted = new Set<string>()
+  try {
+    const rows = await withPb((pb) =>
+      pb.collection('asset_states').getFullList<AssetStateRow>({
+        filter: `slug="${slug}"`,
+      }),
+    )
+    for (const r of rows) {
+      if (r.status === 'deleted') deleted.add(r.assetId)
+      else deleted.delete(r.assetId)
+    }
+  } catch {
+    /* empty overlay */
+  }
+  return deleted
+}
+
 interface ApprovalV2Row {
   postId: string
-  decision: 'in_review' | 'approved' | 'scheduled' | 'rejected'
+  // GF-23 — the full settable workflow (see APPROVAL_DECISIONS). Older rows may
+  // still carry only the original four values; both read back fine.
+  decision: 'drafting' | 'in_review' | 'approved' | 'scheduled' | 'needs_revision' | 'rejected'
   note?: string
   actor?: string
   ts?: string

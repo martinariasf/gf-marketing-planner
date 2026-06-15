@@ -114,6 +114,14 @@ staging.marketing.gfinnov.com {
         reverse_proxy mp-staging-caddy:80
     }
 
+    # GF-4: external reviewers open /review/<publicId> without staging
+    # credentials — the per-link access code on /api/v1/review/* is the gate.
+    # The SPA's static files must come along (hashed JS/CSS + icons; no data).
+    @review_public path /review/* /assets/* /favicon.svg /gf-logo.svg /icons.svg
+    handle @review_public {
+        reverse_proxy mp-staging-caddy:80
+    }
+
     handle {
         basicauth /* {
             staging $2a$14$fe6MgMpmwSKKKkmwd9KWoe/kh.ZFaKVU4WtIaF0wIHgMa5SBkSUhe

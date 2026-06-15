@@ -28,6 +28,32 @@
   --color-paper-muted: #f7f6f9;
   --color-border-subtle: #e5e4e7;
 
+  /* Standard shadcn/ui tokens. The UI primitives (dropdown-menu, dialog,
+     toasts, etc.) are styled with these names — `bg-popover`,
+     `focus:bg-accent`, `ring-foreground`, … — but the theme only ever defined
+     the brand/ink/paper set, so each of them resolved to nothing. The visible
+     symptom was transparent, unreadable popovers across the app (language
+     switcher, chat session menu, every dropdown). Map them onto the existing
+     light palette so menus get a solid surface and legible text. */
+  --color-background: #ffffff;
+  --color-foreground: #08060d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #08060d;
+  --color-card: #ffffff;
+  --color-card-foreground: #08060d;
+  --color-muted: #f7f6f9;
+  --color-muted-foreground: #6b6375;
+  --color-accent: #f3f2f9;
+  --color-accent-foreground: #211d58;
+  --color-primary: #211d58;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f7f6f9;
+  --color-secondary-foreground: #08060d;
+  --color-destructive: #e11d48;
+  --color-destructive-foreground: #ffffff;
+  --color-input: #e5e4e7;
+  --color-ring: #211d58;
+
   --font-sans: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 

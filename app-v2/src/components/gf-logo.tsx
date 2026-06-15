@@ -14,16 +14,15 @@ const SIZES = {
 
 /**
  * GF Innovative Solutions logo mark + optional wordmark.
- * Uses an inline SVG (`/gf-logo.svg`) so it scales perfectly and respects
- * brand colors. To replace with the full color PNG once available,
- * drop the file at `public/gf-logo.png` and swap the src.
+ * Uses the brand PNG (`/gf-logo.png` — the navy + green "GF" mark). `w-auto`
+ * keeps its aspect ratio; height is driven by the `size` prop.
  */
 export function GFLogo({ variant = 'mark', size = 'md', className }: Props) {
   const s = SIZES[size]
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
       <img
-        src="/gf-logo.svg"
+        src="/gf-logo.png"
         alt="GF Innovative Solutions"
         className={cn(s.mark, 'w-auto select-none')}
         draggable={false}

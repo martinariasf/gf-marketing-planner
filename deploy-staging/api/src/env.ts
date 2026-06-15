@@ -33,6 +33,11 @@ export const env = {
   hermesBaseUrl: process.env.HERMES_BASE_URL ?? 'http://hermes-marketing-staging:8642',
   hermesApiKey: process.env.HERMES_API_KEY ?? '',
 
+  // Integration secrets (GF-11). Used to AES-256-GCM encrypt credentials like
+  // the Postiz API key before they hit PocketBase. If unset the value is stored
+  // un-encrypted (with a loud warning) — set this on every real deploy.
+  integrationSecretKey: process.env.INTEGRATION_SECRET_KEY ?? '',
+
   // Misc
   logLevel: process.env.LOG_LEVEL ?? 'info',
   release: process.env.RELEASE ?? 'dev',
