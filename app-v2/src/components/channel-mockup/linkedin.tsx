@@ -1,4 +1,4 @@
-import { ThumbsUp, MessageSquare, Repeat2, Send, Files } from 'lucide-react'
+import { ThumbsUp, MessageSquare, Repeat2, Send, Files, Film } from 'lucide-react'
 import type { MockupPost } from './index'
 
 interface Props {
@@ -26,6 +26,7 @@ export function LinkedinMockup({
   const hasMetrics = total > 0
   const slideCount = post.slides?.length ?? 0
   const isCarousel = slideCount > 1
+  const video = post.media?.find((item) => item.type === 'video' && item.url)
 
   return (
     <div className="mx-auto max-w-[420px] rounded-lg border border-neutral-200 bg-white shadow-sm overflow-hidden">
@@ -47,7 +48,22 @@ export function LinkedinMockup({
         {post.copy}
       </div>
 
-      {post.image && (
+      {video ? (
+        <div className="relative aspect-[1.91/1] bg-black overflow-hidden">
+          <video
+            src={video.url}
+            poster={video.thumbnail}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute top-2 right-2 flex items-center gap-1 rounded bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+            <Film className="h-3 w-3" />
+            Video
+          </span>
+        </div>
+      ) : post.image && (
         <div className="relative aspect-[1.91/1] bg-neutral-100 overflow-hidden">
           <img
             src={post.image}
@@ -65,7 +81,7 @@ export function LinkedinMockup({
       )}
 
       {/* LinkedIn document/carousel affordance: a row of slide dots */}
-      {isCarousel && (
+      {!video && isCarousel && (
         <div className="flex items-center justify-center gap-1 py-2">
           {Array.from({ length: slideCount }).map((_, i) => (
             <span

@@ -526,11 +526,11 @@ def _append_manifest(
     os.replace(tmp, manifest_path)
 
 
-def _current_post_image(post_id: str) -> str:
+def _fetch_post(post_id: str) -> Dict[str, Any]:
     slug = os.environ.get("CLIENT_SLUG", "")
     api_base = _api_base()
     if not (slug and api_base and post_id):
-        return ""
+        return {}
     try:
         with httpx.Client(timeout=15.0) as client:
             r = client.get(
@@ -538,10 +538,15 @@ def _current_post_image(post_id: str) -> str:
                 headers=_api_headers(),
             )
             r.raise_for_status()
-            return str((r.json() or {}).get("image") or "")
+            data = r.json() or {}
+            return data if isinstance(data, dict) else {}
     except Exception:
-        logger.debug("could not fetch current image for post %r", post_id, exc_info=True)
-        return ""
+        logger.debug("could not fetch post %r", post_id, exc_info=True)
+        return {}
+
+
+def _current_post_image(post_id: str) -> str:
+    return str(_fetch_post(post_id).get("image") or "")
 
 
 def _branding_logo_refs() -> List[str]:
@@ -681,7 +686,7 @@ def _download_video(client: httpx.Client, status: Dict[str, Any], api_key: str) 
     return resp.content
 
 
-def _publish_generated_video(video_path: str, prompt: str, model: str) -> Dict[str, Any]:
+def _publish_generated_video(video_path: str, prompt: str, model: str, post_id: str = "") -> Dict[str, Any]:
     slug = os.environ.get("CLIENT_SLUG", "")
     if not slug:
         return {"published": False, "error": "CLIENT_SLUG not set"}
@@ -704,7 +709,7 @@ def _publish_generated_video(video_path: str, prompt: str, model: str) -> Dict[s
             dest_dir,
             filename,
             url,
-            "",
+            post_id,
             kind="video",
             source=f"openrouter:video_generate({model})",
             design_brief=prompt,
@@ -739,6 +744,7 @@ def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
     resolution = _resolve_video_resolution(args.get("resolution"))
     aspect_ratio = _resolve_video_aspect_ratio(args.get("aspect_ratio"))
     generate_audio = _as_bool(args.get("generate_audio"), False)
+    post_id = (args.get("post_id") or "").strip()
 
     reference_errors: List[str] = []
     input_references: List[Dict[str, Any]] = []
@@ -882,7 +888,7 @@ def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
             "job": status,
         })
 
-    asset = _publish_generated_video(cache_path, prompt, model)
+    asset = _publish_generated_video(cache_path, prompt, model, post_id)
     public_url = asset.get("url") if asset.get("published") else ""
     result = {
         "success": bool(public_url),
@@ -904,6 +910,8 @@ def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
             "usage": status.get("usage"),
         },
     }
+    if public_url and post_id:
+        result["post_link"] = _link_video_to_post(str(public_url), post_id, prompt)
     if not public_url:
         result["error"] = asset.get("error") or "video generated but could not publish public asset"
         result["error_type"] = "publish_error"
@@ -969,6 +977,73 @@ def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
         return {"linked": False, "url": url, "error": f"PATCH /posts/{post_id} failed: {exc}"}
 
     return {"linked": served == url, "url": url, "post_image": served, "post_id": post_id}
+
+
+def _link_video_to_post(video_url: str, post_id: str, prompt: str) -> Dict[str, Any]:
+    """Append a generated MP4 to the post's mixed media array."""
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    token = os.environ.get("API_TOKEN", "")
+    if not (slug and api_base and token):
+        return {
+            "linked": False,
+            "error": "CLIENT_SLUG/API_BASE/API_TOKEN not set; cannot auto-link",
+        }
+    if not video_url:
+        return {"linked": False, "error": "video URL missing"}
+
+    post = _fetch_post(post_id)
+    raw_media = post.get("media")
+    media: List[Dict[str, Any]] = []
+    if isinstance(raw_media, list):
+        for item in raw_media:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            item_url = item.get("url")
+            if item_type not in {"image", "video"} or not isinstance(item_url, str) or not item_url:
+                continue
+            clean: Dict[str, Any] = {"type": item_type, "url": item_url}
+            for key in ("thumbnail", "caption", "assetId"):
+                if isinstance(item.get(key), str) and item.get(key):
+                    clean[key] = item[key]
+            media.append(clean)
+
+    already_linked = any(item.get("type") == "video" and item.get("url") == video_url for item in media)
+    if not already_linked:
+        entry: Dict[str, Any] = {"type": "video", "url": video_url}
+        if prompt:
+            entry["caption"] = prompt[:500]
+        media.append(entry)
+
+    headers = {**_api_headers(), "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            patch = client.patch(
+                f"{api_base}/clients/{slug}/posts/{post_id}",
+                json={"media": media},
+                headers=headers,
+            )
+            patch.raise_for_status()
+            confirm = client.get(
+                f"{api_base}/clients/{slug}/posts/{post_id}", headers=headers
+            )
+            confirm.raise_for_status()
+            served_media = (confirm.json() or {}).get("media", [])
+    except httpx.HTTPStatusError as exc:
+        return {
+            "linked": False,
+            "url": video_url,
+            "error": f"PATCH /posts/{post_id} media -> {exc.response.status_code}: {exc.response.text[:200]}",
+        }
+    except Exception as exc:
+        return {"linked": False, "url": video_url, "error": f"PATCH /posts/{post_id} media failed: {exc}"}
+
+    linked = isinstance(served_media, list) and any(
+        isinstance(item, dict) and item.get("type") == "video" and item.get("url") == video_url
+        for item in served_media
+    )
+    return {"linked": linked, "url": video_url, "post_id": post_id, "already_linked": already_linked}
 
 
 # ---------------------------------------------------------------------------
@@ -1097,6 +1172,10 @@ VIDEO_GENERATE_SCHEMA = {
             "last_frame": {
                 "type": "string",
                 "description": "Optional public image URL or asset filename to anchor the exact last frame.",
+            },
+            "post_id": {
+                "type": "string",
+                "description": "Optional dashboard post id. When present, the generated MP4 is appended to that post's media[] as type='video'.",
             },
             "model": {
                 "type": "string",

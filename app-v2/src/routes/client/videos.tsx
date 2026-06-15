@@ -5,13 +5,70 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { fmtDate } from '@/lib/format'
 import type { ClientBundle } from '@/lib/client-data'
+import type { AssetItem } from '@/types'
+
+type VideoLibraryItem = {
+  id: string
+  url: string
+  filename: string
+  createdAt?: string
+  designBrief?: string
+  finalApproved?: boolean
+  usedInPosts: string[]
+  source: 'manifest' | 'post'
+}
+
+function mergeVideo(items: Map<string, VideoLibraryItem>, next: VideoLibraryItem) {
+  const current = items.get(next.url)
+  if (!current) {
+    items.set(next.url, next)
+    return
+  }
+  items.set(next.url, {
+    ...current,
+    filename: current.filename || next.filename,
+    createdAt: current.createdAt ?? next.createdAt,
+    designBrief: current.designBrief ?? next.designBrief,
+    finalApproved: current.finalApproved ?? next.finalApproved,
+    usedInPosts: Array.from(new Set([...current.usedInPosts, ...next.usedInPosts])),
+    source: current.source === 'manifest' ? current.source : next.source,
+  })
+}
 
 export default function VideosView() {
-  const { assets } = useOutletContext<ClientBundle>()
-  const videos = useMemo(
-    () => (assets?.items ?? []).filter((item) => item.kind === 'video'),
-    [assets?.items],
-  )
+  const { assets, posts } = useOutletContext<ClientBundle>()
+  const videos = useMemo(() => {
+    const byUrl = new Map<string, VideoLibraryItem>()
+    ;(assets?.items ?? [])
+      .filter((item): item is AssetItem => item.kind === 'video')
+      .forEach((item) =>
+        mergeVideo(byUrl, {
+          id: item.id,
+          url: item.url,
+          filename: item.filename,
+          createdAt: item.createdAt,
+          designBrief: item.designBrief,
+          finalApproved: item.finalApproved,
+          usedInPosts: item.usedInPosts,
+          source: 'manifest',
+        }),
+      )
+    posts.forEach((post) => {
+      post.media
+        ?.filter((item) => item.type === 'video' && item.url)
+        .forEach((item, index) =>
+          mergeVideo(byUrl, {
+            id: `${post.id}-video-${index}`,
+            url: item.url,
+            filename: item.caption || `${post.id} video`,
+            designBrief: item.caption || post.title,
+            usedInPosts: [post.id],
+            source: 'post',
+          }),
+        )
+    })
+    return Array.from(byUrl.values()).sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+  }, [assets?.items, posts])
 
   return (
     <div className="space-y-6">
@@ -41,7 +98,12 @@ export default function VideosView() {
                     <Sparkles className="h-3 w-3" />
                     Viktor
                   </Badge>
-                  {!item.finalApproved && (
+                  {item.source === 'post' && (
+                    <Badge variant="outline" className="border-brand-blue/30 text-brand-blue">
+                      Post media
+                    </Badge>
+                  )}
+                  {item.finalApproved === false && (
                     <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                       Draft
                     </Badge>
@@ -51,8 +113,17 @@ export default function VideosView() {
                   <p className="font-medium truncate" title={item.filename}>
                     {item.filename}
                   </p>
-                  <p className="text-xs text-ink-muted">{fmtDate(item.createdAt)}</p>
+                  {item.createdAt && <p className="text-xs text-ink-muted">{fmtDate(item.createdAt)}</p>}
                 </div>
+                {item.usedInPosts.length > 0 && (
+                  <div className="flex gap-1 flex-wrap">
+                    {item.usedInPosts.slice(0, 4).map((postId) => (
+                      <Badge key={postId} variant="outline" className="text-[10px]">
+                        {postId}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 {item.designBrief && (
                   <p className="text-sm text-ink-muted line-clamp-3">{item.designBrief}</p>
                 )}

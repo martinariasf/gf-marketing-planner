@@ -135,7 +135,7 @@ export default function AssetsView() {
   }, [plan.pillars])
 
   const items = useMemo(
-    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id)),
+    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id) && item.kind !== 'video'),
     [assets?.items, deletedAssetIds],
   )
 

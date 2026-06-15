@@ -80,6 +80,16 @@ const slideShape = z
   })
   .strict()
 
+const mediaShape = z
+  .object({
+    type: z.enum(['image', 'video']),
+    url: z.string().min(1, 'must be the public asset URL returned by the generation step'),
+    thumbnail: z.string().optional(),
+    caption: z.string().optional(),
+    assetId: z.string().optional(),
+  })
+  .strict()
+
 // All KNOWN post fields. `.strict()` then rejects anything else (typos).
 const postFields = {
   id: z.string().min(1).optional(),
@@ -94,6 +104,7 @@ const postFields = {
   title: z.string().min(1, 'must not be empty'),
   image: z.string().optional(),
   slides: z.array(slideShape).max(10, 'a carousel can have at most 10 slides').optional(),
+  media: z.array(mediaShape).max(20, 'a post can have at most 20 media items').optional(),
   copy: z.string().optional(),
   hashtags: z.array(z.string()).optional(),
   cta: z.string().optional(),
@@ -199,6 +210,25 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
     if (cover && (typeof p.image !== 'string' || p.image.length === 0)) {
       p.image = cover.image
     }
+  }
+  if (Array.isArray(p.media)) {
+    const media = (p.media as unknown[])
+      .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
+      .filter(
+        (m) =>
+          (m.type === 'image' || m.type === 'video') &&
+          typeof m.url === 'string' &&
+          m.url.length > 0,
+      )
+      .map((m) => ({
+        type: m.type as 'image' | 'video',
+        url: m.url as string,
+        ...(typeof m.thumbnail === 'string' && m.thumbnail.length > 0 ? { thumbnail: m.thumbnail } : {}),
+        ...(typeof m.caption === 'string' ? { caption: m.caption } : {}),
+        ...(typeof m.assetId === 'string' ? { assetId: m.assetId } : {}),
+      }))
+    if (media.length > 0) p.media = media
+    else delete p.media
   }
   // GF-7: a post must always surface a type. The agent's create_post tool may
   // omit `format` (it's optional on write), which left the calendar/chat with a

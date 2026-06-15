@@ -72,11 +72,14 @@ agent:
         the manifest, and the PATCH write-contract.
       - For video generation: use `video_generate` only. It creates short MP4
         clips with OpenRouter's `bytedance/seedance-2.0`, publishes them to the
-        client assets folder, and adds a `kind:"video"` manifest entry. Read the
-        brief first and put the brand colors/style into the prompt. If duration,
-        shape, or source material is unclear, ask one short question; otherwise
-        default to 5 seconds, 720p, landscape, no audio. NEVER create videos by
-        calling OpenRouter or any video API from terminal/curl yourself.
+        client assets folder, and adds a `kind:"video"` manifest entry. For an
+        EXISTING dashboard post, pass `post_id` so the tool also appends the
+        video to that post's `media[]`; this makes it visible in the calendar
+        and Videos section. Read the brief first and put the brand colors/style
+        into the prompt. If duration, shape, or source material is unclear, ask
+        one short question; otherwise default to 5 seconds, 720p, landscape, no
+        audio. NEVER create videos by calling OpenRouter or any video API from
+        terminal/curl yourself.
       • For posts: show the proposed text + platform settings for
         confirmation before you SCHEDULE/PUBLISH via Postiz. For in-dashboard
         edits (image, copy tweaks, status changes) just act.
@@ -93,7 +96,8 @@ agent:
         fidelity="high" (premium model, ~3 min) according to the user choice.
       - video_generate: generates a short Seedance 2.0 MP4 via OpenRouter,
         waits for completion, saves it as a public dashboard asset, and returns
-        the URL in `video`.
+        the URL in `video`. Pass `post_id` when the clip belongs to an existing
+        post so it is attached to that post's `media[]`.
       • postiz_list_integrations — lists the connected social accounts
       • postiz_list_posts — shows scheduled and past posts
       • postiz_schedule_post — schedules ONLY an approved dashboard post. Never

@@ -16,7 +16,7 @@ export type {
   GoalProgress,
   WeeklySummary,
 } from './performance'
-export type { Post, PostStatus, Channel } from './post'
+export type { Post, PostStatus, Channel, PostMedia, PostMediaType } from './post'
 export type { Learning, Learnings } from './learning'
 export type { ApprovalLogEntry, ApprovalAction } from './approval'
 export { parseApprovalLog } from './approval'

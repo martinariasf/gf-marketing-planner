@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy } from 'lucide-react'
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, Film } from 'lucide-react'
 import type { MockupPost } from './index'
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 export function InstagramMockup({ post, handle, logoInitials }: Props) {
   const slideCount = post.slides?.length ?? 0
   const isCarousel = slideCount > 1
+  const video = post.media?.find((item) => item.type === 'video' && item.url)
   return (
     <div className="mx-auto max-w-[340px] rounded-[2.2rem] border-8 border-neutral-900 bg-white shadow-xl">
       <div className="rounded-[1.5rem] overflow-hidden">
@@ -29,7 +30,22 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
         </div>
 
         <div className="relative aspect-square bg-neutral-100 overflow-hidden">
-          {post.image && (
+          {video ? (
+            <>
+              <video
+                src={video.url}
+                poster={video.thumbnail}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover bg-black"
+              />
+              <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+                <Film className="h-3 w-3" />
+                Video
+              </span>
+            </>
+          ) : post.image && (
             <img
               src={post.image}
               alt={post.title}
@@ -37,7 +53,7 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
               loading="lazy"
             />
           )}
-          {isCarousel && (
+          {!video && isCarousel && (
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
               <Copy className="h-3 w-3" />
               1/{slideCount}

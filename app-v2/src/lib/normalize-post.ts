@@ -46,6 +46,23 @@ export function normalizePost(raw: unknown): Post {
         }))
     : undefined
   const coverFromSlides = slides && slides.length > 0 ? slides[0].image : undefined
+  const media = Array.isArray(p.media)
+    ? (p.media as unknown[])
+        .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
+        .filter(
+          (m) =>
+            (m.type === 'image' || m.type === 'video') &&
+            typeof m.url === 'string' &&
+            (m.url as string).length > 0,
+        )
+        .map((m) => ({
+          type: m.type as 'image' | 'video',
+          url: m.url as string,
+          ...(typeof m.thumbnail === 'string' && m.thumbnail.length > 0 ? { thumbnail: m.thumbnail } : {}),
+          ...(typeof m.caption === 'string' ? { caption: m.caption } : {}),
+          ...(typeof m.assetId === 'string' ? { assetId: m.assetId } : {}),
+        }))
+    : undefined
 
   // GF-20: multi-network support. Keep only known networks; the primary `channel`
   // is the first valid entry (falling back to the scalar `channel`, then instagram).
@@ -73,6 +90,7 @@ export function normalizePost(raw: unknown): Post {
     title: typeof p.title === 'string' ? p.title : '',
     image: typeof p.image === 'string' && p.image.length > 0 ? p.image : coverFromSlides,
     ...(slides && slides.length > 0 ? { slides } : {}),
+    ...(media && media.length > 0 ? { media } : {}),
     copy: typeof p.copy === 'string' ? p.copy : '',
     hashtags: Array.isArray(p.hashtags) ? p.hashtags.filter((h): h is string => typeof h === 'string') : [],
     cta: typeof p.cta === 'string' ? p.cta : '',

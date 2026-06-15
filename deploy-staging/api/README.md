@@ -111,6 +111,7 @@ datetime) and `title` (non-empty) required; others optional:
 | `channel` | `instagram` \| `linkedin` \| `tiktok` \| `x` \| `facebook` |
 | `status` | `idea` \| `drafting` \| `in_review` \| `needs_revision` \| `approved` \| `scheduled` \| `published` \| `rejected` |
 | `hashtags` | `string[]` (not a single string) |
+| `media` | mixed post media: `Array<{ type:"image"|"video"; url:string; thumbnail?:string; caption?:string; assetId?:string }>`, max 20. Use `type:"video"` for generated MP4 clips attached to the post. |
 | `image` | string URL — field is `image`, not `imageUrl`/`assetIds`. Carousel cover = `slides[0].image` |
 | `slides` | carousel only — `Array<{ image: string; caption?: string }>`, max 10, strict per-slide keys. >1 slide ⇒ carousel; set `format:"carousel"` |
 | `copy`, `cta`, `pillar`, `format`, `campaign` | strings, optional |

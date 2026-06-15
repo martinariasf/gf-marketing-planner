@@ -105,6 +105,18 @@ const Post = z
       .array(z.object({ image: z.string(), caption: z.string().optional() }))
       .optional()
       .openapi({ description: 'Carousel only (2–10). Cover = slides[0].image.' }),
+    media: z
+      .array(
+        z.object({
+          type: z.enum(['image', 'video']),
+          url: z.string(),
+          thumbnail: z.string().optional(),
+          caption: z.string().optional(),
+          assetId: z.string().optional(),
+        }),
+      )
+      .optional()
+      .openapi({ description: 'Mixed post media. Use type="video" for generated MP4 clips attached to the post.' }),
     pillar: z.string().optional(),
     format: z.string().optional(),
     campaign: z.string().optional(),

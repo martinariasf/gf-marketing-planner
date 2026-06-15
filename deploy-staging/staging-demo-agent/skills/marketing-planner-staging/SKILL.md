@@ -96,6 +96,12 @@ Just confirm to the user (in their language) that the post image is updated,
 citing the url. Only fall back to the manual steps below if the tool result shows
 `post_link.linked: false` or an `error`.
 
+For an EXISTING post video, use the same pattern with `video_generate` and pass
+`post_id`. The plugin publishes the MP4 as a `kind:"video"` manifest entry and
+PATCHes the post's `media[]` with `{type:"video", url:<video>}` so the clip
+appears in the content calendar and the dashboard Videos section. Omit
+`post_id` only for a reserve/stand-alone video idea.
+
 Do **NOT** invoke the `branding-overlay` skill or any logo-compositing step for a
 plain "change the image" request — describe the brand colours/style inside the
 `image_generate` prompt instead. Only composite the official logo when the user
