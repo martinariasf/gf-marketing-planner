@@ -1,4 +1,7 @@
 import type { Post } from '@/types'
+import type { Channel } from '@/types'
+
+const VALID_CHANNELS: Channel[] = ['instagram', 'linkedin', 'tiktok', 'x', 'facebook']
 
 const VALID_STATUS: Post['status'][] = [
   'idea',
@@ -44,10 +47,26 @@ export function normalizePost(raw: unknown): Post {
     : undefined
   const coverFromSlides = slides && slides.length > 0 ? slides[0].image : undefined
 
+  // GF-20: multi-network support. Keep only known networks; the primary `channel`
+  // is the first valid entry (falling back to the scalar `channel`, then instagram).
+  const channelList = Array.isArray(p.channels)
+    ? (p.channels.filter(
+        (c): c is Channel => typeof c === 'string' && (VALID_CHANNELS as string[]).includes(c),
+      ) as Channel[])
+    : []
+  const scalarChannel = (
+    typeof p.channel === 'string' && (VALID_CHANNELS as string[]).includes(p.channel)
+      ? p.channel
+      : 'instagram'
+  ) as Channel
+  const primaryChannel = channelList[0] ?? scalarChannel
+  const dedupedChannels = Array.from(new Set([primaryChannel, ...channelList]))
+
   return {
     id: typeof p.id === 'string' ? p.id : '',
     date: typeof p.date === 'string' ? p.date : '',
-    channel: (typeof p.channel === 'string' ? p.channel : 'instagram') as Post['channel'],
+    channel: primaryChannel,
+    ...(dedupedChannels.length > 1 ? { channels: dedupedChannels } : {}),
     format: typeof p.format === 'string' ? p.format : '',
     pillar: typeof p.pillar === 'string' ? p.pillar : '',
     campaign: typeof p.campaign === 'string' ? p.campaign : undefined,

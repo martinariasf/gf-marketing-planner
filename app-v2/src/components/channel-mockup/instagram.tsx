@@ -1,8 +1,8 @@
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy } from 'lucide-react'
-import type { Post } from '@/types'
+import type { MockupPost } from './index'
 
 interface Props {
-  post: Post
+  post: MockupPost
   handle: string
   logoInitials: string
 }

@@ -1,8 +1,8 @@
 import { ThumbsUp, MessageSquare, Repeat2, Send, Files } from 'lucide-react'
-import type { Post } from '@/types'
+import type { MockupPost } from './index'
 
 interface Props {
-  post: Post
+  post: MockupPost
   clientName: string
   logoInitials: string
   /** Free-form subtitle under the company name (industry, follower count, etc.). Omit to hide. */

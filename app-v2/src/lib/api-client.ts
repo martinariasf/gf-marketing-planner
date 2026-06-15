@@ -17,6 +17,8 @@ import type {
   ClientIndexEntry,
   Performance,
   Post,
+  Channel,
+  PostStatus,
   ApprovalLogEntry,
   AssetsManifest,
   Suggestions,
@@ -268,7 +270,16 @@ export async function apiSave(slug: string, file: string, data: unknown): Promis
 
 // ── Phase 4 mutations ────────────────────────────────────────────────────────
 
-export type ApprovalDecision = 'in_review' | 'approved' | 'scheduled' | 'rejected'
+// GF-23 — the full content workflow a dashboard user can set from the calendar
+// or the kanban. Mirrors APPROVAL_DECISIONS on the API. `published` is omitted
+// on purpose: it is derived from the Postiz publish result, not user-settable.
+export type ApprovalDecision =
+  | 'drafting'
+  | 'in_review'
+  | 'approved'
+  | 'scheduled'
+  | 'needs_revision'
+  | 'rejected'
 
 export async function apiSetApproval(
   slug: string,
@@ -299,6 +310,45 @@ export async function apiPatchPost(
   patch: Record<string, unknown>,
 ): Promise<void> {
   await apiSend('PATCH', `/clients/${slug}/posts/${postId}`, patch)
+}
+
+// GF-22 — soft-delete a post. The API appends a `{ status: 'deleted' }` patch
+// and the list endpoint filters it out; recovery is a PATCH back to any status.
+export async function apiDeletePost(slug: string, postId: string): Promise<void> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(`/clients/${slug}/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /clients/${slug}/posts/${postId} failed: ${res.status}`)
+}
+
+// GF-15 — create a new dashboard-originated post. `date` + `title` are the only
+// required fields (the backend coalesces the rest); the API returns the built
+// Post (201), which we normalize like every other read.
+export type CreatePostInput = {
+  date: string
+  title: string
+  channel?: Channel
+  format?: string
+  pillar?: string
+  status?: PostStatus
+  copy?: string
+}
+
+export async function apiCreatePost(
+  slug: string,
+  input: CreatePostInput,
+): Promise<Post> {
+  const raw = await apiSend<unknown>('POST', `/clients/${slug}/posts`, input)
+  return normalizePost(raw)
+}
+
+// GF-5 — delete a Viktor-owned manifest asset (soft-delete overlay on the backend).
+export async function apiDeleteManifestAsset(slug: string, assetId: string): Promise<void> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(
+    `/clients/${slug}/assets/${encodeURIComponent(assetId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
 }
 
 export async function apiLoadCalendarRange(slug: string): Promise<CalendarRangeConfig | null> {
@@ -540,6 +590,13 @@ export async function* apiChatStream(args: {
   }
 }
 
+/** Masked Postiz key status (GF-11). The raw key is never sent to the SPA. */
+export interface PostizStatus {
+  configured: boolean
+  last4: string | null
+  updatedAt: string | null
+}
+
 export interface IntegrationInfo {
   slug: string
   apiBase: string
@@ -554,10 +611,24 @@ export interface IntegrationInfo {
   }
   assetsDir: string
   assetsManifestPath: string
+  postiz: PostizStatus
 }
 
 export async function apiLoadIntegration(slug: string): Promise<IntegrationInfo> {
   return apiGet<IntegrationInfo>(`/clients/${slug}/integration`)
+}
+
+/** Save / rotate the Postiz API key. Returns the masked status; never the key. */
+export async function apiSavePostizKey(slug: string, apiKey: string): Promise<PostizStatus> {
+  return apiSend<PostizStatus>('PUT', `/clients/${slug}/integration/postiz`, { apiKey })
+}
+
+/** Remove the stored Postiz API key. */
+export async function apiDeletePostizKey(slug: string): Promise<PostizStatus> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
+  const res = await authedFetch(`/clients/${slug}/integration/postiz`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /clients/${slug}/integration/postiz failed: ${res.status}`)
+  return (await res.json()) as PostizStatus
 }
 
 // ── Sync / notify-viktor ─────────────────────────────────────────────────────
@@ -657,4 +728,276 @@ export async function apiLoadAgentJobs(
   } catch {
     return []
   }
+}
+
+// ── GF-4: Content Creation review links (collaboration layer) ────────────────
+
+export interface ReviewLink {
+  id: string
+  publicId: string
+  title: string
+  rangeStart: string
+  rangeEnd: string
+  status: 'active' | 'revoked'
+  state: 'active' | 'revoked' | 'expired'
+  expiresAt: string | null
+  createdBy: string | null
+  createdAt: string | null
+  revokedAt: string | null
+  reviewPath: string
+  /** Present only in the immediate create/rotate response — shown once. */
+  code?: string
+  /** Total comments on this link (list endpoint only). */
+  commentCount?: number
+}
+
+export interface ReviewComment {
+  id: string
+  postId: string
+  reviewerName: string
+  body: string
+  status: 'open' | 'resolved'
+  source: 'reviewer' | 'dashboard'
+  createdAt: string
+}
+
+export interface ReviewEvent {
+  id: string
+  slug: string
+  linkId: string
+  postId?: string
+  kind: 'comment' | 'approved' | 'changes_requested'
+  reviewerName?: string
+  preview?: string
+  read?: boolean
+  createdAt?: string
+}
+
+export async function apiCreateReviewLink(
+  slug: string,
+  body: { title?: string; rangeStart: string; rangeEnd: string; ttlDays?: number },
+): Promise<ReviewLink> {
+  return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
+}
+
+export async function apiListReviewLinks(slug: string): Promise<ReviewLink[]> {
+  try {
+    const r = await apiGet<{ items: ReviewLink[] }>(`/clients/${slug}/review-links`)
+    return r.items ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function apiRevokeReviewLink(slug: string, id: string): Promise<ReviewLink> {
+  return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links/${id}/revoke`, {})
+}
+
+export async function apiRotateReviewLink(slug: string, id: string): Promise<ReviewLink> {
+  return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links/${id}/rotate`, {})
+}
+
+export async function apiLoadReviewLinkComments(slug: string, id: string): Promise<ReviewComment[]> {
+  try {
+    const r = await apiGet<{ items: ReviewComment[] }>(`/clients/${slug}/review-links/${id}/comments`)
+    return r.items ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function apiReplyReviewComment(
+  slug: string,
+  linkId: string,
+  body: string,
+  postId?: string,
+): Promise<void> {
+  await apiSend('POST', `/clients/${slug}/review-links/${linkId}/comments`, { body, postId })
+}
+
+export async function apiModerateReviewComment(
+  slug: string,
+  commentId: string,
+  status: 'open' | 'resolved',
+): Promise<void> {
+  await apiSend('PATCH', `/clients/${slug}/review-comments/${commentId}`, { status })
+}
+
+export async function apiLoadReviewActivity(
+  slug: string,
+  opts: { unread?: boolean; limit?: number } = {},
+): Promise<{ items: ReviewEvent[]; unreadCount: number }> {
+  try {
+    const qs = new URLSearchParams()
+    if (opts.unread) qs.set('unread', 'true')
+    if (opts.limit) qs.set('limit', String(opts.limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return await apiGet<{ items: ReviewEvent[]; unreadCount: number }>(
+      `/clients/${slug}/review-activity${suffix}`,
+    )
+  } catch {
+    return { items: [], unreadCount: 0 }
+  }
+}
+
+export async function apiMarkReviewActivityRead(
+  slug: string,
+  arg: { ids?: string[]; all?: boolean },
+): Promise<void> {
+  await apiSend('POST', `/clients/${slug}/review-activity/read`, arg)
+}
+
+// Per-post external feedback for the whole client, indexed by postId. Backs the
+// calendar badges + the "External feedback" thread in the post view (v3).
+export interface ReviewFeedbackComment {
+  id: string
+  linkId: string
+  postId?: string
+  reviewerName?: string
+  body: string
+  status?: 'open' | 'resolved'
+  source: 'reviewer' | 'dashboard'
+  createdAt?: string
+}
+
+export interface ReviewPostFeedback {
+  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  comments: ReviewFeedbackComment[]
+}
+
+export interface ReviewFeedback {
+  byPost: Record<string, ReviewPostFeedback>
+  general: { comments: ReviewFeedbackComment[] }
+}
+
+export async function apiLoadReviewFeedback(slug: string): Promise<ReviewFeedback> {
+  try {
+    return await apiGet<ReviewFeedback>(`/clients/${slug}/review-feedback`)
+  } catch {
+    return { byPost: {}, general: { comments: [] } }
+  }
+}
+
+// ── GF-4: PUBLIC external-review client (no dashboard bearer token) ──────────
+// These hit the code-gated /review/* endpoints. The reviewer is NOT logged into
+// the platform; the only credential is the access code (exchanged for a rev_*
+// session token returned by `open`). All calls go straight through fetch with
+// that session token — never the dashboard bearer.
+
+export interface PublicReviewPost {
+  id: string
+  date: string
+  channel?: string
+  format?: string
+  pillar?: string
+  campaign?: string
+  title: string
+  copy?: string
+  hashtags?: string[]
+  cta?: string
+  image?: string
+  slides?: Array<{ image: string; caption?: string }>
+  statusLabel?: string
+}
+
+export interface PublicReviewBrand {
+  name: string
+  handle: string
+  logoInitials: string
+}
+
+export interface PublicPostDecision {
+  postId: string
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+}
+
+export interface PublicReviewPayload {
+  token?: string
+  expiresAt?: string
+  reviewerName: string
+  canApprove: boolean
+  link: { title: string; rangeStart: string; rangeEnd: string }
+  brand?: PublicReviewBrand
+  posts: PublicReviewPost[]
+  postDecisions?: PublicPostDecision[]
+  comments: ReviewComment[]
+}
+
+export class ReviewGateError extends Error {}
+
+function reviewBase(): string {
+  return API_BASE ?? ''
+}
+
+function reviewImageUrl(url: string | undefined): string | undefined {
+  return url ? absoluteUrl(url) : url
+}
+
+function withAbsoluteImages(payload: PublicReviewPayload): PublicReviewPayload {
+  return {
+    ...payload,
+    posts: payload.posts.map((p) => ({
+      ...p,
+      image: reviewImageUrl(p.image),
+      slides: p.slides?.map((s) => ({ ...s, image: reviewImageUrl(s.image) ?? s.image })),
+    })),
+  }
+}
+
+export async function reviewOpen(
+  publicId: string,
+  code: string,
+  name?: string,
+): Promise<PublicReviewPayload> {
+  const res = await fetch(`${reviewBase()}/review/${publicId}/open`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, name }),
+  })
+  if (res.status === 403) throw new ReviewGateError('This link is unavailable, or the code is incorrect.')
+  if (!res.ok) throw new Error(`Could not open review link (${res.status})`)
+  return withAbsoluteImages((await res.json()) as PublicReviewPayload)
+}
+
+export async function reviewRefresh(publicId: string, token: string): Promise<PublicReviewPayload> {
+  const res = await fetch(`${reviewBase()}/review/${publicId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (res.status === 403) throw new ReviewGateError('Your review session expired. Re-enter the code.')
+  if (!res.ok) throw new Error(`Could not refresh (${res.status})`)
+  return withAbsoluteImages((await res.json()) as PublicReviewPayload)
+}
+
+export async function reviewComment(
+  publicId: string,
+  token: string,
+  body: string,
+  opts: { postId?: string; name?: string } = {},
+): Promise<ReviewComment> {
+  const res = await fetch(`${reviewBase()}/review/${publicId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ body, postId: opts.postId, name: opts.name }),
+  })
+  if (res.status === 403) throw new ReviewGateError('Your review session expired. Re-enter the code.')
+  if (!res.ok) throw new Error(`Could not post comment (${res.status})`)
+  return (await res.json()) as ReviewComment
+}
+
+export async function reviewDecision(
+  publicId: string,
+  token: string,
+  decision: 'approved' | 'changes_requested',
+  opts: { note?: string; name?: string; postId?: string } = {},
+): Promise<void> {
+  const res = await fetch(`${reviewBase()}/review/${publicId}/decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ decision, note: opts.note, name: opts.name, postId: opts.postId }),
+  })
+  if (res.status === 403) throw new ReviewGateError('Your review session expired. Re-enter the code.')
+  if (!res.ok) throw new Error(`Could not submit decision (${res.status})`)
 }

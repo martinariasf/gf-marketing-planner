@@ -154,6 +154,22 @@ const collections: CollectionSpec[] = [
     indexes: ['CREATE INDEX `idx_inspiration_slug` ON `inspiration_assets` (`slug`)'],
   },
   {
+    // Soft-delete overlay for Viktor-owned manifest assets. The dashboard can
+    // hide pictures from the Assets section without mutating assets/manifest.json
+    // or deleting image files from the agent-owned client assets directory.
+    name: 'asset_states',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'assetId', type: 'text', required: true, max: 160 },
+      { name: 'status', type: 'select', required: true, values: ['active', 'deleted'] },
+      { name: 'ts', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_asset_states_slug_asset` ON `asset_states` (`slug`, `assetId`)',
+    ],
+  },
+  {
     // Dashboard- and chat-created posts. Viktor's disk JSON is the authoritative
     // source for posts he wrote; this collection holds posts originated from
     // the staging dashboard/chat. Reads merge both. `data` is the full post JSON.
@@ -197,6 +213,24 @@ const collections: CollectionSpec[] = [
     indexes: ['CREATE UNIQUE INDEX `idx_org_configs_slug` ON `org_configs` (`slug`)'],
   },
   {
+    // GF-11: integration credentials (e.g. Postiz API key). Deliberately a
+    // SEPARATE collection from org_configs because org_configs is agent-readable
+    // (no role gate on its GET). Secrets here are stored as an encrypted envelope
+    // (see secrets.ts) and are NEVER returned to the dashboard — only the masked
+    // last4 is. The plaintext is decrypted server-side solely for the agent
+    // runtime fetch path. Default deny on all PB rules so only the admin API
+    // (withPb superuser) can touch it.
+    name: 'integration_secrets',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postizApiKeyEnc', type: 'text', maxSize: 5_000 },
+      { name: 'postizLast4', type: 'text', max: 8 },
+      { name: 'updatedAt', type: 'text', max: 40 },
+      { name: 'actor', type: 'text', max: 100 },
+    ],
+    indexes: ['CREATE UNIQUE INDEX `idx_integration_secrets_slug` ON `integration_secrets` (`slug`)'],
+  },
+  {
     name: 'information_sources',
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },
@@ -214,6 +248,75 @@ const collections: CollectionSpec[] = [
       { name: 'updatedAt', type: 'text', max: 40 },
     ],
     indexes: ['CREATE INDEX `idx_information_sources_slug` ON `information_sources` (`slug`)'],
+  },
+  // ── GF-4 Collaboration layer ────────────────────────────────────────────────
+  // Protected external review links for the Content Creation calendar range.
+  // A reviewer opens /review/<publicId> with a code, sees only the sanitized
+  // posts in [rangeStart,rangeEnd], and can comment / submit a review decision.
+  // The access code is stored hashed (sha256(publicId+":"+code)); never plaintext.
+  {
+    name: 'review_links',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'publicId', type: 'text', required: true, max: 64 },
+      { name: 'title', type: 'text', max: 200 },
+      { name: 'rangeStart', type: 'text', required: true, max: 7 },
+      { name: 'rangeEnd', type: 'text', required: true, max: 7 },
+      { name: 'codeHash', type: 'text', required: true, max: 128 },
+      { name: 'status', type: 'select', required: true, values: ['active', 'revoked'] },
+      { name: 'expiresAt', type: 'text', max: 40 },
+      { name: 'createdBy', type: 'text', max: 100 },
+      { name: 'createdAt', type: 'text', max: 40 },
+      { name: 'revokedAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_review_links_public` ON `review_links` (`publicId`)',
+      'CREATE INDEX `idx_review_links_slug` ON `review_links` (`slug`)',
+    ],
+  },
+  // External-reviewer comments + dashboard moderation replies. Kept distinct from
+  // chat_messages (Viktor transcripts) and approvals_v2 (internal decisions).
+  {
+    name: 'review_comments',
+    fields: [
+      { name: 'linkId', type: 'text', required: true, max: 50 },
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'postId', type: 'text', max: 100 },
+      { name: 'reviewerName', type: 'text', max: 120 },
+      { name: 'body', type: 'text', required: true, maxSize: 20_000 },
+      { name: 'status', type: 'select', values: ['open', 'resolved'] },
+      { name: 'source', type: 'select', required: true, values: ['reviewer', 'dashboard'] },
+      { name: 'parentId', type: 'text', max: 50 },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_review_comments_link` ON `review_comments` (`linkId`,`createdAt`)',
+      'CREATE INDEX `idx_review_comments_slug` ON `review_comments` (`slug`)',
+    ],
+  },
+  // Dashboard-visible activity feed: one row per external review action so the
+  // dashboard can show unread counts and link back to the reviewed post.
+  {
+    name: 'review_events',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'linkId', type: 'text', required: true, max: 50 },
+      { name: 'postId', type: 'text', max: 100 },
+      {
+        name: 'kind',
+        type: 'select',
+        required: true,
+        values: ['comment', 'approved', 'changes_requested'],
+      },
+      { name: 'reviewerName', type: 'text', max: 120 },
+      { name: 'preview', type: 'text', max: 300 },
+      { name: 'read', type: 'bool' },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_review_events_slug_read` ON `review_events` (`slug`,`read`,`createdAt`)',
+      'CREATE INDEX `idx_review_events_link` ON `review_events` (`linkId`)',
+    ],
   },
 ]
 

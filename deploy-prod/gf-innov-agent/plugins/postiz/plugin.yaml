@@ -1,10 +1,12 @@
 name: postiz
-version: 0.2.0
-description: "Postiz integration via the official `postiz` CLI. Lists connected accounts, uploads media, and schedules only already-approved marketing.gfinnov.com dashboard posts by shelling out to the CLI (preferred) instead of hitting REST directly."
+version: 0.3.0
+description: "Postiz integration via the official `postiz` CLI. Lists connected accounts, uploads media, and schedules only already-approved marketing.gfinnov.com dashboard posts by shelling out to the CLI (preferred) instead of hitting REST directly. The Postiz API key is resolved at runtime from the Marketing Platform API (GF-11) when not set in the env."
 author: gf-innovative-solutions
 kind: backend
-requires_env:
-  - POSTIZ_API_KEY
+# POSTIZ_API_KEY is optional: if unset, the key is fetched at runtime from the
+# platform API using API_BASE/CLIENT_SLUG/API_TOKEN. Gating is done by the
+# plugin's check_fn, so no env var is hard-required here.
+requires_env: []
 provides_tools:
   - postiz_list_integrations
   - postiz_schedule_post

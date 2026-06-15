@@ -11,22 +11,42 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
+import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER, effectiveChannels } from '@/components/channel-icon'
 import { Pillar } from '@/components/pillar'
+import { ReviewShareDialog } from '@/components/review-share-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { fmtDate } from '@/lib/format'
 import {
+  apiCreatePost,
+  apiDeletePost,
   apiLoadCalendarRange,
+  apiLoadReviewActivity,
+  apiLoadReviewFeedback,
   apiPatchPost,
+  apiReplyReviewComment,
   apiSaveCalendarRange,
   apiSetApproval,
   apiUploadInspiration,
   isApiEnabled,
+  type ApprovalDecision,
+  type ReviewFeedback,
+  type ReviewPostFeedback,
 } from '@/lib/api-client'
+import { WORKFLOW, isPublished, laneFor, publishedUrl } from '@/lib/post-status'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
+import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
 import {
   CalendarDays,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Tag,
   ImageIcon,
   Maximize2,
@@ -39,8 +59,19 @@ import {
   Rows3,
   Images,
   Settings2,
+  Share2,
+  Download,
+  FileText,
+  FileType2,
+  Plus,
+  PieChart as PieChartIcon,
   Check,
-  X,
+  ThumbsUp,
+  PenLine,
+  MessageSquare,
+  Send,
+  Trash2,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -54,7 +85,7 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
-import type { Post } from '@/types'
+import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -76,6 +107,17 @@ function isCarousel(post: Post): post is Post & { slides: Slide[] } {
 /** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
 function weekOfMonth(iso: string) {
   return Math.ceil(new Date(iso).getDate() / 7)
+}
+
+/**
+ * GF-16 — normalize a stored post date (full ISO or plain YYYY-MM-DD) to the
+ * `YYYY-MM-DD` value an `<input type="date">` expects. Empty string if unparseable.
+ */
+function toDateInputValue(iso: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso ?? '')
+  if (m) return m[1]
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -102,6 +144,31 @@ export default function CalendarView() {
   const [rangeOpen, setRangeOpen] = useState(false)
   const [savingRange, setSavingRange] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  // GF-22 — post pending delete-confirmation, and the in-flight delete state.
+  const [deleteTarget, setDeleteTarget] = useState<Post | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  // GF-15 — manual post creation from the calendar.
+  const [creating, setCreating] = useState(false)
+  // Post id to focus once `posts` refreshes after a create (jump to the new post).
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null)
+  // GF-4 — review share dialog + unread external-review activity badge.
+  const [shareOpen, setShareOpen] = useState(false)
+  const [reviewUnread, setReviewUnread] = useState(0)
+  // GF-4 v3 — per-post external reviewer feedback (decisions + comments),
+  // loaded once for the whole calendar and indexed by postId.
+  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedback>({
+    byPost: {},
+    general: { comments: [] },
+  })
+
+  const reloadReviewFeedback = useCallback(() => {
+    if (!isApiEnabled) return
+    void apiLoadReviewFeedback(slug).then(setReviewFeedback)
+  }, [slug])
+
+  useEffect(() => {
+    reloadReviewFeedback()
+  }, [reloadReviewFeedback])
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +178,18 @@ export default function CalendarView() {
       const normalized = normalizeCalendarRange(range)
       setCalendarRange(normalized)
       setRangeDraft(normalized)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  // GF-4 — surface unread external-review activity on the Share button.
+  useEffect(() => {
+    let cancelled = false
+    if (!isApiEnabled) return
+    apiLoadReviewActivity(slug, { unread: true, limit: 1 }).then((a) => {
+      if (!cancelled) setReviewUnread(a.unreadCount)
     })
     return () => {
       cancelled = true
@@ -133,6 +212,48 @@ export default function CalendarView() {
     return m
   }, [posts, monthKeys])
 
+  // GF-9 — content-mix vs strategy for the visible range: actual share of posts
+  // per content pillar against each pillar's target weight. Posts whose pillar
+  // isn't a known strategy pillar are grouped under "Other".
+  const contentMix = useMemo(() => {
+    const inRange = posts.filter((p) => monthKeys.includes(monthKeyFromIso(p.date)))
+    const total = inRange.length
+    const byPillar = new Map<string, number>()
+    inRange.forEach((p) => {
+      const name = p.pillar || '—'
+      byPillar.set(name, (byPillar.get(name) ?? 0) + 1)
+    })
+    const targetTotal = plan.pillars.reduce((s, p) => s + (p.weight || 0), 0) || 1
+    const known = plan.pillars.map((p) => {
+      const count = byPillar.get(p.name) ?? 0
+      return {
+        name: p.name,
+        value: count,
+        color: p.color,
+        actualPct: total ? Math.round((count / total) * 100) : 0,
+        targetPct: Math.round(((p.weight || 0) / targetTotal) * 100),
+      }
+    })
+    let other = 0
+    byPillar.forEach((count, name) => {
+      if (!plan.pillars.some((p) => p.name === name)) other += count
+    })
+    const data =
+      other > 0
+        ? [
+            ...known,
+            {
+              name: t('calendar.mixOther'),
+              value: other,
+              color: '#cbd5e1',
+              actualPct: total ? Math.round((other / total) * 100) : 0,
+              targetPct: 0,
+            },
+          ]
+        : known
+    return { data, total }
+  }, [posts, monthKeys, plan.pillars, t])
+
   // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
   const [activeMonth, setActiveMonth] = useState(rangeMonths[0]?.key ?? defaultRange.startMonth)
@@ -140,6 +261,8 @@ export default function CalendarView() {
   const [direction, setDirection] = useState(0)
   // Right-pane mode: the full picture (default) or the social-platform mockup.
   const [rightView, setRightView] = useState<'picture' | 'preview'>('picture')
+  // GF-20 — which selected network's mockup the Preview tab is showing.
+  const [previewChannel, setPreviewChannel] = useState<Channel | null>(null)
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
@@ -150,6 +273,12 @@ export default function CalendarView() {
   const monthPosts = postsByMonth[activeMonth] ?? []
   const activePost = monthPosts[slideIndex]
   const activeMonthLabel = rangeMonths.find((m) => m.key === activeMonth)?.name ?? activeMonth
+  // GF-20 — the networks the active post targets, and which one the Preview tab
+  // currently shows (defaults to the first; tolerates a stale selection when the
+  // active post changes without needing an effect).
+  const previewChannels = activePost ? effectiveChannels(activePost) : []
+  const activePreviewChannel =
+    previewChannel && previewChannels.includes(previewChannel) ? previewChannel : previewChannels[0]
 
   useEffect(() => {
     if (!rangeMonths.some((m) => m.key === activeMonth)) {
@@ -178,18 +307,102 @@ export default function CalendarView() {
     }
   }
 
-  const setApproval = async (post: Post, decision: 'approved' | 'rejected') => {
+  // GF-23 — set a post to any workflow status (Draft/Review/Approved/
+  // Programmed/Rechecked/Rejected). Published is terminal and never set here.
+  const setStatus = async (post: Post, decision: ApprovalDecision) => {
     setApprovingId(post.id)
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(decision === 'approved' ? `Approved ${post.id}` : `Rejected ${post.id}`, { duration: 1600 })
+      toast(t('calendar.statusSet', { id: post.id, status: t(`status.${decision}`) }), { duration: 1600 })
       refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update approval')
+      toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
     } finally {
       setApprovingId(null)
     }
   }
+
+  // GF-22 — delete after the confirmation dialog is accepted.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await apiDeletePost(slug, deleteTarget.id)
+      toast(t('calendar.deleted', { id: deleteTarget.id }), { duration: 1600 })
+      setDeleteTarget(null)
+      setSlideIndex(0)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('calendar.deleteFailed'))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // GF-15 — create a blank draft post in the active month, then jump to it.
+  const createPost = useCallback(async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      const date = `${activeMonth}-01`
+      const created = await apiCreatePost(slug, {
+        date,
+        title: t('calendar.newPostTitle'),
+        status: 'idea',
+      })
+      toast(t('calendar.postCreated'), { duration: 1600 })
+      setViewMode('month')
+      setActiveMonth(monthKeyFromIso(created.date))
+      setPendingSelectId(created.id)
+      refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('calendar.createFailed'))
+    } finally {
+      setCreating(false)
+    }
+  }, [creating, activeMonth, slug, t, refetch])
+
+  // Once a freshly-created post lands in the refreshed `posts`, select it.
+  useEffect(() => {
+    if (!pendingSelectId) return
+    const idx = (postsByMonth[activeMonth] ?? []).findIndex((p) => p.id === pendingSelectId)
+    if (idx >= 0) {
+      setSlideIndex(idx)
+      setDirection(0)
+      setPendingSelectId(null)
+    }
+  }, [pendingSelectId, postsByMonth, activeMonth])
+
+  // GF-17 â€” export the currently visible calendar range as PDF or Word.
+  const runExport = useCallback(
+    async (kind: 'pdf' | 'word') => {
+      try {
+        const input = {
+          clientName: plan.client.name,
+          range: calendarRange,
+          posts,
+          labels: {
+            title: t('calendar.eyebrow'),
+            rangeLabel: `${rangeMonths[0]?.label ?? ''} â€“ ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
+            date: t('export.date'),
+            channel: t('export.channel'),
+            format: t('export.format'),
+            pillar: t('export.pillar'),
+            post: t('export.post'),
+            copy: t('calendar.copyLabel'),
+            noPosts: t('calendar.noPostsShort'),
+            generatedOn: t('export.generatedOn'),
+          },
+        }
+        // Async since images are fetched + embedded into the document.
+        if (kind === 'pdf') await exportCalendarPdf(input)
+        else await exportCalendarWord(input)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('export.failed'))
+      }
+    },
+    [plan.client.name, calendarRange, posts, rangeMonths, t],
+  )
 
   // CAL2 â€” upload an image straight onto the active post (no Viktor needed).
   // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
@@ -297,18 +510,56 @@ export default function CalendarView() {
           </button>
         ))}
       </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setRangeDraft(calendarRange)
-            setRangeOpen(true)
-          }}
-          className="gap-1.5"
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-          {rangeMonths[0]?.label} - {rangeMonths[rangeMonths.length - 1]?.label}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isApiEnabled && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShareOpen(true)}
+                className="gap-1.5 relative"
+              >
+                <Share2 className="h-3.5 w-3.5 text-brand-blue" />
+                {t('review.share')}
+                {reviewUnread > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-green-500 px-1 text-[10px] font-bold text-white">
+                    {reviewUnread}
+                  </span>
+                )}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Download className="h-3.5 w-3.5 text-brand-blue" />
+                    {t('export.download')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => runExport('pdf')}>
+                    <FileText className="h-3.5 w-3.5 mr-2" />
+                    {t('export.asPdf')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => runExport('word')}>
+                    <FileType2 className="h-3.5 w-3.5 mr-2" />
+                    {t('export.asWord')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setRangeDraft(calendarRange)
+              setRangeOpen(true)
+            }}
+            className="gap-1.5"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            {rangeMonths[0]?.label} - {rangeMonths[rangeMonths.length - 1]?.label}
+          </Button>
+        </div>
       </div>
 
       {/* Month tabs â€” shown in Week + Month modes (Quarter shows all months). */}
@@ -381,9 +632,10 @@ export default function CalendarView() {
                       <CompactPostCard
                         key={p.id}
                         post={p}
+                        feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
-                        onApprove={() => setApproval(p, 'approved')}
-                        onReject={() => setApproval(p, 'rejected')}
+                        onSetStatus={(d) => setStatus(p, d)}
+                        onDelete={() => setDeleteTarget(p)}
                         onSelect={() => jumpToPost(p)}
                       />
                     ))}
@@ -430,9 +682,10 @@ export default function CalendarView() {
                       <CompactPostCard
                         key={p.id}
                         post={p}
+                        feedback={reviewFeedback.byPost[p.id]}
                         approving={approvingId === p.id}
-                        onApprove={() => setApproval(p, 'approved')}
-                        onReject={() => setApproval(p, 'rejected')}
+                        onSetStatus={(d) => setStatus(p, d)}
+                        onDelete={() => setDeleteTarget(p)}
                         onSelect={() => jumpToPost(p)}
                       />
                     ))}
@@ -475,8 +728,8 @@ export default function CalendarView() {
                     pillarColor={pillarColor[activePost.pillar]}
                     onSaved={refetch}
                     approving={approvingId === activePost.id}
-                    onApprove={() => setApproval(activePost, 'approved')}
-                    onReject={() => setApproval(activePost, 'rejected')}
+                    onSetStatus={(d) => setStatus(activePost, d)}
+                    onDelete={() => setDeleteTarget(activePost)}
                   />
 
                   {/* Vertical divider */}
@@ -507,10 +760,33 @@ export default function CalendarView() {
                       </div>
                     </div>
 
+                    {/* GF-20 — when the post targets several networks, the Preview
+                        tab offers one sub-tab per network so each gets its own mockup. */}
+                    {rightView === 'preview' && previewChannels.length > 1 && (
+                      <div className="flex items-center justify-center gap-1 mb-3 flex-wrap">
+                        {previewChannels.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setPreviewChannel(c)}
+                            aria-pressed={c === activePreviewChannel}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                              c === activePreviewChannel
+                                ? 'border-brand-blue bg-brand-blue text-white'
+                                : 'border-border-subtle text-ink-muted hover:bg-paper-muted',
+                            )}
+                          >
+                            <ChannelIcon channel={c} className="h-3.5 w-3.5" tinted={c !== activePreviewChannel} />
+                            {CHANNEL_LABEL[c]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="flex-1 flex items-center justify-center">
                       <AnimatePresence mode="wait" custom={direction}>
                         <motion.div
-                          key={`${activePost.id}-${rightView}`}
+                          key={`${activePost.id}-${rightView}-${rightView === 'preview' ? activePreviewChannel : ''}`}
                           custom={direction}
                           initial={{ opacity: 0, x: direction === 0 ? 0 : direction * 40 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -520,7 +796,7 @@ export default function CalendarView() {
                         >
                           {rightView === 'preview' ? (
                             <ChannelMockup
-                              post={activePost}
+                              post={{ ...activePost, channel: activePreviewChannel ?? activePost.channel }}
                               clientName={plan.client.name}
                               handle={plan.client.handle}
                               logoInitials={plan.client.logoInitials}
@@ -663,8 +939,10 @@ export default function CalendarView() {
                         )}
                       </div>
                       <div className="p-2 space-y-0.5">
-                        <p className="text-[10px] text-ink-muted">
-                          {fmtDate(p.date)} Â· {p.channel}
+                        <p className="text-[10px] text-ink-muted flex items-center gap-1">
+                          <ChannelIcon channel={p.channel} className="h-3 w-3" />
+                          <span className="truncate">{fmtDate(p.date)}</span>
+                          <ReviewSignals feedback={reviewFeedback.byPost[p.id]} />
                         </p>
                         <p className="text-xs font-medium leading-tight line-clamp-2">
                           {p.title}
@@ -675,6 +953,16 @@ export default function CalendarView() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* GF-4 v3 — external reviewer feedback for the active post. */}
+          {isApiEnabled && (
+            <ExternalFeedbackPanel
+              slug={slug}
+              postId={activePost.id}
+              feedback={reviewFeedback.byPost[activePost.id]}
+              onReplied={reloadReviewFeedback}
+            />
           )}
 
           {/* Lightbox */}
@@ -702,6 +990,36 @@ export default function CalendarView() {
           </Dialog>
         </>
       ) : null)}
+
+      {/* GF-15 — add a post manually, at the bottom of the calendar. */}
+      {isApiEnabled && (
+        <div className="flex justify-center pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={createPost}
+            disabled={creating}
+            className="gap-1.5"
+          >
+            {creating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5 text-brand-blue" />
+            )}
+            {t('calendar.addPost')}
+          </Button>
+        </div>
+      )}
+
+      {/* GF-9 — content-mix pie chart vs strategy. Shown only in Quarter view. */}
+      {viewMode === 'quarter' && (
+        <ContentMixChart
+          quarterLabel={plan.quarter.label || String(plan.quarter.year ?? '')}
+          rangeLabel={`${rangeMonths[0]?.label ?? ''} - ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`}
+          data={contentMix.data}
+          total={contentMix.total}
+        />
+      )}
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
@@ -740,7 +1058,205 @@ export default function CalendarView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* GF-22 — delete a post, with an explicit confirmation window. */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && !deleting && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogTitle>{t('calendar.deleteTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('calendar.deleteBody', { id: deleteTarget?.id ?? '', title: deleteTarget?.title ?? '' })}
+          </DialogDescription>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+              {t('calendar.deleteConfirm')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* GF-4 â€” share-for-review + external-review activity. */}
+      {isApiEnabled && (
+        <ReviewShareDialog
+          slug={slug}
+          range={calendarRange}
+          open={shareOpen}
+          onOpenChange={(v) => {
+            setShareOpen(v)
+            if (!v) reloadReviewFeedback()
+          }}
+          onJumpToPost={(postId) => {
+            const p = posts.find((x) => x.id === postId)
+            if (p) jumpToPost(p)
+          }}
+          onUnreadChange={setReviewUnread}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * GF-9 — content-mix pie chart. Shows the quarter plus the actual distribution
+ * of posts across content pillars (in the visible range) against each pillar's
+ * strategy target weight.
+ */
+function ContentMixChart({
+  quarterLabel,
+  rangeLabel,
+  data,
+  total,
+}: {
+  quarterLabel: string
+  rangeLabel: string
+  data: Array<{ name: string; value: number; color: string; actualPct: number; targetPct: number }>
+  total: number
+}) {
+  const t = useT()
+  const slices = data.filter((d) => d.value > 0)
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PieChartIcon className="h-4 w-4 text-brand-blue" />
+          <h3 className="text-sm font-semibold text-brand-blue">{t('calendar.contentMixTitle')}</h3>
+          <span className="text-[11px] text-ink-muted">
+            {[quarterLabel, rangeLabel].filter(Boolean).join(' Â· ')}
+          </span>
+        </div>
+        {total === 0 ? (
+          <p className="text-xs text-ink-muted py-6 text-center">{t('calendar.contentMixEmpty')}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6 items-center">
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={slices}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={88}
+                    paddingAngle={2}
+                  >
+                    {slices.map((d) => (
+                      <Cell key={d.name} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {data.map((d) => (
+                <div key={d.name} className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                  <span className="flex-1 truncate">{d.name}</span>
+                  <span className="font-medium tabular-nums">{d.actualPct}%</span>
+                  <span className="text-ink-muted tabular-nums">
+                    {t('calendar.mixTarget', { pct: d.targetPct })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * GF-23 — workflow status control. For a live (non-published) post it is a
+ * dropdown over the full workflow (Draft/Review/Approved/Programmed/Rechecked/
+ * Rejected). A published post is read-only: it shows the Published badge and a
+ * link to the live Postiz post when one is known.
+ */
+function StatusSelect({
+  post,
+  busy,
+  onSetStatus,
+  size = 'sm',
+}: {
+  post: Post
+  busy: boolean
+  onSetStatus: (decision: ApprovalDecision) => void
+  size?: 'sm' | 'xs'
+}) {
+  const t = useT()
+
+  if (isPublished(post)) {
+    const url = publishedUrl(post)
+    return (
+      <span className="inline-flex items-center gap-1.5 flex-wrap">
+        <Badge variant="secondary" className={cn(size === 'xs' ? 'text-[9px]' : 'text-[10px]', STATUS_STYLES.published)}>
+          <Send className={cn(size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3', 'mr-1')} />
+          {t('status.published')}
+        </Badge>
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'inline-flex items-center gap-1 font-medium text-brand-blue hover:underline',
+              size === 'xs' ? 'text-[10px]' : 'text-xs',
+            )}
+          >
+            <ExternalLink className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+            {t('calendar.viewPublished')}
+          </a>
+        )}
+      </span>
+    )
+  }
+
+  const current = laneFor(post) as ApprovalDecision
+  const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
+  const StepIcon = step.Icon
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
+        >
+          {busy ? (
+            <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
+          ) : (
+            <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+          )}
+          {t(step.labelKey)}
+          <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {WORKFLOW.map((s) => {
+          const Icon = s.Icon
+          return (
+            <DropdownMenuItem
+              key={s.key}
+              disabled={s.key === current}
+              onClick={() => onSetStatus(s.key)}
+            >
+              <Icon className="h-3.5 w-3.5 mr-2" />
+              {t(s.labelKey)}
+              {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -750,17 +1266,20 @@ export default function CalendarView() {
  */
 function CompactPostCard({
   post,
+  feedback,
   onSelect,
-  onApprove,
-  onReject,
+  onSetStatus,
+  onDelete,
   approving,
 }: {
   post: Post
+  feedback?: ReviewPostFeedback
   onSelect: () => void
-  onApprove: () => void
-  onReject: () => void
+  onSetStatus: (decision: ApprovalDecision) => void
+  onDelete: () => void
   approving: boolean
 }) {
+  const t = useT()
   const slideCount = isCarousel(post) ? post.slides.length : 0
   const timing = dateTiming(post.date)
   return (
@@ -788,28 +1307,205 @@ function CompactPostCard({
       </button>
       <div className="min-w-0 flex-1 space-y-1">
         <button onClick={onSelect} className="block w-full text-left">
-          <p className="text-[10px] text-ink-muted truncate">
-            {fmtDate(post.date)} · {post.channel}
-            {timing === 'past' && ' · Past'}
-            {timing === 'today' && ' · Today'}
+          <p className="text-[10px] text-ink-muted truncate flex items-center gap-1">
+            <ChannelIcon channel={post.channel} className="h-3 w-3" />
+            <span>{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
+            <span>· {fmtDate(post.date)}</span>
+            {timing === 'past' && <span>· Past</span>}
+            {timing === 'today' && <span>· Today</span>}
           </p>
           <p className="text-xs font-medium leading-tight line-clamp-2 group-hover:text-brand-blue transition-colors">
             {post.title}
           </p>
         </button>
-        <StatusBadges post={post} />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StatusBadges post={post} />
+          <ReviewSignals feedback={feedback} />
+        </div>
         {isApiEnabled && (
           <div className="flex items-center gap-1 pt-0.5">
-            <Button size="sm" variant="outline" disabled={approving} onClick={onApprove} className="h-6 px-2 text-[10px]">
-              <Check className="h-3 w-3 mr-1" /> Approve
-            </Button>
-            <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="h-6 px-2 text-[10px] text-rose-700">
-              <X className="h-3 w-3 mr-1" /> Reject
+            <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} size="xs" />
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={approving}
+              onClick={onDelete}
+              aria-label={t('calendar.deletePost')}
+              title={t('calendar.deletePost')}
+              className="h-6 w-6 p-0 text-ink-muted hover:text-rose-700"
+            >
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * GF-4 v3 — tiny external-reviewer indicators: ✓ n approved, ✎ n changes
+ * requested, 💬 n reviewer comments. Renders nothing without feedback. These
+ * are signals from outside reviewers — visually separate from internal status.
+ */
+function ReviewSignals({ feedback }: { feedback?: ReviewPostFeedback }) {
+  const t = useT()
+  if (!feedback) return null
+  const approved = feedback.decisions.filter((d) => d.decision === 'approved').length
+  const changes = feedback.decisions.filter((d) => d.decision === 'changes_requested').length
+  const comments = feedback.comments.filter((c) => c.source === 'reviewer').length
+  if (!approved && !changes && !comments) return null
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      {approved > 0 && (
+        <span
+          title={t('review.fb.approvedBy', { n: approved })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <ThumbsUp className="h-2.5 w-2.5" />
+          {approved}
+        </span>
+      )}
+      {changes > 0 && (
+        <span
+          title={t('review.fb.changesBy', { n: changes })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <PenLine className="h-2.5 w-2.5" />
+          {changes}
+        </span>
+      )}
+      {comments > 0 && (
+        <span
+          title={t('review.fb.commentsBy', { n: comments })}
+          className="inline-flex items-center gap-0.5 rounded-full bg-brand-blue/10 text-brand-blue px-1.5 py-0.5 text-[9px] font-semibold"
+        >
+          <MessageSquare className="h-2.5 w-2.5" />
+          {comments}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * GF-4 v3 — "External feedback" under the month-view post: reviewer decision
+ * chips + the comment thread, with a team reply box. Reviewer decisions are
+ * signals only; internal Approve/Reject stays in CopyPane.
+ */
+function ExternalFeedbackPanel({
+  slug,
+  postId,
+  feedback,
+  onReplied,
+}: {
+  slug: string
+  postId: string
+  feedback?: ReviewPostFeedback
+  onReplied: () => void
+}) {
+  const t = useT()
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const decisions = feedback?.decisions ?? []
+  const comments = feedback?.comments ?? []
+  if (decisions.length === 0 && comments.length === 0) return null
+
+  // Replies attach to a review link; thread them onto the link of the latest
+  // reviewer comment for this post.
+  const lastReviewerComment = [...comments].reverse().find((c) => c.source === 'reviewer')
+
+  const send = async () => {
+    if (!reply.trim() || !lastReviewerComment) return
+    setSending(true)
+    try {
+      await apiReplyReviewComment(slug, lastReviewerComment.linkId, reply.trim(), postId)
+      setReply('')
+      onReplied()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('review.fb.replyFailed'))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4 sm:p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-brand-blue" />
+          {t('review.fb.title')}
+        </h3>
+
+        {decisions.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {decisions.map((d) => (
+              <span
+                key={`${d.reviewerName}-${d.createdAt}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  d.decision === 'approved'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700',
+                )}
+              >
+                {d.decision === 'approved' ? (
+                  <ThumbsUp className="h-3 w-3" />
+                ) : (
+                  <PenLine className="h-3 w-3" />
+                )}
+                {d.reviewerName}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {comments.length > 0 && (
+          <div className="space-y-1.5">
+            {comments.map((c) => (
+              <div
+                key={c.id}
+                className={cn(
+                  'text-xs rounded-md px-2.5 py-1.5',
+                  c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
+                )}
+              >
+                <span className="font-medium">
+                  {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
+                </span>
+                {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
+                <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {lastReviewerComment && (
+          <div className="flex items-center gap-2">
+            <input
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send()
+                }
+              }}
+              placeholder={t('review.fb.replyPlaceholder')}
+              className="flex-1 min-w-0 rounded-md border border-border-subtle bg-paper px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
+            />
+            <Button size="sm" onClick={send} disabled={sending || !reply.trim()}>
+              {sending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -836,30 +1532,40 @@ function CopyPane({
   pillarColor,
   onSaved,
   approving,
-  onApprove,
-  onReject,
+  onSetStatus,
+  onDelete,
 }: {
   slug: string
   post: Post
   pillarColor?: string
   onSaved: () => void
   approving: boolean
-  onApprove: () => void
-  onReject: () => void
+  onSetStatus: (decision: ApprovalDecision) => void
+  onDelete: () => void
 }) {
   const t = useT()
   const initialHashtags = (post.hashtags ?? []).join(' ')
+  const initialDate = toDateInputValue(post.date)
   const [title, setTitle] = useState(post.title ?? '')
   const [copy, setCopy] = useState(post.copy ?? '')
   const [hashtags, setHashtags] = useState(initialHashtags)
   const [cta, setCta] = useState(post.cta ?? '')
+  // GF-16 — editable publication date (YYYY-MM-DD for the date input).
+  const [date, setDate] = useState(initialDate)
+  // GF-20 — editable target networks (multi-select, picked above the title).
+  const initialChannels = effectiveChannels(post)
+  const [channels, setChannels] = useState<Channel[]>(initialChannels)
+  const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const channelsChanged = channels.join(',') !== initialChannels.join(',')
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
-    cta !== (post.cta ?? '')
+    cta !== (post.cta ?? '') ||
+    date !== initialDate ||
+    channelsChanged
 
   const save = async () => {
     if (!dirty || saving) return
@@ -871,6 +1577,21 @@ function CopyPane({
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
+    if (channelsChanged && channels.length > 0) {
+      // Persist the multi-network list and keep the primary `channel` in sync so
+      // every single-channel reader (list icon, exports, mockups) stays coherent.
+      patch.channels = channels
+      patch.channel = channels[0]
+    }
+    // GF-16 — only send the date when it actually changed and is non-empty
+    // (the API rejects an empty date with a 422).
+    if (date !== initialDate) {
+      if (!date) {
+        toast.error(t('calendar.dateRequired'))
+        return
+      }
+      patch.date = date
+    }
     setSaving(true)
     try {
       await apiPatchPost(slug, post.id, patch)
@@ -888,6 +1609,21 @@ function CopyPane({
     setCopy(post.copy ?? '')
     setHashtags(initialHashtags)
     setCta(post.cta ?? '')
+    setDate(initialDate)
+    setChannels(initialChannels)
+    setChannelOpen(false)
+  }
+
+  // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
+  const toggleChannel = (c: Channel) => {
+    setChannels((prev) => {
+      const has = prev.includes(c)
+      if (has && prev.length === 1) return prev // never empty
+      const next = new Set(prev)
+      if (has) next.delete(c)
+      else next.add(c)
+      return CHANNEL_ORDER.filter((x) => next.has(x))
+    })
   }
 
   return (
@@ -896,12 +1632,73 @@ function CopyPane({
         <Badge variant="outline" className="font-mono text-[10px]">{post.id}</Badge>
         <StatusBadges post={post} />
         <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
+
+        {/* GF-20 — target-network selector, top-right above the title. Multi-select:
+            a post can target several networks at once (each gets its own preview). */}
+        <div className="ml-auto">
+          {isApiEnabled ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setChannelOpen((o) => !o)}
+                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                aria-haspopup="listbox"
+                aria-expanded={channelOpen}
+                aria-label={t('context.selectNetwork')}
+              >
+                {channels.map((c) => (
+                  <ChannelIcon key={c} channel={c} className="h-4 w-4" />
+                ))}
+                {channels.length === 1 && (
+                  <span className="font-medium">{CHANNEL_LABEL[channels[0]]}</span>
+                )}
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </button>
+              {channelOpen && (
+                <>
+                  {/* click-away backdrop */}
+                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
+                  <ul
+                    role="listbox"
+                    aria-multiselectable="true"
+                    className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
+                  >
+                    {CHANNEL_ORDER.map((c) => {
+                      const on = channels.includes(c)
+                      return (
+                        <li key={c}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={on}
+                            onClick={() => toggleChannel(c)}
+                            className={cn(
+                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
+                              on && 'font-medium',
+                            )}
+                          >
+                            <ChannelIcon channel={c} className="h-4 w-4" />
+                            <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
+                            {on && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-1">
+              {effectiveChannels(post).map((c) => (
+                <ChannelIcon key={c} channel={c} className="h-4 w-4" />
+              ))}
+            </span>
+          )}
+        </div>
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-          {fmtDate(post.date)} Â· {post.channel} Â· {post.format}
-        </p>
         {isApiEnabled ? (
           <input
             value={title}
@@ -913,6 +1710,21 @@ function CopyPane({
           <h2 className="text-2xl font-bold text-ink leading-tight">{post.title}</h2>
         )}
       </div>
+
+      {/* GF-16 — editable publication date. */}
+      {isApiEnabled && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.publishDate')}
+          </p>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <Pillar name={post.pillar} color={pillarColor} />
@@ -996,14 +1808,20 @@ function CopyPane({
         </div>
       )}
       {isApiEnabled && (
-        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle">
-          <Button size="sm" variant="outline" disabled={approving} onClick={onApprove}>
-            <Check className="h-3.5 w-3.5 mr-1.5" />
-            Approve
-          </Button>
-          <Button size="sm" variant="ghost" disabled={approving} onClick={onReject} className="text-rose-700">
-            <X className="h-3.5 w-3.5 mr-1.5" />
-            Reject
+        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            {t('calendar.statusLabel')}
+          </span>
+          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} />
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={approving}
+            onClick={onDelete}
+            className="ml-auto text-ink-muted hover:text-rose-700"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+            {t('calendar.deletePost')}
           </Button>
         </div>
       )}

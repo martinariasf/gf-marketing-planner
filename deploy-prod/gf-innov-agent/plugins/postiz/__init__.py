@@ -6,7 +6,11 @@ agent-facing surface, handles auth via POSTIZ_API_KEY env var, and is
 maintained alongside the API.
 
 Environment:
-  POSTIZ_API_KEY     required — passed straight through to the CLI
+  POSTIZ_API_KEY     optional — explicit override. If unset, the key is fetched
+                     at runtime from the Marketing Platform API (GF-11) using
+                     API_BASE/CLIENT_SLUG/API_TOKEN and injected into the CLI.
+                     The key is never logged or returned in tool output — the
+                     dashboard owner configures it once and never sees it again.
   POSTIZ_API_URL     optional — custom endpoint (cloud default works)
 
 Registered tools:
@@ -45,8 +49,54 @@ def _api_token() -> str:
     return os.environ.get("API_TOKEN", "").strip()
 
 
+# Cache the resolved Postiz key for the process lifetime. The agent container is
+# restarted on every deploy/key rotation, so a per-process cache is sufficient
+# and keeps the secret out of repeated network round-trips. `_KEY_RESOLVED`
+# distinguishes "not configured" (cached None) from "not tried yet".
+_POSTIZ_KEY: Optional[str] = None
+_KEY_RESOLVED = False
+
+
+def _resolve_postiz_api_key() -> Optional[str]:
+    """Return the Postiz API key without ever logging it.
+
+    Order: explicit POSTIZ_API_KEY env override → GF-11 agent-only fetch from
+    the Marketing Platform API. The plaintext is held only in this module and is
+    never returned through any tool handler ("Viktor can get it, never sees it").
+    """
+    global _POSTIZ_KEY, _KEY_RESOLVED
+    env_key = os.environ.get("POSTIZ_API_KEY", "").strip()
+    if env_key:
+        return env_key
+    if _KEY_RESOLVED:
+        return _POSTIZ_KEY
+
+    _KEY_RESOLVED = True
+    api_base, slug, token = _api_base(), _client_slug(), _api_token()
+    if not (api_base and slug and token):
+        return None
+    req = urllib.request.Request(
+        f"{api_base}/clients/{slug}/integration/postiz/key",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as res:
+            payload = json.loads(res.read().decode("utf-8"))
+        key = (payload.get("apiKey") or "").strip()
+        _POSTIZ_KEY = key or None
+    except urllib.error.HTTPError as exc:
+        # 404 = no key configured for this client; anything else is unexpected.
+        if exc.code != 404:
+            logger.warning("postiz key fetch failed: HTTP %s", exc.code)
+        _POSTIZ_KEY = None
+    except Exception as exc:  # noqa: BLE001 — never let key resolution crash a tool
+        logger.warning("postiz key fetch failed: %s", exc)
+        _POSTIZ_KEY = None
+    return _POSTIZ_KEY
+
+
 def _check_postiz_available() -> bool:
-    if not os.environ.get("POSTIZ_API_KEY"):
+    if not _resolve_postiz_api_key():
         return False
     return shutil.which(CLI_BIN) is not None
 
@@ -54,7 +104,11 @@ def _check_postiz_available() -> bool:
 def _run_cli(args: List[str], timeout: int = CLI_TIMEOUT) -> Dict[str, Any]:
     """Run a postiz CLI command. Returns {ok, stdout, stderr, code}."""
     env = os.environ.copy()
-    # CLI requires POSTIZ_API_KEY in env; everything else is optional.
+    # CLI requires POSTIZ_API_KEY in env. Inject the runtime-resolved key so the
+    # operator does not have to bake it into the container (GF-11). Never logged.
+    key = _resolve_postiz_api_key()
+    if key:
+        env["POSTIZ_API_KEY"] = key
     try:
         proc = subprocess.run(
             [CLI_BIN, *args],
@@ -347,5 +401,8 @@ def register(ctx) -> None:
             handler=handler,
             check_fn=_check_postiz_available,
             emoji=emoji,
-            requires_env=["POSTIZ_API_KEY"],
+            # No hard env gate: the key may be fetched at runtime (GF-11) rather
+            # than baked into the container. _check_postiz_available() is the real
+            # gate and resolves the key from env OR the API before enabling tools.
+            requires_env=[],
         )
