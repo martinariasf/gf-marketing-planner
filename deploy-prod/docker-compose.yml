@@ -39,6 +39,10 @@ services:
       # config.yaml extra.key). Until the prod agent exists, leave chat disabled.
       HERMES_BASE_URL: "${HERMES_BASE_URL:-}"
       HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
+      # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
+      # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.
+      INTEGRATION_SECRET_KEY: "${INTEGRATION_SECRET_KEY:-}"
       RELEASE: "${RELEASE:-prod}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:

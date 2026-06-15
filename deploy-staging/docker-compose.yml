@@ -42,6 +42,10 @@ services:
       # in /opt/agents/staging-demo/config.yaml under platforms.api_server.extra.key
       HERMES_BASE_URL: "${HERMES_BASE_URL:-http://hermes-marketing-staging:8642}"
       HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
+      # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
+      # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.
+      INTEGRATION_SECRET_KEY: "${INTEGRATION_SECRET_KEY:-}"
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:
