@@ -105,6 +105,18 @@ const Post = z
       .array(z.object({ image: z.string(), caption: z.string().optional() }))
       .optional()
       .openapi({ description: 'Carousel only (2–10). Cover = slides[0].image.' }),
+    media: z
+      .array(
+        z.object({
+          type: z.enum(['image', 'video']),
+          url: z.string(),
+          thumbnail: z.string().optional(),
+          caption: z.string().optional(),
+          assetId: z.string().optional(),
+        }),
+      )
+      .optional()
+      .openapi({ description: 'Mixed post media. Use type="video" for generated MP4 clips attached to the post.' }),
     pillar: z.string().optional(),
     format: z.string().optional(),
     campaign: z.string().optional(),
@@ -347,8 +359,8 @@ export function registerApiDocs(app: OpenAPIHono): void {
     method: 'get',
     path: '/api/v1/clients/{slug}/assets/files/{name}',
     tags: ['assets'],
-    summary: 'Stream a generated image (public, no auth)',
-    description: 'Unauthenticated so <img> tags work. Use this URL form in post.image / branding logos.',
+    summary: 'Stream a generated media asset (public, no auth)',
+    description: 'Unauthenticated so image/video tags work. Use this URL form in post.image / branding logos / video manifest items.',
     request: {
       params: z.object({
         slug: z.string().openapi({ param: { name: 'slug', in: 'path' }, example: 'staging-demo' }),
@@ -356,7 +368,7 @@ export function registerApiDocs(app: OpenAPIHono): void {
       }),
     },
     responses: {
-      200: { description: 'Image bytes', content: { 'image/png': { schema: z.string().openapi({ format: 'binary' }) } } },
+      200: { description: 'Media bytes', content: { 'image/png': { schema: z.string().openapi({ format: 'binary' }) }, 'video/mp4': { schema: z.string().openapi({ format: 'binary' }) } } },
       400: { description: 'Invalid slug/filename', content: json(Problem) },
       404: { description: 'No such asset', content: json(Problem) },
     },

@@ -26,14 +26,16 @@ export type PostBase = {
 // our public, basicauth-bypassing file route (root-relative so it works on any
 // host). Leaves real absolute URLs (Unsplash, or the already-correct full URL)
 // untouched.
-export function normalizeImageUrl(slug: string, image: unknown): unknown {
-  if (typeof image !== 'string') return image
-  const v = image.trim()
+export function normalizeAssetUrl(slug: string, value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const v = value.trim()
   if (!v) return v
   if (/^https?:\/\//i.test(v) || v.startsWith('/api/v1/')) return v
   const name = v.split('/').filter(Boolean).pop() ?? v
   return `/api/v1/clients/${slug}/assets/files/${name}`
 }
+
+export const normalizeImageUrl = normalizeAssetUrl
 
 export async function buildPost(slug: string, id: string): Promise<PostBase | null> {
   // Try disk first, then fall back to dashboard/chat-created posts in PB.
@@ -54,6 +56,18 @@ export async function buildPost(slug: string, id: string): Promise<PostBase | nu
     const slides = (next as Record<string, unknown>).slides as Array<Record<string, unknown>>
     ;(next as Record<string, unknown>).slides = slides.map((s) =>
       s && typeof s === 'object' ? { ...s, image: normalizeImageUrl(slug, s.image) } : s,
+    )
+  }
+  if (Array.isArray((next as Record<string, unknown>).media)) {
+    const media = (next as Record<string, unknown>).media as Array<Record<string, unknown>>
+    ;(next as Record<string, unknown>).media = media.map((m) =>
+      m && typeof m === 'object'
+        ? {
+            ...m,
+            url: normalizeAssetUrl(slug, m.url),
+            thumbnail: normalizeAssetUrl(slug, m.thumbnail),
+          }
+        : m,
     )
   }
   if (approval) {

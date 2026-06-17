@@ -1,4 +1,4 @@
-"""OpenRouter image generation backend for Hermes Agent.
+"""OpenRouter image/video generation backend for Hermes Agent.
 
 Routes image generation requests to OpenRouter's image-capable models
 (default: Nano Banana 2 / ``google/gemini-3.1-flash-image-preview``) via the OpenAI-compatible Chat
@@ -9,6 +9,7 @@ outgoing chat message.
 Environment:
   OPENROUTER_API_KEY        required
   OPENROUTER_IMAGE_MODEL    optional, default Nano Banana 2
+  OPENROUTER_VIDEO_MODEL    optional, default Seedance 2.0
   OPENROUTER_BASE_URL       optional, default "https://openrouter.ai/api/v1"
 """
 
@@ -43,11 +44,29 @@ DEFAULT_MODEL_FAST = "google/gemini-3.1-flash-image-preview"  # Nano Banana 2, ~
 DEFAULT_MODEL_HIGH = "openai/gpt-5.4-image-2"                 # premium, ~3 min
 DEFAULT_MODEL = DEFAULT_MODEL_FAST
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_VIDEO_MODEL = "bytedance/seedance-2.0"
+DEFAULT_VIDEO_DURATION = 5
+DEFAULT_VIDEO_RESOLUTION = "720p"
+DEFAULT_VIDEO_POLL_INTERVAL = 30.0
+DEFAULT_VIDEO_MAX_POLLS = 60
 
 _ASPECT_TO_SIZE = {
     "landscape": "1536x1024",
     "square": "1024x1024",
     "portrait": "1024x1536",
+}
+
+_ASPECT_TO_VIDEO_ASPECT = {
+    "landscape": "16:9",
+    "square": "1:1",
+    "portrait": "9:16",
+    "16:9": "16:9",
+    "1:1": "1:1",
+    "9:16": "9:16",
+    "4:3": "4:3",
+    "3:4": "3:4",
+    "21:9": "21:9",
+    "9:21": "9:21",
 }
 
 
@@ -74,6 +93,10 @@ def _model_for_fidelity(fidelity: Optional[str]) -> Optional[str]:
 
 def _base_url() -> str:
     return os.environ.get("OPENROUTER_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+
+
+def _video_model() -> str:
+    return os.environ.get("OPENROUTER_VIDEO_MODEL", DEFAULT_VIDEO_MODEL)
 
 
 class OpenRouterImageGenProvider(ImageGenProvider):
@@ -455,7 +478,17 @@ def _publish_reserve_image(image_ref: str) -> Dict[str, Any]:
     return {"published": True, "url": url}
 
 
-def _append_manifest(dest_dir: str, filename: str, url: str, post_id: str) -> None:
+def _append_manifest(
+    dest_dir: str,
+    filename: str,
+    url: str,
+    post_id: str,
+    *,
+    kind: str = "image",
+    source: str = "openrouter:image_generate(auto-link)",
+    design_brief: str = "",
+    tags: Optional[List[str]] = None,
+) -> None:
     """Best-effort manifest entry so the asset shows up on the Assets tab."""
     manifest_path = os.path.join(dest_dir, "manifest.json")
     try:
@@ -470,19 +503,22 @@ def _append_manifest(dest_dir: str, filename: str, url: str, post_id: str) -> No
     n = 1
     while f"a{n:03d}" in used:
         n += 1
-    items.append(
-        {
-            "id": f"a{n:03d}",
-            "filename": filename,
-            "url": url,
-            "kind": "image",
-            "source": "openrouter:image_generate(auto-link)",
-            "usedInPosts": [post_id] if post_id else [],
-            "owner": "Viktor (staging)",
-            "finalApproved": False,
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+    entry: Dict[str, Any] = {
+        "id": f"a{n:03d}",
+        "filename": filename,
+        "url": url,
+        "kind": kind,
+        "source": source,
+        "usedInPosts": [post_id] if post_id else [],
+        "owner": "Viktor (staging)",
+        "finalApproved": False,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if design_brief:
+        entry["designBrief"] = design_brief
+    if tags:
+        entry["tags"] = tags
+    items.append(entry)
     manifest["items"] = items
     tmp = manifest_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -490,11 +526,11 @@ def _append_manifest(dest_dir: str, filename: str, url: str, post_id: str) -> No
     os.replace(tmp, manifest_path)
 
 
-def _current_post_image(post_id: str) -> str:
+def _fetch_post(post_id: str) -> Dict[str, Any]:
     slug = os.environ.get("CLIENT_SLUG", "")
     api_base = _api_base()
     if not (slug and api_base and post_id):
-        return ""
+        return {}
     try:
         with httpx.Client(timeout=15.0) as client:
             r = client.get(
@@ -502,10 +538,15 @@ def _current_post_image(post_id: str) -> str:
                 headers=_api_headers(),
             )
             r.raise_for_status()
-            return str((r.json() or {}).get("image") or "")
+            data = r.json() or {}
+            return data if isinstance(data, dict) else {}
     except Exception:
-        logger.debug("could not fetch current image for post %r", post_id, exc_info=True)
-        return ""
+        logger.debug("could not fetch post %r", post_id, exc_info=True)
+        return {}
+
+
+def _current_post_image(post_id: str) -> str:
+    return str(_fetch_post(post_id).get("image") or "")
 
 
 def _branding_logo_refs() -> List[str]:
@@ -536,6 +577,345 @@ def _branding_logo_refs() -> List[str]:
 def _append_unique_ref(refs: List[str], ref: str) -> None:
     if ref and ref not in refs:
         refs.append(ref)
+
+
+def _openrouter_url(path_or_url: str) -> str:
+    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+        return path_or_url
+    base = _base_url()
+    if path_or_url.startswith("/api/"):
+        origin = base.split("/api/", 1)[0]
+        return f"{origin}{path_or_url}"
+    if path_or_url.startswith("/"):
+        return f"{base}{path_or_url}"
+    return f"{base}/{path_or_url}"
+
+
+def _resolve_video_aspect_ratio(value: Any) -> str:
+    raw = str(value or "landscape").strip().lower()
+    return _ASPECT_TO_VIDEO_ASPECT.get(raw, "16:9")
+
+
+def _resolve_video_duration(value: Any) -> int:
+    try:
+        duration = int(value)
+    except Exception:
+        duration = DEFAULT_VIDEO_DURATION
+    return max(4, min(15, duration))
+
+
+def _resolve_video_resolution(value: Any) -> str:
+    raw = str(value or DEFAULT_VIDEO_RESOLUTION).strip()
+    return raw if raw in {"480p", "720p"} else DEFAULT_VIDEO_RESOLUTION
+
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _public_image_url(ref: str) -> str:
+    """Resolve a user-provided image reference to a public HTTPS URL for videos.
+
+    OpenRouter's video API fetches references itself, so it needs URLs rather
+    than inline data. For bare asset filenames and paths under the client assets
+    dir, return the dashboard's public asset URL.
+    """
+    ref = ref.strip()
+    if not ref:
+        raise ValueError("empty image reference")
+    if ref.startswith("data:"):
+        raise ValueError("data: image references are not supported for video; use a public URL or asset filename")
+    if ref.startswith("http://") or ref.startswith("https://"):
+        return ref
+
+    assets_dir = os.path.abspath(_assets_dir())
+    if os.path.isabs(ref):
+        abs_ref = os.path.abspath(ref)
+        if not abs_ref.startswith(assets_dir + os.sep):
+            raise ValueError(f"local reference must be inside {assets_dir}")
+        filename = os.path.basename(abs_ref)
+    else:
+        filename = os.path.basename(ref)
+        candidate = os.path.join(assets_dir, filename)
+        if not os.path.exists(candidate):
+            raise ValueError(f"asset file not found: {filename}")
+
+    slug = os.environ.get("CLIENT_SLUG", "")
+    if not slug:
+        raise ValueError("CLIENT_SLUG not set")
+    return f"{_public_assets_base()}/clients/{slug}/assets/files/{filename}"
+
+
+def _video_cache_dir() -> str:
+    root = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    path = os.path.join(root, "cache", "videos")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _save_video_bytes(data: bytes, *, model: str, job_id: str) -> str:
+    safe_model = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in model)
+    safe_job = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in job_id)[:48]
+    filename = f"openrouter_{safe_model}_{safe_job}_{int(time.time() * 1000)}.mp4"
+    path = os.path.join(_video_cache_dir(), filename)
+    with open(path, "wb") as f:
+        f.write(data)
+    return path
+
+
+def _download_video(client: httpx.Client, status: Dict[str, Any], api_key: str) -> bytes:
+    urls = status.get("unsigned_urls") or []
+    download_url = ""
+    if urls and isinstance(urls[0], str):
+        download_url = urls[0]
+    if not download_url:
+        job_id = status.get("id")
+        if not job_id:
+            raise ValueError("completed video job did not include an id")
+        download_url = f"{_base_url()}/videos/{job_id}/content?index=0"
+
+    headers = {"Authorization": f"Bearer {api_key}"} if "openrouter.ai/api/" in download_url else {}
+    resp = client.get(download_url, headers=headers)
+    resp.raise_for_status()
+    return resp.content
+
+
+def _publish_generated_video(video_path: str, prompt: str, model: str, post_id: str = "") -> Dict[str, Any]:
+    slug = os.environ.get("CLIENT_SLUG", "")
+    if not slug:
+        return {"published": False, "error": "CLIENT_SLUG not set"}
+
+    filename = f"video_{int(time.time() * 1000)}.mp4"
+    dest_dir = _assets_dir()
+    dest_path = os.path.join(dest_dir, filename)
+    try:
+        with open(video_path, "rb") as f:
+            data = f.read()
+        os.makedirs(dest_dir, exist_ok=True)
+        with open(dest_path, "wb") as f:
+            f.write(data)
+    except Exception as exc:
+        return {"published": False, "error": f"copy into assets failed: {exc}"}
+
+    url = f"{_public_assets_base()}/clients/{slug}/assets/files/{filename}"
+    try:
+        _append_manifest(
+            dest_dir,
+            filename,
+            url,
+            post_id,
+            kind="video",
+            source=f"openrouter:video_generate({model})",
+            design_brief=prompt,
+            tags=["video", "seedance-2.0"],
+        )
+    except Exception:
+        logger.debug("manifest append (video) failed", exc_info=True)
+    return {"published": True, "url": url, "path": dest_path}
+
+
+def _handle_video_generate(args: Dict[str, Any], **_kw: Any) -> str:
+    prompt = (args.get("prompt") or "").strip()
+    if not prompt:
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": "prompt is required for video generation",
+            "error_type": "invalid_argument",
+        })
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": "OPENROUTER_API_KEY not set",
+            "error_type": "auth_required",
+        })
+
+    model = (args.get("model") or _video_model()).strip()
+    duration = _resolve_video_duration(args.get("duration"))
+    resolution = _resolve_video_resolution(args.get("resolution"))
+    aspect_ratio = _resolve_video_aspect_ratio(args.get("aspect_ratio"))
+    generate_audio = _as_bool(args.get("generate_audio"), False)
+    post_id = (args.get("post_id") or "").strip()
+
+    reference_errors: List[str] = []
+    input_references: List[Dict[str, Any]] = []
+    raw_refs = args.get("input_references") or args.get("reference_images") or []
+    if isinstance(raw_refs, str):
+        raw_refs = [raw_refs]
+    for ref in raw_refs:
+        try:
+            url = _public_image_url(str(ref))
+        except Exception as exc:
+            reference_errors.append(f"{ref}: {exc}")
+            continue
+        input_references.append({"type": "image_url", "image_url": {"url": url}})
+
+    frame_images: List[Dict[str, Any]] = []
+    for key, frame_type in (("first_frame", "first_frame"), ("last_frame", "last_frame")):
+        ref = (args.get(key) or "").strip()
+        if not ref:
+            continue
+        try:
+            url = _public_image_url(ref)
+        except Exception as exc:
+            reference_errors.append(f"{key}={ref}: {exc}")
+            continue
+        frame_images.append({
+            "type": "image_url",
+            "image_url": {"url": url},
+            "frame_type": frame_type,
+        })
+
+    if (raw_refs or args.get("first_frame") or args.get("last_frame")) and reference_errors:
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": "One or more video reference images could not be resolved: " + "; ".join(reference_errors),
+            "error_type": "reference_image_error",
+            "provider": "openrouter",
+            "model": model,
+        })
+
+    payload: Dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "duration": duration,
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "generate_audio": generate_audio,
+    }
+    if input_references:
+        payload["input_references"] = input_references
+    if frame_images:
+        payload["frame_images"] = frame_images
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/NousResearch/hermes-agent",
+        "X-Title": "Hermes Agent",
+    }
+
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            resp = client.post(f"{_base_url()}/videos", json=payload, headers=headers)
+            resp.raise_for_status()
+            status: Dict[str, Any] = resp.json()
+
+            interval = float(os.environ.get("OPENROUTER_VIDEO_POLL_INTERVAL", DEFAULT_VIDEO_POLL_INTERVAL))
+            max_polls = int(os.environ.get("OPENROUTER_VIDEO_MAX_POLLS", DEFAULT_VIDEO_MAX_POLLS))
+            for _attempt in range(max_polls):
+                if status.get("status") == "completed":
+                    break
+                if status.get("status") in {"failed", "cancelled", "expired"}:
+                    return json.dumps({
+                        "success": False,
+                        "video": None,
+                        "error": status.get("error") or f"Video generation {status.get('status')}",
+                        "error_type": "api_error",
+                        "provider": "openrouter",
+                        "model": model,
+                        "job": status,
+                    })
+                polling_url = status.get("polling_url")
+                if not polling_url:
+                    return json.dumps({
+                        "success": False,
+                        "video": None,
+                        "error": "OpenRouter video job did not include polling_url",
+                        "error_type": "api_error",
+                        "provider": "openrouter",
+                        "model": model,
+                        "job": status,
+                    })
+                time.sleep(interval)
+                poll = client.get(_openrouter_url(str(polling_url)), headers={"Authorization": f"Bearer {api_key}"})
+                poll.raise_for_status()
+                status = poll.json()
+
+            if status.get("status") != "completed":
+                return json.dumps({
+                    "success": False,
+                    "video": None,
+                    "error": f"Video generation did not complete after {max_polls} polls",
+                    "error_type": "timeout",
+                    "provider": "openrouter",
+                    "model": model,
+                    "job": status,
+                })
+
+            video_bytes = _download_video(client, status, api_key)
+    except httpx.HTTPStatusError as exc:
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": f"OpenRouter returned {exc.response.status_code}: {exc.response.text[:300]}",
+            "error_type": "api_error",
+            "provider": "openrouter",
+            "model": model,
+        })
+    except Exception as exc:
+        logger.debug("OpenRouter video generation failed", exc_info=True)
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": f"OpenRouter video generation failed: {exc}",
+            "error_type": "api_error",
+            "provider": "openrouter",
+            "model": model,
+        })
+
+    job_id = str(status.get("id") or status.get("generation_id") or "job")
+    try:
+        cache_path = _save_video_bytes(video_bytes, model=model, job_id=job_id)
+    except Exception as exc:
+        return json.dumps({
+            "success": False,
+            "video": None,
+            "error": f"Could not save video to cache: {exc}",
+            "error_type": "io_error",
+            "provider": "openrouter",
+            "model": model,
+            "job": status,
+        })
+
+    asset = _publish_generated_video(cache_path, prompt, model, post_id)
+    public_url = asset.get("url") if asset.get("published") else ""
+    result = {
+        "success": bool(public_url),
+        "video": public_url or cache_path,
+        "path": cache_path,
+        "media": f"MEDIA:{cache_path}",
+        "asset": asset,
+        "provider": "openrouter",
+        "model": model,
+        "prompt": prompt,
+        "duration": duration,
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "generate_audio": generate_audio,
+        "job": {
+            "id": status.get("id"),
+            "status": status.get("status"),
+            "generation_id": status.get("generation_id"),
+            "usage": status.get("usage"),
+        },
+    }
+    if public_url and post_id:
+        result["post_link"] = _link_video_to_post(str(public_url), post_id, prompt)
+    if not public_url:
+        result["error"] = asset.get("error") or "video generated but could not publish public asset"
+        result["error_type"] = "publish_error"
+    return json.dumps(result)
 
 
 def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
@@ -597,6 +977,73 @@ def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
         return {"linked": False, "url": url, "error": f"PATCH /posts/{post_id} failed: {exc}"}
 
     return {"linked": served == url, "url": url, "post_image": served, "post_id": post_id}
+
+
+def _link_video_to_post(video_url: str, post_id: str, prompt: str) -> Dict[str, Any]:
+    """Append a generated MP4 to the post's mixed media array."""
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    token = os.environ.get("API_TOKEN", "")
+    if not (slug and api_base and token):
+        return {
+            "linked": False,
+            "error": "CLIENT_SLUG/API_BASE/API_TOKEN not set; cannot auto-link",
+        }
+    if not video_url:
+        return {"linked": False, "error": "video URL missing"}
+
+    post = _fetch_post(post_id)
+    raw_media = post.get("media")
+    media: List[Dict[str, Any]] = []
+    if isinstance(raw_media, list):
+        for item in raw_media:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            item_url = item.get("url")
+            if item_type not in {"image", "video"} or not isinstance(item_url, str) or not item_url:
+                continue
+            clean: Dict[str, Any] = {"type": item_type, "url": item_url}
+            for key in ("thumbnail", "caption", "assetId"):
+                if isinstance(item.get(key), str) and item.get(key):
+                    clean[key] = item[key]
+            media.append(clean)
+
+    already_linked = any(item.get("type") == "video" and item.get("url") == video_url for item in media)
+    if not already_linked:
+        entry: Dict[str, Any] = {"type": "video", "url": video_url}
+        if prompt:
+            entry["caption"] = prompt[:500]
+        media.append(entry)
+
+    headers = {**_api_headers(), "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            patch = client.patch(
+                f"{api_base}/clients/{slug}/posts/{post_id}",
+                json={"media": media},
+                headers=headers,
+            )
+            patch.raise_for_status()
+            confirm = client.get(
+                f"{api_base}/clients/{slug}/posts/{post_id}", headers=headers
+            )
+            confirm.raise_for_status()
+            served_media = (confirm.json() or {}).get("media", [])
+    except httpx.HTTPStatusError as exc:
+        return {
+            "linked": False,
+            "url": video_url,
+            "error": f"PATCH /posts/{post_id} media -> {exc.response.status_code}: {exc.response.text[:200]}",
+        }
+    except Exception as exc:
+        return {"linked": False, "url": video_url, "error": f"PATCH /posts/{post_id} media failed: {exc}"}
+
+    linked = isinstance(served_media, list) and any(
+        isinstance(item, dict) and item.get("type") == "video" and item.get("url") == video_url
+        for item in served_media
+    )
+    return {"linked": linked, "url": video_url, "post_id": post_id, "already_linked": already_linked}
 
 
 # ---------------------------------------------------------------------------
@@ -661,6 +1108,79 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                     "the real file here (find the logo via the brief's branding.logos "
                     "or the client assets folder). OMIT for purely text-described images."
                 ),
+            },
+        },
+        "required": ["prompt"],
+    },
+}
+
+VIDEO_GENERATE_SCHEMA = {
+    "name": "video_generate",
+    "description": (
+        "Generate a short MP4 video with OpenRouter's bytedance/seedance-2.0 "
+        "video model. The tool submits the async OpenRouter video job, polls "
+        "until completion, downloads the MP4, publishes it to the client's "
+        "assets folder, appends the manifest entry as kind='video', and returns "
+        "a public URL in the `video` field. Use `input_references` for visual "
+        "style/product/identity guidance, or `first_frame`/`last_frame` when the "
+        "video must start/end on exact existing image assets."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": "Detailed video prompt including subject, camera movement, lighting, motion, pacing, and brand style.",
+            },
+            "aspect_ratio": {
+                "type": "string",
+                "enum": ["landscape", "portrait", "square", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"],
+                "description": "Output shape. Friendly values map to landscape=16:9, portrait=9:16, square=1:1.",
+                "default": "landscape",
+            },
+            "duration": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 15,
+                "description": "Clip duration in seconds. Seedance supports short clips; default is 5.",
+                "default": DEFAULT_VIDEO_DURATION,
+            },
+            "resolution": {
+                "type": "string",
+                "enum": ["480p", "720p"],
+                "description": "Output resolution. Use 720p unless the user asks otherwise.",
+                "default": DEFAULT_VIDEO_RESOLUTION,
+            },
+            "generate_audio": {
+                "type": "boolean",
+                "description": "Whether to ask the video model for audio when supported. Default false for marketing draft clips.",
+                "default": False,
+            },
+            "input_references": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional public image URLs, asset filenames, or paths under "
+                    "the client assets folder that should guide subject, identity, "
+                    "or style without forcing exact first/last frames."
+                ),
+            },
+            "first_frame": {
+                "type": "string",
+                "description": "Optional public image URL or asset filename to anchor the exact first frame.",
+            },
+            "last_frame": {
+                "type": "string",
+                "description": "Optional public image URL or asset filename to anchor the exact last frame.",
+            },
+            "post_id": {
+                "type": "string",
+                "description": "Optional dashboard post id. When present, the generated MP4 is appended to that post's media[] as type='video'.",
+            },
+            "model": {
+                "type": "string",
+                "description": "Optional override. Default is bytedance/seedance-2.0 via OPENROUTER_VIDEO_MODEL.",
+                "default": DEFAULT_VIDEO_MODEL,
             },
         },
         "required": ["prompt"],
@@ -764,5 +1284,17 @@ def register(ctx) -> None:
         is_async=False,
         description="Generate an image (ask first; fidelity: fast=Nano Banana 2, high=premium ~3min).",
         emoji="🎨",
+        override=True,
+    )
+    ctx.register_tool(
+        name="video_generate",
+        toolset="image_gen",
+        schema=VIDEO_GENERATE_SCHEMA,
+        handler=_handle_video_generate,
+        check_fn=_image_gen_available,
+        requires_env=["OPENROUTER_API_KEY"],
+        is_async=False,
+        description="Generate a Seedance 2.0 MP4 via OpenRouter and publish it as a dashboard video asset.",
+        emoji="video",
         override=True,
     )

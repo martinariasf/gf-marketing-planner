@@ -34,6 +34,7 @@ import {
   Globe2,
   CheckCircle2,
   FileText,
+  Film,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -134,7 +135,7 @@ export default function AssetsView() {
   }, [plan.pillars])
 
   const items = useMemo(
-    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id)),
+    () => (assets?.items ?? []).filter((item) => !deletedAssetIds.has(item.id) && item.kind !== 'video'),
     [assets?.items, deletedAssetIds],
   )
 
@@ -354,10 +355,8 @@ export default function AssetsView() {
                   >
                     <Card className="overflow-hidden h-full flex flex-col">
                       <div className="aspect-square bg-paper-muted relative overflow-hidden">
-                        <img
-                          src={item.url}
-                          alt={item.filename}
-                          loading="lazy"
+                        <AssetMedia
+                          item={item}
                           className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                         {!item.finalApproved && (
@@ -437,11 +436,7 @@ export default function AssetsView() {
                 </DialogHeader>
 
                 <div className="rounded-lg overflow-hidden bg-paper-muted">
-                  <img
-                    src={selected.url}
-                    alt={selected.filename}
-                    className="w-full max-h-[60vh] object-contain"
-                  />
+                  <AssetMedia item={selected} controls className="w-full max-h-[60vh] object-contain" />
                 </div>
 
                 {selected.designBrief && (
@@ -1088,4 +1083,29 @@ function SourceBadge({ source }: { source: AssetSource }) {
       {label}
     </Badge>
   )
+}
+
+function AssetMedia({ item, className, controls = false }: { item: AssetItem; className?: string; controls?: boolean }) {
+  if (item.kind === 'video') {
+    return (
+      <div className="relative h-full w-full bg-black">
+        <video
+          src={item.url}
+          controls={controls}
+          muted={!controls}
+          playsInline
+          preload="metadata"
+          className={cn(className, 'bg-black')}
+        />
+        {!controls && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="h-10 w-10 rounded-full bg-black/55 text-white flex items-center justify-center">
+              <Film className="h-5 w-5" />
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
+  return <img src={item.url} alt={item.filename} loading="lazy" className={className} />
 }

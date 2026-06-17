@@ -10,6 +10,7 @@ export interface MockupPost {
   hashtags: string[]
   image?: string
   slides?: Array<{ image: string; caption?: string }>
+  media?: Array<{ type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string }>
   channel: string
 }
 

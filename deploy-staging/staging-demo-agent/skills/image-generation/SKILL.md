@@ -74,5 +74,7 @@ change in the user's language, citing the public url.
 
 ## See also
 
+- `video-generation` - create Seedance 2.0 MP4 assets with `video_generate`.
+
 - `copywriting` — read the VOICE before writing the post text.
 - `marketing-planner-staging` — full API write-contract, assets, carousels.

@@ -63,6 +63,7 @@ import {
   Download,
   FileText,
   FileType2,
+  Film,
   Plus,
   PieChart as PieChartIcon,
   Check,
@@ -102,6 +103,10 @@ const STATUS_STYLES: Record<string, string> = {
 /** A post is a carousel when it carries more than one slide. */
 function isCarousel(post: Post): post is Post & { slides: Slide[] } {
   return Array.isArray(post.slides) && post.slides.length > 1
+}
+
+function postVideo(post: Post) {
+  return post.media?.find((item) => item.type === 'video' && item.url)
 }
 
 /** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
@@ -910,6 +915,7 @@ export default function CalendarView() {
               <div className="flex gap-2 pb-1">
                 {monthPosts.map((p, i) => {
                   const isActive = i === slideIndex
+                  const video = postVideo(p)
                   return (
                     <button
                       key={p.id}
@@ -925,7 +931,21 @@ export default function CalendarView() {
                       )}
                     >
                       <div className="aspect-video bg-paper-muted overflow-hidden">
-                        {p.image ? (
+                        {video ? (
+                          <div className="relative h-full w-full bg-black">
+                            <video
+                              src={video.url}
+                              poster={video.thumbnail}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              className="h-full w-full object-cover"
+                            />
+                            <span className="absolute top-1 right-1 inline-flex items-center rounded-full bg-black/60 text-white p-1">
+                              <Film className="h-3 w-3" />
+                            </span>
+                          </div>
+                        ) : p.image ? (
                           <img
                             src={p.image}
                             alt=""
@@ -969,7 +989,15 @@ export default function CalendarView() {
           <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
             <DialogContent className="sm:max-w-4xl p-2 bg-black/95 border-none">
               <DialogTitle className="sr-only">{activePost.title}</DialogTitle>
-              {isCarousel(activePost) ? (
+              {postVideo(activePost) ? (
+                <video
+                  src={postVideo(activePost)?.url}
+                  poster={postVideo(activePost)?.thumbnail}
+                  controls
+                  playsInline
+                  className="w-full max-h-[85vh] rounded bg-black"
+                />
+              ) : isCarousel(activePost) ? (
                 <LightboxCarousel
                   post={activePost}
                   slideIndex={imageSlide}
@@ -1281,6 +1309,7 @@ function CompactPostCard({
 }) {
   const t = useT()
   const slideCount = isCarousel(post) ? post.slides.length : 0
+  const video = postVideo(post)
   const timing = dateTiming(post.date)
   return (
     <div
@@ -1291,7 +1320,21 @@ function CompactPostCard({
       )}
     >
       <button onClick={onSelect} className="relative shrink-0 h-16 w-16 rounded-md overflow-hidden bg-paper-muted">
-        {post.image ? (
+        {video ? (
+          <div className="relative h-full w-full bg-black">
+            <video
+              src={video.url}
+              poster={video.thumbnail}
+              muted
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-cover"
+            />
+            <span className="absolute top-1 right-1 inline-flex items-center rounded-full bg-black/60 text-white p-1">
+              <Film className="h-2.5 w-2.5" />
+            </span>
+          </div>
+        ) : post.image ? (
           <img src={post.image} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-ink-muted">
@@ -1847,6 +1890,37 @@ function PicturePane({
   onZoom: () => void
 }) {
   const t = useT()
+  const video = postVideo(post)
+
+  if (video) {
+    return (
+      <div className="w-full max-w-sm flex flex-col gap-2">
+        <button
+          onClick={onZoom}
+          className="group relative w-full rounded-xl overflow-hidden border border-border-subtle bg-black focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          title={t('calendar.viewLarger')}
+        >
+          <video
+            src={video.url}
+            poster={video.thumbnail}
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full max-h-[60vh] bg-black"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 text-white text-[10px] font-medium px-2 py-0.5">
+            <Film className="h-3 w-3" />
+            Video
+          </span>
+          <span className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Maximize2 className="h-3.5 w-3.5" />
+          </span>
+        </button>
+        {video.caption && <p className="text-xs text-ink-muted text-center line-clamp-2">{video.caption}</p>}
+      </div>
+    )
+  }
 
   // Carousel viewer.
   if (isCarousel(post)) {

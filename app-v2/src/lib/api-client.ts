@@ -22,6 +22,7 @@ import type {
   ApprovalLogEntry,
   AssetsManifest,
   Suggestions,
+  PostMedia,
 } from '@/types'
 import { normalizePost } from '@/lib/normalize-post'
 import type { CalendarRangeConfig } from '@/lib/planning-range'
@@ -538,6 +539,8 @@ const WRITE_TOOLS = new Set([
   'terminal',
   'write_file',
   'patch',
+  'image_generate',
+  'video_generate',
 ])
 export function isWriteTool(name: string): boolean {
   return WRITE_TOOLS.has(name)
@@ -897,6 +900,7 @@ export interface PublicReviewPost {
   cta?: string
   image?: string
   slides?: Array<{ image: string; caption?: string }>
+  media?: PostMedia[]
   statusLabel?: string
 }
 
@@ -942,6 +946,11 @@ function withAbsoluteImages(payload: PublicReviewPayload): PublicReviewPayload {
       ...p,
       image: reviewImageUrl(p.image),
       slides: p.slides?.map((s) => ({ ...s, image: reviewImageUrl(s.image) ?? s.image })),
+      media: p.media?.map((m) => ({
+        ...m,
+        url: reviewImageUrl(m.url) ?? m.url,
+        thumbnail: reviewImageUrl(m.thumbnail) ?? m.thumbnail,
+      })),
     })),
   }
 }

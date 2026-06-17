@@ -85,6 +85,7 @@ export function linkState(link: Pick<ReviewLinkRecord, 'status' | 'expiresAt'>, 
 // metadata, unknown future fields) is dropped by construction.
 
 const PUBLIC_SLIDE_FIELDS = ['image', 'caption'] as const
+const PUBLIC_MEDIA_TYPES = new Set(['image', 'video'])
 
 export interface PublicPost {
   id: string
@@ -99,6 +100,7 @@ export interface PublicPost {
   cta?: string
   image?: string
   slides?: Array<{ image: string; caption?: string }>
+  media?: Array<{ type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string }>
   /** Read-only label of the internal status, so reviewers see "approved" etc.
    *  without exposing who/when. */
   statusLabel?: string
@@ -128,6 +130,26 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
         const slide: { image: string; caption?: string } = { image: s.image as string }
         if (typeof s.caption === 'string') slide.caption = s.caption
         return slide
+      })
+  }
+  if (Array.isArray(post.media)) {
+    out.media = post.media
+      .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
+      .filter(
+        (m) =>
+          typeof m.type === 'string' &&
+          PUBLIC_MEDIA_TYPES.has(m.type) &&
+          typeof m.url === 'string',
+      )
+      .map((m) => {
+        const media: { type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string } = {
+          type: m.type as 'image' | 'video',
+          url: m.url as string,
+        }
+        if (typeof m.thumbnail === 'string') media.thumbnail = m.thumbnail
+        if (typeof m.caption === 'string') media.caption = m.caption
+        if (typeof m.assetId === 'string') media.assetId = m.assetId
+        return media
       })
   }
   const approval = post.approval
