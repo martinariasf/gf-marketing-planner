@@ -69,7 +69,7 @@ client — regardless of which dashboard URL opened the chat.
 | `POST /clients/:slug/approvals` | agent/dash/admin | Record an approval decision. |
 | `GET /clients/:slug/performance` | any (scoped) | Read performance JSON. |
 | `GET /clients/:slug/assets/manifest` | any (scoped) | Read the asset manifest. |
-| `GET /clients/:slug/assets/files/:name` | **none** (public) | Stream a generated image. Use this URL form in `post.image`. |
+| `GET /clients/:slug/assets/files/:name` | **none** (public) | Stream a generated image/video asset. Use this URL form in `post.image` for images and in video manifest items for clips. |
 | `GET /clients/:slug/inspiration/:id/file` | **none** (public) | Stream an uploaded inspiration image. |
 
 **Branding body** (`PATCH /clients/:slug/branding`) — top-level fields
@@ -111,6 +111,7 @@ datetime) and `title` (non-empty) required; others optional:
 | `channel` | `instagram` \| `linkedin` \| `tiktok` \| `x` \| `facebook` |
 | `status` | `idea` \| `drafting` \| `in_review` \| `needs_revision` \| `approved` \| `scheduled` \| `published` \| `rejected` |
 | `hashtags` | `string[]` (not a single string) |
+| `media` | mixed post media: `Array<{ type:"image"|"video"; url:string; thumbnail?:string; caption?:string; assetId?:string }>`, max 20. Use `type:"video"` for generated MP4 clips attached to the post. |
 | `image` | string URL — field is `image`, not `imageUrl`/`assetIds`. Carousel cover = `slides[0].image` |
 | `slides` | carousel only — `Array<{ image: string; caption?: string }>`, max 10, strict per-slide keys. >1 slide ⇒ carousel; set `format:"carousel"` |
 | `copy`, `cta`, `pillar`, `format`, `campaign` | strings, optional |

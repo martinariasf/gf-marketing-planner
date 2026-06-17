@@ -3,10 +3,11 @@ import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ExternalLink, Loader2, Users } from 'lucide-react'
+import { ArrowRight, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { useT } from '@/lib/i18n'
+import { hasUnseenChangelog } from '@/lib/changelog'
 import { loadClientIndex } from '@/lib/client-data'
 import { cn } from '@/lib/utils'
 import type { ClientIndex, ClientIndexEntry, ClientStatus } from '@/types'
@@ -48,6 +49,7 @@ export default function ClientPicker() {
             </div>
           </Link>
           <div className="flex items-center gap-2">
+            <WhatsNewLink />
             <a
               href="https://gfinnov.com"
               target="_blank"
@@ -119,6 +121,25 @@ export default function ClientPicker() {
 function OpenCockpitLabel() {
   const t = useT()
   return <>{t('home.openCockpit')}</>
+}
+
+/** "What's new" header link with an unseen-entry dot. */
+function WhatsNewLink() {
+  const t = useT()
+  const [unseen, setUnseen] = useState(false)
+  useEffect(() => setUnseen(hasUnseenChangelog()), [])
+  return (
+    <Link
+      to="/changelog"
+      className="relative inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-brand-blue transition-colors"
+    >
+      <Sparkles className="h-3.5 w-3.5" />
+      <span className="hidden sm:inline">{t('home.whatsNew')}</span>
+      {unseen && (
+        <span className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-brand-blue ring-2 ring-paper" />
+      )}
+    </Link>
+  )
 }
 
 function ClientCard({ client, delay }: { client: ClientIndexEntry; delay: number }) {

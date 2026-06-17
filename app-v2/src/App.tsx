@@ -19,6 +19,8 @@ const IntegrationView = lazy(() => import('@/routes/client/integration'))
 const VideosView      = lazy(() => import('@/routes/client/videos'))
 // GF-4 — external reviewer page. Standalone, code-gated, OUTSIDE client layout.
 const ExternalReview  = lazy(() => import('@/routes/review/external'))
+// Product changelog. Standalone page, OUTSIDE the client layout — must precede /:slug.
+const Changelog       = lazy(() => import('@/routes/changelog'))
 
 function RouteFallback() {
   return (
@@ -108,6 +110,8 @@ export default function App() {
         <Routes>
           {/* Public external review — must precede the /:slug catch-all layout. */}
           <Route path="/review/:publicId" element={<ExternalReview />} />
+          {/* Changelog — also must precede /:slug or it'd be read as a client slug. */}
+          <Route path="/changelog" element={<Changelog />} />
           <Route path="/" element={<ClientPicker />} />
           <Route path="/:slug" element={<ClientLayout />}>
             <Route index element={<Navigate to="context" replace />} />

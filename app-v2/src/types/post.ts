@@ -19,6 +19,16 @@ export interface Slide {
   caption?: string
 }
 
+export type PostMediaType = 'image' | 'video'
+
+export interface PostMedia {
+  type: PostMediaType
+  url: string
+  thumbnail?: string
+  caption?: string
+  assetId?: string
+}
+
 export interface Post {
   id: string
   date: string
@@ -38,6 +48,9 @@ export interface Post {
   image?: string
   // Present with length > 1 ⇒ carousel (IG caps at 10). Absent ⇒ single image.
   slides?: Slide[]
+  // Mixed media attached to the post. Images/slides stay backward-compatible;
+  // videos live here so the calendar can show clips without overloading `image`.
+  media?: PostMedia[]
   copy: string
   hashtags: string[]
   cta: string
