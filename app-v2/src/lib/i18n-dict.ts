@@ -127,6 +127,10 @@ const en: Dict = {
   'home.loadingClients':    'Loading clients…',
   'home.noClients':         'No clients yet. Add one by creating clients/<slug>/brief.json and appending the slug to clients/index.json.',
   'home.openCockpit':       'Open cockpit',
+  'home.whatsNew':          "What's new",
+  'changelog.title':        'Changelog',
+  'changelog.subtitle':     'Latest updates to your marketing dashboard.',
+  'changelog.back':         'Back to dashboards',
 
   // Edit bar
   'editBar.modified':         '{count} file modified',
@@ -939,6 +943,10 @@ const de: Dict = {
   'home.loadingClients':    'Kunden werden geladen…',
   'home.noClients':         'Noch keine Kunden. Lege einen an, indem du clients/<slug>/brief.json erstellst und den Slug an clients/index.json anhängst.',
   'home.openCockpit':       'Cockpit öffnen',
+  'home.whatsNew':          'Neuigkeiten',
+  'changelog.title':        'Änderungsprotokoll',
+  'changelog.subtitle':     'Die neuesten Aktualisierungen deines Marketing-Dashboards.',
+  'changelog.back':         'Zurück zu den Dashboards',
 
   'editBar.modified':         '{count} Datei geändert',
   'editBar.modifiedPlural':   '{count} Dateien geändert',
@@ -1731,6 +1739,10 @@ const es: Dict = {
   'home.loadingClients':    'Cargando clientes…',
   'home.noClients':         'Aún no hay clientes. Añade uno creando clients/<slug>/brief.json y añadiendo el slug a clients/index.json.',
   'home.openCockpit':       'Abrir cockpit',
+  'home.whatsNew':          'Novedades',
+  'changelog.title':        'Novedades',
+  'changelog.subtitle':     'Últimas actualizaciones de tu panel de marketing.',
+  'changelog.back':         'Volver a los paneles',
 
   'editBar.modified':         '{count} archivo modificado',
   'editBar.modifiedPlural':   '{count} archivos modificados',
