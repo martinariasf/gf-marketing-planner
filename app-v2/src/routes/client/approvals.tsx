@@ -90,9 +90,6 @@ export default function ApprovalsView() {
           <section className="space-y-3">
             <div className="flex items-baseline justify-between flex-wrap gap-2">
               <h2 className="text-lg font-semibold">{t('approvals.kanbanTitle')}</h2>
-              <span className="text-[11px] text-ink-muted">
-                {t('approvals.kanbanHint')}
-              </span>
             </div>
             <ApprovalKanban
               slug={slug}

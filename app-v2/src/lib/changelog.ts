@@ -36,6 +36,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Rejected posts are hidden from the calendar (and kept in a collapsible, recoverable list) so your plan stays uncluttered.',
       'New Reload button refreshes the content calendar without reloading the whole page.',
       'Fixed the calendar post-navigation arrows so they stay put and are reliably clickable.',
+      'Tidier Approvals board: cards are moved by dragging them between columns (the extra per-card buttons are gone), and the board is simply called "Kanban".',
     ],
   },
   {

@@ -464,8 +464,7 @@ const en: Dict = {
   // Approvals page
   'approvals.eyebrow':         'Approvals',
   'approvals.heading':         'What is Viktor waiting on?',
-  'approvals.kanbanTitle':     'Kanban (staging)',
-  'approvals.kanbanHint':      'Click → moves a post. Writes to approvals_v2 + appends to audit log.',
+  'approvals.kanbanTitle':     'Kanban',
   'approvals.waitingTitle':    'Waiting for review',
   'approvals.waitingCount':    '{n} item',
   'approvals.waitingCountPlural':'{n} items',
@@ -1283,8 +1282,7 @@ const de: Dict = {
 
   'approvals.eyebrow':         'Freigaben',
   'approvals.heading':         'Worauf wartet Viktor?',
-  'approvals.kanbanTitle':     'Kanban (Staging)',
-  'approvals.kanbanHint':      'Klick → verschiebt einen Post. Schreibt in approvals_v2 + Audit-Log.',
+  'approvals.kanbanTitle':     'Kanban',
   'approvals.waitingTitle':    'Wartet auf Prüfung',
   'approvals.waitingCount':    '{n} Eintrag',
   'approvals.waitingCountPlural':'{n} Einträge',
@@ -2096,8 +2094,7 @@ const es: Dict = {
 
   'approvals.eyebrow':         'Aprobaciones',
   'approvals.heading':         '¿Qué está esperando Viktor?',
-  'approvals.kanbanTitle':     'Kanban (staging)',
-  'approvals.kanbanHint':      'Clic → mueve un post. Escribe en approvals_v2 + añade al log de auditoría.',
+  'approvals.kanbanTitle':     'Kanban',
   'approvals.waitingTitle':    'En espera de revisión',
   'approvals.waitingCount':    '{n} elemento',
   'approvals.waitingCountPlural':'{n} elementos',

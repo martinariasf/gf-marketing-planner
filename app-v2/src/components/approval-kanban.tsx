@@ -1,21 +1,22 @@
-// Approval kanban — staging-only, drag-to-move + click-button fallback.
+// Approval kanban — drag-to-move content board.
 //
 // GF-23: the columns are the full content workflow (Draft, Review, Approved,
 // Programmed, Rechecked, Rejected) plus a terminal, read-only **Published**
 // column a post only reaches once Postiz published it. Dragging a card into a
 // workflow column optimistically updates the local view, fires POST
-// /api/v1/clients/:slug/approvals, and asks the parent to refetch. Each card
-// still has explicit "→ Column" buttons for keyboard / touch users. The
-// Published column accepts no drops, has no move buttons, and shows a link to
-// the live post when available.
+// /api/v1/clients/:slug/approvals, and asks the parent to refetch. The
+// Published column accepts no drops and shows a link to the live post when
+// available.
 //
-// Implementation note: native HTML5 drag-and-drop (no @dnd-kit). For the
-// click-to-move case we trade some animation polish for ~0 dependencies.
+// GF-43: the per-card "→ Column" buttons were removed — moving a card is done by
+// dragging it between columns. (Touch/keyboard users now rely on native HTML5
+// drag; revisit with a lighter affordance if that proves insufficient.)
+//
+// Implementation note: native HTML5 drag-and-drop (no @dnd-kit) — ~0 deps.
 
 import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Loader2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -206,8 +207,11 @@ export function ApprovalKanban({
                           {post.pillar}
                         </span>
                       )}
-                      {isPublishedCol ? (
-                        url ? (
+                      {/* GF-43 — cards are moved by drag-and-drop, so the per-card
+                          "→ Column" buttons were dropped to declutter the card. The
+                          Published column keeps its read-only link to the live post. */}
+                      {isPublishedCol &&
+                        (url ? (
                           <a
                             href={url}
                             target="_blank"
@@ -221,23 +225,7 @@ export function ApprovalKanban({
                           <span className="inline-block pt-1 text-[10px] text-ink-muted">
                             {t('approvals.publishedNoLink')}
                           </span>
-                        )
-                      ) : (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {WORKFLOW.filter((c) => c.key !== col.key).map((c) => (
-                            <Button
-                              key={c.key}
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-[10px]"
-                              disabled={pending.has(post.id)}
-                              onClick={() => move(post, c.key)}
-                            >
-                              → {t(c.labelKey)}
-                            </Button>
-                          ))}
-                        </div>
-                      )}
+                        ))}
                     </CardContent>
                   </Card>
                 )
