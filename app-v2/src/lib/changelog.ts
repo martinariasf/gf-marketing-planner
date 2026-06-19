@@ -1,14 +1,16 @@
 // Product changelog shown at /changelog and surfaced by the "What's new" link
 // in the header. This is the single source of truth — append a new entry at the
-// TOP for every promotion to production. The promote-staging-to-prod skill has a
-// step for this.
+// TOP for every staging deployment (the new-task-workflow skill has a step for
+// this). The promote-staging-to-prod skill confirms the entry and updates its
+// date to the production go-live when the change is promoted to main.
 //
 // Entry prose is English-only on purpose: release notes are awkward to mirror
 // across ES/DE and go stale fast. The surrounding UI chrome (link label, page
 // title) IS translated via i18n-dict.ts.
 
 export type ChangelogEntry = {
-  /** ISO date (YYYY-MM-DD) the change went live in production. */
+  /** ISO date (YYYY-MM-DD) the change shipped to staging; updated to the
+   *  production go-live date when promoted to main. */
   date: string
   /** Short headline for the release. */
   title: string
@@ -18,6 +20,20 @@ export type ChangelogEntry = {
 
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    date: '2026-06-19',
+    title: 'Real scheduling, a smarter Viktor & finer sharing controls',
+    items: [
+      'Programmed posts are now actually scheduled for publishing on your connected platform, and move to Published automatically once they go live.',
+      'You can no longer accidentally schedule a post with a past date — the system asks you to pick a future date.',
+      '"Add Post" now creates the post in the month you are viewing, not somewhere else.',
+      'New "Visual Guidelines" field in Company Context — set your layout, colour and font rules once and Viktor applies them to every image for a consistent feed.',
+      'Viktor now creates Instagram images in the correct vertical 4:5 format with larger, cleaner text, keeps visuals consistent across posts, and never invents logos.',
+      'Choose exactly which months to include when you share an external review link.',
+      'Simpler setup for connecting an external AI assistant — one-click copy of your integration details, with up-to-date API docs.',
+      'Cleaner chat replies from Viktor, without internal status noise.',
+    ],
+  },
   {
     date: '2026-06-15',
     title: 'Collaboration, exports & a full approval workflow',
