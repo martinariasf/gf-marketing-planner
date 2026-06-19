@@ -56,8 +56,19 @@ app.doc('/api/v1/openapi.json', {
   info: {
     title: 'Marketing Planner API',
     version: '1.0.0',
-    description:
+    description: [
       'Staging API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
+      '',
+      '## For external agents',
+      'These docs are the agent-facing integration reference (the human webapp only links here).',
+      '',
+      '- **Auth:** send `Authorization: Bearer <agent token>` on every request. The token is scoped to one client `slug` and cannot touch other clients.',
+      '- **Get connected in one step:** the dashboard Integration screen offers a one-click JSON payload (`apiBase`, `slug`, `token`, `openapiUrl`, key `endpoints`) — ingest that and you are configured.',
+      '- **Source material for post generation:** POST factual grounding to `/clients/{slug}/information-sources` (JSON) or `/clients/{slug}/information-sources/upload` (text file). Role `agent` is allowed; set `approved: true` to make a source usable immediately. See the **source material** tag.',
+      '- **Posts / approvals / suggestions:** agent role has full read+write (see those tags).',
+      '- **Strategy docs** (brief/plan/goals/learnings) are **read-only** for agents; only `branding` is agent-writable.',
+      '- **Images** are optional. When you do generate one, write it to `clients/{slug}/assets/` and append a manifest row; reference it via the public `/clients/{slug}/assets/files/{name}` URL.',
+    ].join('\n'),
   },
   servers: [
     { url: 'https://staging.marketing.gfinnov.com', description: 'staging' },
