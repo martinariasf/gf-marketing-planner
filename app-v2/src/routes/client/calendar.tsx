@@ -47,6 +47,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  RefreshCw,
   Tag,
   ImageIcon,
   Maximize2,
@@ -208,6 +209,9 @@ export default function CalendarView() {
     const m: Record<string, Post[]> = {}
     monthKeys.forEach((key) => (m[key] = []))
     posts.forEach((p) => {
+      // GF-35 — rejected posts are hidden from the active calendar views; they
+      // live in a collapsible "Rejected" section below and stay recoverable.
+      if ((p.approval.status || p.status) === 'rejected') return
       const k = monthKeyFromIso(p.date)
       if (m[k]) m[k].push(p)
     })
@@ -217,11 +221,29 @@ export default function CalendarView() {
     return m
   }, [posts, monthKeys])
 
+  // GF-35 — rejected posts within the visible range, surfaced (collapsed) so they
+  // don't clutter the calendar but can still be restored or deleted.
+  const rejectedInRange = useMemo(
+    () =>
+      posts
+        .filter(
+          (p) =>
+            (p.approval.status || p.status) === 'rejected' &&
+            monthKeys.includes(monthKeyFromIso(p.date)),
+        )
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [posts, monthKeys],
+  )
+
   // GF-9 — content-mix vs strategy for the visible range: actual share of posts
   // per content pillar against each pillar's target weight. Posts whose pillar
   // isn't a known strategy pillar are grouped under "Other".
   const contentMix = useMemo(() => {
-    const inRange = posts.filter((p) => monthKeys.includes(monthKeyFromIso(p.date)))
+    const inRange = posts.filter(
+      (p) =>
+        monthKeys.includes(monthKeyFromIso(p.date)) &&
+        (p.approval.status || p.status) !== 'rejected',
+    )
     const total = inRange.length
     const byPillar = new Map<string, number>()
     inRange.forEach((p) => {
@@ -277,6 +299,8 @@ export default function CalendarView() {
   const [imageSlide, setImageSlide] = useState(0)
   // CAL2 â€” direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
+  // GF-35 — collapsed by default; expands the recoverable rejected list.
+  const [showRejected, setShowRejected] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const monthPosts = postsByMonth[activeMonth] ?? []
@@ -524,6 +548,17 @@ export default function CalendarView() {
         <div className="flex items-center gap-2 flex-wrap">
           {isApiEnabled && (
             <>
+              {/* GF-41 — manual reload of the content calendar. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-1.5"
+                title={t('calendar.reload')}
+                aria-label={t('calendar.reload')}
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-brand-blue" />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -745,7 +780,11 @@ export default function CalendarView() {
 
             <Card className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-stretch">
+                {/* GF-30 — stable min height so the card doesn't resize between
+                    posts; that resizing made the floating prev/next arrows jump
+                    (their vertical center tracked the card height), so a second
+                    click missed. A consistent height keeps them put. */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-stretch lg:min-h-[34rem]">
                   {/* Left: copy (editable) */}
                   <CopyPane
                     key={`copy-${activePost.id}`}
@@ -1059,6 +1098,40 @@ export default function CalendarView() {
             )}
             {t('calendar.addPost')}
           </Button>
+        </div>
+      )}
+
+      {/* GF-35 — rejected posts: hidden from the active calendar, recoverable
+          here (restore via the status control, or delete for good). */}
+      {isApiEnabled && rejectedInRange.length > 0 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowRejected((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition-colors"
+          >
+            {showRejected ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            {t('status.rejected')} · {t('calendar.postsCount', { n: rejectedInRange.length })}
+          </button>
+          {showRejected && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {rejectedInRange.map((p) => (
+                <CompactPostCard
+                  key={p.id}
+                  post={p}
+                  feedback={reviewFeedback.byPost[p.id]}
+                  approving={approvingId === p.id}
+                  onSetStatus={(d) => setStatus(p, d)}
+                  onDelete={() => setDeleteTarget(p)}
+                  onSelect={() => {}}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
