@@ -261,7 +261,11 @@ export default function CalendarView() {
 
   // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
-  const [activeMonth, setActiveMonth] = useState(rangeMonths[0]?.key ?? defaultRange.startMonth)
+  // GF-31 — default to the current month (if in range) so a manually created
+  // post lands where the user is, not on the range's first month.
+  const defaultActiveMonth =
+    rangeMonths.find((m) => m.isCurrent)?.key ?? rangeMonths[0]?.key ?? defaultRange.startMonth
+  const [activeMonth, setActiveMonth] = useState(defaultActiveMonth)
   const [slideIndex, setSlideIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   // Right-pane mode: the full picture (default) or the social-platform mockup.
@@ -287,11 +291,11 @@ export default function CalendarView() {
 
   useEffect(() => {
     if (!rangeMonths.some((m) => m.key === activeMonth)) {
-      setActiveMonth(rangeMonths[0]?.key ?? defaultRange.startMonth)
+      setActiveMonth(defaultActiveMonth)
       setSlideIndex(0)
       setDirection(0)
     }
-  }, [activeMonth, defaultRange.startMonth, rangeMonths])
+  }, [activeMonth, defaultActiveMonth, rangeMonths])
 
   const saveRange = async () => {
     const diff = monthDiff(rangeDraft.startMonth, rangeDraft.endMonth)
@@ -344,12 +348,14 @@ export default function CalendarView() {
     }
   }
 
-  // GF-15 — create a blank draft post in the active month, then jump to it.
-  const createPost = useCallback(async () => {
+  // GF-15 — create a blank draft post, then jump to it.
+  // GF-31 — create in the explicitly chosen month (Quarter passes the column's
+  // month); defaults to the active month tab in Week/Month views.
+  const createPost = useCallback(async (month: string = activeMonth) => {
     if (creating) return
     setCreating(true)
     try {
-      const date = `${activeMonth}-01`
+      const date = `${month}-01`
       const created = await apiCreatePost(slug, {
         date,
         title: t('calendar.newPostTitle'),
@@ -623,9 +629,24 @@ export default function CalendarView() {
                     {m.name}
                     {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
                   </h3>
-                  <span className="text-[11px] text-ink-muted">
-                    {t('calendar.postsCount', { n: list.length })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-ink-muted">
+                      {t('calendar.postsCount', { n: list.length })}
+                    </span>
+                    {/* GF-31 — add directly into this month (unambiguous in Quarter). */}
+                    {isApiEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => createPost(m.key)}
+                        disabled={creating}
+                        title={t('calendar.addPost')}
+                        aria-label={t('calendar.addPost')}
+                        className="text-brand-blue hover:text-brand-blue/80 disabled:opacity-50"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {list.length === 0 ? (
                   <p className="text-xs text-ink-muted py-4 text-center">
@@ -1019,13 +1040,15 @@ export default function CalendarView() {
         </>
       ) : null)}
 
-      {/* GF-15 — add a post manually, at the bottom of the calendar. */}
-      {isApiEnabled && (
+      {/* GF-15 — add a post manually, at the bottom of the calendar.
+          GF-31 — hidden in Quarter view, which has an explicit per-month add
+          button (the single bottom button there has no unambiguous month). */}
+      {isApiEnabled && viewMode !== 'quarter' && (
         <div className="flex justify-center pt-1">
           <Button
             variant="outline"
             size="sm"
-            onClick={createPost}
+            onClick={() => createPost()}
             disabled={creating}
             className="gap-1.5"
           >
