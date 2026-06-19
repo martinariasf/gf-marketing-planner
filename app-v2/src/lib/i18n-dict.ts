@@ -111,6 +111,7 @@ const en: Dict = {
   'help.approvalsTitle':     'Approvals',
   'help.approvalsBody.prefix':'Nothing publishes without you writing ',
   'help.approvalsBody.suffix':' to Viktor on Telegram.',
+  'help.bookMeeting':        'Book a meeting',
 
   // Loading state
   'loading.loadingClient':  'Loading {slug}…',
@@ -929,6 +930,7 @@ const de: Dict = {
   'help.approvalsTitle':     'Freigaben',
   'help.approvalsBody.prefix':'Nichts wird veröffentlicht, ohne dass du ',
   'help.approvalsBody.suffix':' an Viktor in Telegram schreibst.',
+  'help.bookMeeting':        'Termin buchen',
 
   'loading.loadingClient':  '{slug} wird geladen…',
   'loading.couldNotLoad':   'Kundendaten konnten nicht geladen werden',
@@ -1725,6 +1727,7 @@ const es: Dict = {
   'help.approvalsTitle':     'Aprobaciones',
   'help.approvalsBody.prefix':'Nada se publica sin que escribas ',
   'help.approvalsBody.suffix':' a Viktor en Telegram.',
+  'help.bookMeeting':        'Reservar una reunión',
 
   'loading.loadingClient':  'Cargando {slug}…',
   'loading.couldNotLoad':   'No se pudieron cargar los datos del cliente',
