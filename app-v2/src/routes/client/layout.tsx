@@ -58,6 +58,9 @@ import { useEdit, deepMerge } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
 import { cn } from '@/lib/utils'
 
+// GF Innovative Solutions booking link (confirmed from gfinnov.com, 2026-06-19).
+const CALENDLY_URL = 'https://calendly.com/gfinnov-info/30min'
+
 interface NavItem {
   to: string
   labelKey: string
@@ -406,7 +409,18 @@ export default function ClientLayout() {
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('help.title')}</DialogTitle>
+            <div className="flex items-start justify-between gap-3">
+              <DialogTitle>{t('help.title')}</DialogTitle>
+              <a
+                href={CALENDLY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                {t('help.bookMeeting')}
+              </a>
+            </div>
             <DialogDescription>
               {t('help.description')}
             </DialogDescription>
