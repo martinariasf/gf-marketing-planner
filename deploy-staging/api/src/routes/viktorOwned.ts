@@ -5,6 +5,7 @@
 // agent's disk files are never mutated by the API in Phase 4.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
+import type { Context } from 'hono'
 import { withPb } from '../pb.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { audit } from '../audit.js'
@@ -19,6 +20,8 @@ import {
   approvalCreateSchema,
   zodDetail,
 } from '../schemas/post.js'
+import { applyStatusToSchedule, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
+import { SchedulingError } from '../scheduling/provider.js'
 
 type AssetManifest = {
   items?: Array<{ id?: unknown } & Record<string, unknown>>
@@ -26,6 +29,43 @@ type AssetManifest = {
 
 export const viktorOwned = new OpenAPIHono<AppEnv>()
 viktorOwned.use('*', requireAuth)
+
+// GF-26 — persist a publishing patch produced by the scheduling port as a
+// posts_patches overlay row (same mechanism every other dashboard write uses).
+async function persistSchedulingPatch(
+  slug: string,
+  postId: string,
+  patch: Record<string, unknown>,
+  actor: string,
+): Promise<void> {
+  await withPb((pb) =>
+    pb.collection('posts_patches').create({
+      slug,
+      postId,
+      patch,
+      ts: new Date().toISOString(),
+      actor,
+    }),
+  )
+}
+
+// Turn a scheduling-port exception into a problem+json response. A business
+// rule (past date / no provider) is a 422; a backend failure (Postiz down /
+// rejected) is a 502 — either way the caller learns WHY and the post is NOT
+// left mislabeled as Programmed (TASK-014).
+function schedulingProblem(c: Context<AppEnv>, err: unknown) {
+  if (err instanceof ScheduleRejected) {
+    return problem(c, { title: 'Unprocessable Entity', status: err.status, detail: err.message })
+  }
+  if (err instanceof SchedulingError) {
+    return problem(c, {
+      title: 'Bad Gateway',
+      status: 502,
+      detail: `Scheduling failed via ${err.provider}: ${err.message} The post was NOT scheduled.`,
+    })
+  }
+  return null
+}
 
 viktorOwned.get('/clients/:slug/posts', requireScope(), async (c) => {
   const slug = c.req.param('slug')
@@ -76,14 +116,33 @@ viktorOwned.post(
       typeof body.id === 'string' && body.id.trim()
         ? body.id.trim()
         : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-    const data = { ...body, id }
+    const data = { ...body, id } as Record<string, unknown>
+    const actor = principal.label ?? principal.token.slice(0, 12)
+
+    // GF-26 — a post created directly as "scheduled" must get a REAL provider
+    // job before we persist it; otherwise it would appear in the Programmed lane
+    // with nothing actually scheduled. On failure return the error and do NOT
+    // create the post (TASK-014/016). prevStatus is empty => this is a move-in.
+    if (data.status === 'scheduled') {
+      try {
+        const result = await applyStatusToSchedule(slug, { ...data, status: '' }, 'scheduled')
+        if (result?.publishing) {
+          data.publishing = { ...((data.publishing as object) ?? {}), ...result.publishing }
+        }
+      } catch (err) {
+        const resp = schedulingProblem(c, err)
+        if (resp) return resp
+        throw err
+      }
+    }
+
     await withPb((pb) =>
       pb.collection('posts_created').create({
         slug,
         postId: id,
         data,
         ts: new Date().toISOString(),
-        actor: principal.label ?? principal.token.slice(0, 12),
+        actor,
       }),
     )
     await audit(principal, { action: 'post.create', slug, resourceId: id, after: data })
@@ -128,8 +187,23 @@ viktorOwned.delete(
 )
 
 viktorOwned.get('/clients/:slug/posts/:id', requireScope(), async (c) => {
-  const post = await buildPost(c.req.param('slug'), c.req.param('id'))
+  const slug = c.req.param('slug')
+  const id = c.req.param('id')
+  const post = await buildPost(slug, id)
   if (!post) return problem(c, { title: 'Not Found', status: 404, detail: 'No such post' })
+  // GF-26 / TASK-015 — when a scheduled post has gone live at the provider,
+  // flip it to Published (filling publishedAt + publicUrl) and persist the
+  // transition so the Published lane + post link reflect reality. Best-effort:
+  // refreshPublishStatus never throws on a provider hiccup.
+  const refreshed = await refreshPublishStatus(slug, post as Record<string, unknown>)
+  if (refreshed) {
+    const patch: Record<string, unknown> = { publishing: refreshed.publishing }
+    if (refreshed.status) patch.status = refreshed.status
+    const principal = c.get('principal')
+    await persistSchedulingPatch(slug, id, patch, principal.label ?? principal.token.slice(0, 12))
+    const next = await buildPost(slug, id)
+    return c.json(next ?? post)
+  }
   return c.json(post)
 })
 
@@ -153,16 +227,43 @@ viktorOwned.patch(
     }
     const patch = parsedPatch.data as Record<string, unknown>
     const principal = c.get('principal')
-    await withPb((pb) =>
-      pb.collection('posts_patches').create({
-        slug,
-        postId,
-        patch,
-        ts: new Date().toISOString(),
-        actor: principal.label ?? principal.token.slice(0, 12),
-      }),
-    )
-    await audit(principal, { action: 'post.patch', slug, resourceId: postId, after: patch })
+    const actor = principal.label ?? principal.token.slice(0, 12)
+
+    // GF-26 — if this PATCH changes the status (and/or the date of a scheduled
+    // post), drive the scheduling provider FIRST. We compute the post as it
+    // WILL be after the field-level patch (date may change in the same call) so
+    // the past-date check and the provider payload use the intended values.
+    const current = await buildPost(slug, postId)
+    if (!current) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'No such post' })
+    }
+    const nextStatus = typeof patch.status === 'string' ? patch.status : undefined
+    const intended = { ...current, ...patch, id: postId } as Record<string, unknown>
+    // Drive the port when the status changes, or when an already-scheduled post
+    // has its date moved (a reschedule must move the real provider job too).
+    const reschedulingDate =
+      nextStatus === undefined &&
+      String(current.status ?? '') === 'scheduled' &&
+      typeof patch.date === 'string' &&
+      patch.date !== current.date
+    let schedulingPatch: Record<string, unknown> | null = null
+    if (nextStatus !== undefined || reschedulingDate) {
+      try {
+        const result = await applyStatusToSchedule(slug, intended, nextStatus)
+        if (result) {
+          schedulingPatch = result.publishing
+          if (result.status) patch.status = result.status
+        }
+      } catch (err) {
+        const resp = schedulingProblem(c, err)
+        if (resp) return resp
+        throw err
+      }
+    }
+
+    const finalPatch = schedulingPatch ? { ...patch, publishing: { ...((patch.publishing as object) ?? {}), ...schedulingPatch } } : patch
+    await persistSchedulingPatch(slug, postId, finalPatch, actor)
+    await audit(principal, { action: 'post.patch', slug, resourceId: postId, after: finalPatch })
     const next = await buildPost(slug, postId)
     return c.json(next)
   },
@@ -370,15 +471,40 @@ viktorOwned.post(
     }
     const body = parsedApproval.data
     const principal = c.get('principal')
+    const actor = principal.label ?? principal.token.slice(0, 12)
+
+    // GF-26 — `decision` is the dashboard's primary status-change path. Moving a
+    // post to "scheduled" must create a REAL provider job BEFORE we record the
+    // decision; moving it out cancels the job. If scheduling fails we return an
+    // error and DO NOT write the approval row, so the post is never shown as
+    // Programmed without a live job (TASK-014/016).
+    let schedulingPatch: Record<string, unknown> | null = null
+    {
+      const current = await buildPost(slug, body.postId)
+      if (current) {
+        try {
+          const result = await applyStatusToSchedule(slug, current, body.decision)
+          if (result) schedulingPatch = result.publishing
+        } catch (err) {
+          const resp = schedulingProblem(c, err)
+          if (resp) return resp
+          throw err
+        }
+      }
+    }
+
     const row = {
       slug,
       postId: body.postId,
       decision: body.decision,
       note: body.note ?? '',
-      actor: principal.label ?? principal.token.slice(0, 12),
+      actor,
       ts: new Date().toISOString(),
     }
     await withPb((pb) => pb.collection('approvals_v2').create(row))
+    if (schedulingPatch) {
+      await persistSchedulingPatch(slug, body.postId, { publishing: schedulingPatch }, actor)
+    }
     await audit(principal, {
       action: 'approval.decide',
       slug,
