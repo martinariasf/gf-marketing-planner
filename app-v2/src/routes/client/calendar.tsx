@@ -780,10 +780,13 @@ export default function CalendarView() {
 
             <Card className="overflow-hidden">
               <CardContent className="p-0">
-                {/* GF-30 — stable min height so the card doesn't resize between
-                    posts; that resizing made the floating prev/next arrows jump
-                    (their vertical center tracked the card height), so a second
-                    click missed. A consistent height keeps them put. */}
+                {/* GF-30 — min height keeps the card from collapsing; combined
+                    with the FIXED arrow offset below (lg:top-[19rem]) the floating
+                    prev/next arrows no longer track the live content height, so
+                    they stay perfectly still for every post and during the slide
+                    animation. (A min-height alone wasn't enough: taller posts
+                    exceed it and the animation still changes the height mid-click,
+                    which made the arrows drift and the second click miss.) */}
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-stretch lg:min-h-[34rem]">
                   {/* Left: copy (editable) */}
                   <CopyPane
@@ -932,7 +935,7 @@ export default function CalendarView() {
                   size="icon"
                   onClick={prev}
                   aria-label={t('calendar.previousPost')}
-                  className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
+                  className="absolute left-0 top-1/2 lg:top-[19rem] -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
@@ -941,7 +944,7 @@ export default function CalendarView() {
                   size="icon"
                   onClick={next}
                   aria-label={t('calendar.nextPost')}
-                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
+                  className="absolute right-0 top-1/2 lg:top-[19rem] translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </Button>
