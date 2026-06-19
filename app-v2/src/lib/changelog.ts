@@ -32,6 +32,10 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Choose exactly which months to include when you share an external review link.',
       'Simpler setup for connecting an external AI assistant — one-click copy of your integration details, with up-to-date API docs.',
       'Cleaner chat replies from Viktor, without internal status noise.',
+      'Chat edits — including image changes — now appear automatically when Viktor finishes, with no manual page refresh.',
+      'Rejected posts are hidden from the calendar (and kept in a collapsible, recoverable list) so your plan stays uncluttered.',
+      'New Reload button refreshes the content calendar without reloading the whole page.',
+      'Fixed the calendar post-navigation arrows so they stay put and are reliably clickable.',
     ],
   },
   {
