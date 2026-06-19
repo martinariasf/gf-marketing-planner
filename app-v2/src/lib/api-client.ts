@@ -741,6 +741,8 @@ export interface ReviewLink {
   title: string
   rangeStart: string
   rangeEnd: string
+  /** GF-42 — selected month keys (YYYY-MM); empty = all months in the range. */
+  months: string[]
   status: 'active' | 'revoked'
   state: 'active' | 'revoked' | 'expired'
   expiresAt: string | null
@@ -778,7 +780,7 @@ export interface ReviewEvent {
 
 export async function apiCreateReviewLink(
   slug: string,
-  body: { title?: string; rangeStart: string; rangeEnd: string; ttlDays?: number },
+  body: { title?: string; rangeStart: string; rangeEnd: string; months?: string[]; ttlDays?: number },
 ): Promise<ReviewLink> {
   return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
 }
@@ -922,7 +924,7 @@ export interface PublicReviewPayload {
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
-  link: { title: string; rangeStart: string; rangeEnd: string }
+  link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
   brand?: PublicReviewBrand
   posts: PublicReviewPost[]
   postDecisions?: PublicPostDecision[]

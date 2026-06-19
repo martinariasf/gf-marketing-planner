@@ -20,6 +20,7 @@ import {
   hashCode,
   defaultExpiry,
   linkState,
+  parseMonthSelection,
   DEFAULT_TTL_DAYS,
   type ReviewLinkRecord,
 } from '../reviewLib.js'
@@ -31,12 +32,19 @@ const createSchema = z
     title: z.string().max(200).optional(),
     rangeStart: MONTH_KEY,
     rangeEnd: MONTH_KEY,
+    // GF-42 — optional subset of months within [rangeStart, rangeEnd] to share.
+    // Omit or pass [] to share every month in the range (legacy behavior).
+    months: z.array(MONTH_KEY).max(60).optional(),
     ttlDays: z.number().int().min(1).max(90).optional(),
   })
   .strict()
   .refine((v) => v.rangeStart <= v.rangeEnd, {
     message: 'rangeStart must be <= rangeEnd',
     path: ['rangeStart'],
+  })
+  .refine((v) => !v.months || v.months.every((m) => m >= v.rangeStart && m <= v.rangeEnd), {
+    message: 'every selected month must be within rangeStart..rangeEnd',
+    path: ['months'],
   })
 
 const dashCommentSchema = z.object({ body: z.string().min(1).max(20_000), postId: z.string().max(100).optional() }).strict()
@@ -59,6 +67,7 @@ function publicLink(rec: ReviewLinkRecord) {
     title: rec.title ?? '',
     rangeStart: rec.rangeStart,
     rangeEnd: rec.rangeEnd,
+    months: parseMonthSelection(rec.months),
     status: rec.status,
     state: linkState(rec),
     expiresAt: rec.expiresAt ?? null,
@@ -115,6 +124,8 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
       title: body.title ?? '',
       rangeStart: body.rangeStart,
       rangeEnd: body.rangeEnd,
+      // Persist a clean, de-duplicated selection; [] means "all months".
+      months: parseMonthSelection(body.months),
       codeHash: hashCode(publicId, code),
       status: 'active',
       expiresAt: body.ttlDays
@@ -128,7 +139,13 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
     action: 'review_link.create',
     slug,
     resourceId: rec.id,
-    after: { publicId, rangeStart: body.rangeStart, rangeEnd: body.rangeEnd, ttlDays: body.ttlDays ?? DEFAULT_TTL_DAYS },
+    after: {
+      publicId,
+      rangeStart: body.rangeStart,
+      rangeEnd: body.rangeEnd,
+      months: parseMonthSelection(body.months),
+      ttlDays: body.ttlDays ?? DEFAULT_TTL_DAYS,
+    },
   })
   // The plaintext code is returned exactly once — it is never stored or
   // retrievable again. Rotation issues a fresh one.
