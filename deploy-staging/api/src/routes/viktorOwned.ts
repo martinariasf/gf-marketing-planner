@@ -49,6 +49,22 @@ async function persistSchedulingPatch(
   )
 }
 
+async function refreshPostPublishStatus(
+  slug: string,
+  postId: string,
+  post: PostBase,
+  actor: string,
+): Promise<PostBase> {
+  // GF-26 / TASK-015 — keep list and detail reads consistent. The calendar
+  // loads the posts list, so published transitions must be observed there too.
+  const refreshed = await refreshPublishStatus(slug, post as Record<string, unknown>)
+  if (!refreshed) return post
+  const patch: Record<string, unknown> = { publishing: refreshed.publishing }
+  if (refreshed.status) patch.status = refreshed.status
+  await persistSchedulingPatch(slug, postId, patch, actor)
+  return (await buildPost(slug, postId)) ?? post
+}
+
 // Turn a scheduling-port exception into a problem+json response. A business
 // rule (past date / no provider) is a 422; a backend failure (Postiz down /
 // rejected) is a 502 — either way the caller learns WHY and the post is NOT
@@ -73,10 +89,13 @@ viktorOwned.get('/clients/:slug/posts', requireScope(), async (c) => {
   const status = c.req.query('status')
   const pillar = c.req.query('pillar')
   const includeDeleted = c.req.query('includeDeleted') === 'true'
+  const principal = c.get('principal')
+  const actor = principal.label ?? principal.token.slice(0, 12)
   const items: PostBase[] = []
   for (const id of allIds) {
-    const post = await buildPost(slug, id)
+    let post = await buildPost(slug, id)
     if (!post) continue
+    post = await refreshPostPublishStatus(slug, id, post, actor)
     if (!includeDeleted && post.status === 'deleted') continue
     if (status && post.approval?.status !== status && post.status !== status) continue
     if (pillar && post.pillar !== pillar) continue
@@ -166,13 +185,28 @@ viktorOwned.delete(
       return problem(c, { title: 'Not Found', status: 404, detail: 'No such post' })
     }
     const principal = c.get('principal')
+    const actor = principal.label ?? principal.token.slice(0, 12)
+
+    if (exists.status === 'scheduled') {
+      try {
+        const result = await applyStatusToSchedule(slug, exists as Record<string, unknown>, 'deleted')
+        if (result?.publishing) {
+          await persistSchedulingPatch(slug, postId, { publishing: result.publishing }, actor)
+        }
+      } catch (err) {
+        const resp = schedulingProblem(c, err)
+        if (resp) return resp
+        throw err
+      }
+    }
+
     await withPb((pb) =>
       pb.collection('posts_patches').create({
         slug,
         postId,
         patch: { status: 'deleted' },
         ts: new Date().toISOString(),
-        actor: principal.label ?? principal.token.slice(0, 12),
+        actor,
       }),
     )
     await audit(principal, {
@@ -191,20 +225,9 @@ viktorOwned.get('/clients/:slug/posts/:id', requireScope(), async (c) => {
   const id = c.req.param('id')
   const post = await buildPost(slug, id)
   if (!post) return problem(c, { title: 'Not Found', status: 404, detail: 'No such post' })
-  // GF-26 / TASK-015 — when a scheduled post has gone live at the provider,
-  // flip it to Published (filling publishedAt + publicUrl) and persist the
-  // transition so the Published lane + post link reflect reality. Best-effort:
-  // refreshPublishStatus never throws on a provider hiccup.
-  const refreshed = await refreshPublishStatus(slug, post as Record<string, unknown>)
-  if (refreshed) {
-    const patch: Record<string, unknown> = { publishing: refreshed.publishing }
-    if (refreshed.status) patch.status = refreshed.status
-    const principal = c.get('principal')
-    await persistSchedulingPatch(slug, id, patch, principal.label ?? principal.token.slice(0, 12))
-    const next = await buildPost(slug, id)
-    return c.json(next ?? post)
-  }
-  return c.json(post)
+  const principal = c.get('principal')
+  const actor = principal.label ?? principal.token.slice(0, 12)
+  return c.json(await refreshPostPublishStatus(slug, id, post, actor))
 })
 
 viktorOwned.patch(
