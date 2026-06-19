@@ -61,11 +61,24 @@ const approvalShape = z
   })
   .passthrough()
 
+// GF-26 — the publishing block is now provider-agnostic. `provider` names the
+// scheduling backend that owns the job (e.g. "postiz") and `providerJobId` is
+// the id that backend returned. `postizJobId` is KEPT as a backward-compatible
+// alias for `providerJobId` so already-stored rows and the old Postiz-only path
+// keep working; coalescePost() mirrors the two on read. `scheduledFor` records
+// the time we asked the provider to publish (so a reschedule/cancel can target
+// the right job), and `lastError` surfaces a failed send to the dashboard
+// instead of silently leaving the post mislabeled.
 const publishingShape = z
   .object({
+    provider: z.string().nullable().optional(),
+    providerJobId: z.string().nullable().optional(),
+    // Backward-compatible alias for providerJobId (pre-GF-26 rows / Postiz-only).
     postizJobId: z.string().nullable().optional(),
+    scheduledFor: z.string().nullable().optional(),
     publishedAt: z.string().nullable().optional(),
     publicUrl: z.string().nullable().optional(),
+    lastError: z.string().nullable().optional(),
   })
   .passthrough()
 
@@ -160,9 +173,14 @@ const DEFAULT_APPROVAL = {
 }
 
 const DEFAULT_PUBLISHING = {
+  provider: null,
+  providerJobId: null,
+  // alias of providerJobId — kept for backward compatibility (see publishingShape)
   postizJobId: null,
+  scheduledFor: null,
   publishedAt: null,
   publicUrl: null,
+  lastError: null,
 }
 
 /**
@@ -247,6 +265,22 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
     p.publishing = { ...DEFAULT_PUBLISHING }
   } else {
     p.publishing = { ...DEFAULT_PUBLISHING, ...(p.publishing as object) }
+  }
+  // GF-26: keep the generic `providerJobId` and the legacy `postizJobId` alias
+  // coherent in both directions so old readers (Postiz-only) and new readers
+  // (provider-agnostic) always see the same job id. If a provider is set but no
+  // explicit provider id, default the provider to "postiz" when only the legacy
+  // field is present.
+  {
+    const pub = p.publishing as Record<string, unknown>
+    const generic = typeof pub.providerJobId === 'string' ? pub.providerJobId : null
+    const legacy = typeof pub.postizJobId === 'string' ? pub.postizJobId : null
+    const jobId = generic ?? legacy
+    pub.providerJobId = jobId
+    pub.postizJobId = jobId
+    if (jobId && (typeof pub.provider !== 'string' || pub.provider.length === 0)) {
+      pub.provider = 'postiz'
+    }
   }
   return p as T
 }
