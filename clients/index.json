@@ -17,6 +17,15 @@
       "quarter": "Q3 2026",
       "headline": "Summer Strength: turn the July dip into our biggest brand moment of the year",
       "status": "demo"
+    },
+    {
+      "slug": "biomas",
+      "name": "Parque Biomas",
+      "industry": "Parques educativos / turismo educativo",
+      "logoInitials": "PB",
+      "quarter": "Q3 2026",
+      "headline": "Llenar la agenda de excursiones escolares de primavera y las visitas familiares de vacaciones de julio.",
+      "status": "active"
     }
   ]
 }

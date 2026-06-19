@@ -1,0 +1,146 @@
+{
+  "company": {
+    "name": "Parque Biomas",
+    "industry": "Parques educativos / turismo educativo experiencial",
+    "country": "UY",
+    "website": "https://parquebiomas.com.uy",
+    "contact": { "name": "Equipo Parque Biomas", "email": "contacto@parquebiomas.com.uy", "telegram": null, "phone": "+598 2312 7373", "whatsapp": "+598 95 718 501" }
+  },
+  "business": {
+    "model": "Venta de entradas + paquetes educativos (B2B con instituciones, B2C con familias)",
+    "customerType": "Instituciones educativas (jardines, primaria y secundaria) y familias de Montevideo y el interior de Uruguay",
+    "mainOffer": "Experiencias educativas inmersivas en cuatro atracciones: Parque Biomas, Parque Flora, Viaje Espacial y Uruguay Aereo",
+    "bestSeller": "Excursiones escolares con tarifas y recorridos especiales para grupos",
+    "differentiators": [
+      "Aprendizaje multisensorial: la educacion como una experiencia que va mas alla del aula",
+      "16.000 m2 con 14 biomas que recrean los ecosistemas del mundo",
+      "Cuatro atracciones complementarias en un mismo predio (naturaleza, flora, espacio y geografia)",
+      "Conciencia ambiental y curricular integrada en cada recorrido",
+      "Unico en su tipo en Uruguay para excursiones educativas"
+    ]
+  },
+  "audience": {
+    "segments": [
+      {
+        "name": "Primario - Docentes y coordinadores de instituciones educativas",
+        "demo": "25-55, maestras/os y profesores de jardin, primaria y secundaria; coordinadores de paseos; Montevideo y area metropolitana",
+        "psycho": "Buscan salidas didacticas que justifiquen el dia fuera del aula con valor curricular real (ciencias naturales, medio ambiente, geografia). Necesitan logistica clara: precios de grupo, transporte, seguridad y propuesta pedagogica.",
+        "where": "Instagram, Facebook, grupos de WhatsApp de docentes, boca a boca entre colegios"
+      },
+      {
+        "name": "Secundario - Familias con hijos en edad escolar",
+        "demo": "30-45, padres/madres de ninos de 3 a 12 anos, Montevideo y Canelones, clase media",
+        "psycho": "Buscan planes para hacer con los chicos en fines de semana y vacaciones; valoran lo educativo + entretenido y al aire libre; deciden por recomendaciones y fotos atractivas.",
+        "where": "Instagram (Reels y Stories), Facebook, YouTube"
+      },
+      {
+        "name": "Terciario - Grupos y turismo receptivo",
+        "demo": "Agencias, clubes de ninos, colonias de vacaciones, turismo interno",
+        "psycho": "Arman agendas de actividades para grupos; valoran un proveedor confiable con cupos y un dia entero de contenido.",
+        "where": "Facebook, contacto directo, WhatsApp"
+      }
+    ],
+    "painPoints": [
+      "Docentes con poco presupuesto y agenda de salidas apretada",
+      "Familias que no conocen la propuesta completa (creen que es solo un parque de plantas)",
+      "Estacionalidad fuerte: clima y calendario escolar concentran la demanda",
+      "Competencia con otros paseos (zoologicos, museos, parques)"
+    ],
+    "desires": [
+      "Una salida educativa que los chicos recuerden y que cumpla con el programa escolar",
+      "Un plan de fin de semana o vacaciones que sea educativo y divertido",
+      "Reserva simple, precios claros para grupos y buena experiencia en el lugar",
+      "Contenido que despierte curiosidad por la naturaleza y la ciencia"
+    ],
+    "competitors": ["Zoologico / Bioparque", "Museos interactivos (Espacio Ciencia, Museo del Tiempo)", "Otros parques y paseos al aire libre"],
+    "referenceBrands": ["Bioparque Temaiken (AR)", "Museos de ciencia interactivos", "Parques tematicos educativos de la region"]
+  },
+  "voice": {
+    "tone": ["Calido", "Educativo", "Asombro y descubrimiento", "Cercano a familias y docentes", "Cuidado ambiental"],
+    "wordsToUse": [
+      "Experiencia",
+      "Descubri",
+      "Aprender jugando",
+      "Naturaleza",
+      "Ecosistemas",
+      "Aventura",
+      "Excursion",
+      "Asombro",
+      "En familia"
+    ],
+    "wordsToAvoid": [
+      "Aburrido",
+      "Solo para chicos",
+      "Tecnicismos sin explicar",
+      "Promesas exageradas",
+      "Lenguaje frio o corporativo"
+    ],
+    "do": [
+      "Mostrar a los chicos viviendo la experiencia (fotos y videos reales del parque)",
+      "Conectar cada atraccion con un aprendizaje concreto (que se descubre en cada bioma)",
+      "Hablarle por separado a docentes (valor curricular + logistica) y a familias (plan + diversion)",
+      "Usar un tono de asombro: invitar a descubrir, no a vender",
+      "Incluir siempre un llamado a la accion claro (reservar / consultar por WhatsApp)"
+    ],
+    "dont": [
+      "Usar imagenes genericas de stock en vez de fotos reales del parque",
+      "Prometer experiencias que el parque no ofrece",
+      "Olvidar mencionar las cuatro atracciones (no es solo plantas)",
+      "Texto largo sin foto o video que muestre el lugar",
+      "Ignorar la estacionalidad y el calendario escolar uruguayo"
+    ]
+  },
+  "channels": {
+    "primary": ["instagram", "facebook"],
+    "secondary": ["youtube"],
+    "cadence": "4-5/semana en Instagram (Reels + Stories) + 3/semana en Facebook + 1-2/mes en YouTube",
+    "language": "es"
+  },
+  "boundaries": {
+    "viktorCanDoWithoutAsking": [
+      "Redactar borradores de posts para Instagram y Facebook en espanol rioplatense",
+      "Proponer ideas de contenido por atraccion (Biomas, Flora, Viaje Espacial, Uruguay Aereo)",
+      "Generar conceptos de imagen que acompanen los posts (nunca como reemplazo de fotos reales del parque)",
+      "Investigar fechas del calendario escolar y efemerides ambientales relevantes",
+      "Proponer calendario de publicaciones segun temporada"
+    ],
+    "viktorNeedsApprovalFor": [
+      "Cualquier post que mencione precios o promociones concretas",
+      "Cualquier comunicacion sobre cupos, horarios o disponibilidad de fechas",
+      "Respuestas a mensajes directos o consultas de clientes (las maneja el equipo)",
+      "Alianzas, sorteos o colaboraciones con terceros",
+      "Cualquier afirmacion sobre seguridad o protocolos del parque"
+    ],
+    "sensitiveTopics": [
+      "Seguridad de los ninos (solo comunicar lo que el equipo confirme)",
+      "Politica, religion y temas de actualidad ajenos a la marca",
+      "Comparaciones directas o negativas con la competencia",
+      "Cualquier dato de contacto de menores o clientes"
+    ],
+    "communityRules": {
+      "who_handles_dms": "equipo Parque Biomas (humano)",
+      "escalation_owner": "Equipo Parque Biomas"
+    }
+  },
+  "metricsThatMatter": [
+    "Consultas de reservas de excursiones escolares (WhatsApp + Instagram + Facebook)",
+    "Reservas de grupos confirmadas",
+    "Alcance y guardados en Instagram (interes de familias)",
+    "Visitas familiares de fin de semana y vacaciones",
+    "Crecimiento de seguidores en Instagram y Facebook"
+  ],
+  "tools": {
+    "design": "Fotos y videos reales del parque + Canva",
+    "scheduler": "Postiz (pendiente de conexion)",
+    "analytics": "Instagram Insights + Facebook Insights"
+  },
+  "references": {
+    "drive_folder_url": null,
+    "examples": [
+      "Cuentas de bioparques y museos de ciencia que muestran a ninos viviendo la experiencia",
+      "Reels de paseos educativos con asombro y descubrimiento",
+      "Comunicacion de parques tematicos orientada a familias y escuelas"
+    ]
+  },
+  "expectations": "En 90 dias, Parque Biomas deberia llenar su agenda de excursiones escolares de primavera (set-nov) y aumentar las visitas familiares en vacaciones de julio, con un flujo constante de consultas entrantes por Instagram, Facebook y WhatsApp, y sin esfuerzo manual de publicacion por parte del equipo."
+}
