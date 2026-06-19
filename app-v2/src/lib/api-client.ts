@@ -611,6 +611,22 @@ export interface IntegrationInfo {
     curlReadBrief: string
     curlPatchPost: string
     curlSetApproval: string
+    curlAddSourceMaterial?: string
+  }
+  /**
+   * GF-27: single machine-ingestible connection blob. The Integration screen
+   * offers a one-click copy of JSON.stringify(agentConnection) so an external
+   * agent can self-configure from one paste instead of 3 separate fields.
+   */
+  agentConnection?: {
+    apiBase: string
+    slug: string
+    token: string
+    authHeader: string
+    openapiUrl: string
+    docsUrl: string
+    endpoints: Record<string, string>
+    instructions: string
   }
   assetsDir: string
   assetsManifestPath: string

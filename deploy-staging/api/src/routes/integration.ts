@@ -95,11 +95,46 @@ integration.get(
 
     const postiz = await loadPostizStatus(slug)
 
+    const docsUrl = `${apiBase}/docs`
+    const openapiUrl = `${apiBase}/openapi.json`
+
+    // GF-27 (TASK-021b): ONE machine-ingestible connection payload. An external
+    // agent can be handed this single JSON blob instead of having a human copy
+    // the base URL, slug and token separately into three fields. It contains
+    // everything the agent needs to self-configure, including the OpenAPI URL it
+    // should read for the full route list (source material included).
+    const agentConnection = {
+      apiBase,
+      slug,
+      token: agentToken ?? '<paste agent token here>',
+      authHeader: `Authorization: Bearer ${agentToken ?? '<token>'}`,
+      openapiUrl,
+      docsUrl,
+      // Most-used endpoints, called out so an agent doesn't have to infer them.
+      // `sourceMaterial` is the "source material for post generation" surface
+      // (information_sources) — POST here to feed the planner factual grounding.
+      endpoints: {
+        readClient: `${apiBase}/clients/${slug}`,
+        listPosts: `${apiBase}/clients/${slug}/posts`,
+        createPost: `${apiBase}/clients/${slug}/posts`,
+        setApproval: `${apiBase}/clients/${slug}/approvals`,
+        sourceMaterial: `${apiBase}/clients/${slug}/information-sources`,
+        sourceMaterialUpload: `${apiBase}/clients/${slug}/information-sources/upload`,
+      },
+      instructions:
+        `You are integrating with the GF Marketing Planner REST API for client "${slug}". ` +
+        `Send "${`Authorization: Bearer ${agentToken ?? '<token>'}`}" on every request. ` +
+        `Read ${openapiUrl} for the full, machine-readable route list and schemas. ` +
+        `To add source material for post generation, POST JSON {"title": "...", "summary": "...", "approved": true} ` +
+        `to ${apiBase}/clients/${slug}/information-sources (or upload a text file to .../information-sources/upload). ` +
+        `Strategy docs (brief/plan/goals/learnings) are read-only for agents.`,
+    }
+
     return c.json({
       slug,
       apiBase,
-      docsUrl: `${apiBase}/docs`,
-      openapiUrl: `${apiBase}/openapi.json`,
+      docsUrl,
+      openapiUrl,
       agentToken,
       tokenHint: agentToken
         ? null
@@ -108,7 +143,11 @@ integration.get(
         curlReadBrief: `curl -H "Authorization: Bearer ${agentToken ?? '<token>'}" ${apiBase}/clients/${slug}/brief`,
         curlPatchPost: `curl -X PATCH -H "Authorization: Bearer ${agentToken ?? '<token>'}" -H "Content-Type: application/json" -d '{"title":"new title"}' ${apiBase}/clients/${slug}/posts/p001`,
         curlSetApproval: `curl -X POST -H "Authorization: Bearer ${agentToken ?? '<token>'}" -H "Content-Type: application/json" -d '{"postId":"p001","decision":"approved"}' ${apiBase}/clients/${slug}/approvals`,
+        curlAddSourceMaterial: `curl -X POST -H "Authorization: Bearer ${agentToken ?? '<token>'}" -H "Content-Type: application/json" -d '{"title":"Product facts","summary":"...","approved":true}' ${apiBase}/clients/${slug}/information-sources`,
       },
+      // GF-27 (TASK-021b): the one-click payload. The SPA renders a single
+      // "copy for your agent" button that copies JSON.stringify(agentConnection).
+      agentConnection,
       assetsDir: `clients/${slug}/assets/`,
       assetsManifestPath: `clients/${slug}/assets/manifest.json`,
       // GF-11: masked-only — the raw key is never serialised here.
