@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "id": "s001",
+      "kind": "post_idea",
+      "title": "Reel 'Un dia en Parque Biomas' para arrancar las vacaciones de julio",
+      "rationale": "Julio es temporada de vacaciones de invierno y el plan en familia es la prioridad del mes. Un Reel que muestre las cuatro atracciones en un recorrido resuelve el malentendido de 'es solo plantas' y funciona como linea de base de alcance.",
+      "suggestedAction": "draft p001 instagram \"Reel\" pillar=\"Aprender jugando\" campaign=\"Vacaciones de julio en familia\" date=2026-07-02 hook=\"En un solo dia: caminas por 14 biomas del mundo, viajas al espacio y sobrevolas Uruguay. Asi son las vacaciones en Parque Biomas.\"",
+      "relatedCampaign": "Vacaciones de julio en familia",
+      "relatedPillar": "Aprender jugando",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-06-19T12:00:00Z"
+    },
+    {
+      "id": "s002",
+      "kind": "next_action",
+      "title": "Abrir la campana de excursiones de primavera para docentes en agosto",
+      "rationale": "Las reservas de excursiones de set-nov se deciden con semanas de anticipacion. Empezar la comunicacion a docentes a comienzos de agosto, cuando vuelven de las vacaciones, asegura la agenda del trimestre. Es el KPI que convierte.",
+      "suggestedAction": "draft p002 facebook \"Post informativo\" pillar=\"Excursiones escolares\" campaign=\"Excursiones de primavera (docentes)\" date=2026-08-04 hook=\"Docentes: ya pueden reservar la excursion de primavera. Una salida con valor curricular real en ciencias, medio ambiente y geografia.\"",
+      "relatedCampaign": "Excursiones de primavera (docentes)",
+      "relatedPillar": "Excursiones escolares",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-06-19T12:00:00Z"
+    },
+    {
+      "id": "s003",
+      "kind": "follow_up",
+      "title": "Conectar Postiz para programar la temporada completa",
+      "rationale": "El plan trimestral tiene cadencia de 4-5 posts/semana en Instagram. Sin Postiz conectado, la publicacion es manual. Conectar las integraciones sociales permite que Viktor programe los borradores aprobados y libere al equipo.",
+      "suggestedAction": "Crear cuenta Postiz para Parque Biomas, conectar Instagram y Facebook, y cargar la API key en el agente.",
+      "relatedPillar": "Planes y temporada",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-06-19T12:00:00Z"
+    }
+  ]
+}
