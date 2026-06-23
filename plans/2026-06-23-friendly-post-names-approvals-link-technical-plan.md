@@ -5,13 +5,25 @@ owner: martin
 repo: C:/Users/Admin/Desktop/GF Innovative Solutions/GF/marketing-planner
 source_branch: experimental
 code_reviewed: false
-focus_tasks: [TASK-001, TASK-002, TASK-003, TASK-004, TASK-005]
+focus_tasks: [TASK-003, TASK-004, TASK-005, TASK-007]
 items:
   - gf-44: Friendly post names (sequential 'Post N') | priority: medium
   - gf-13: Connect Approvals & Calendar | priority: high
 ---
 
 # Plan
+
+## Build Note (2026-06-23)
+
+Implemented on branch `claude/gf-44-friendly-post-names` (on top of
+`origin/experimental`). The running number is computed **client-side** from the
+post set the dashboard already holds (`postSeqMap` in `post-status.ts`), so the
+planned backend/schema tasks (TASK-001/002) were **not needed** and are marked
+cancelled — this is presentation only, no API change. Verified: `tsc -b` +
+`vite build` pass; browser preview confirms "Post N" in Approvals + activity
+log, the name links to the calendar, and an out-of-range post (demo p006 in
+September) auto-widens the range and is shown. Pending: independent cross-vendor
+review, then merge to `experimental` + move GF-44/GF-13 to "Done in Staging".
 
 ## Simple Words
 
@@ -31,7 +43,7 @@ Not in scope yet: renaming the actual database IDs, making `approve` accept the
 ## Decisions and API Contracts
 
 ### TASK-001: Compute a stable per-client sequential number for every post
-status: todo
+status: cancelled
 owner: martin
 agent: claude
 reviewer: codex
@@ -51,7 +63,7 @@ notes:
 - Technical scope: derive `seq` deterministically — sort disk posts by their numeric `pNNN`, then created posts by the base36 timestamp embedded in `c-<ts>-...`, then number 1..N. Document the delete-gap trade-off; persisting a counter is a possible follow-up only if gaps become a problem.
 
 ### TASK-002: Add `seq` to the Post contract (type + schema + normalizer)
-status: todo
+status: cancelled
 owner: martin
 agent: claude
 reviewer: codex
@@ -72,7 +84,7 @@ notes:
 ## Frontend Implementation
 
 ### TASK-003: Render "Post N — Title" instead of the raw ID everywhere it shows
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: codex
@@ -93,7 +105,7 @@ notes:
 - Technical scope: add `postName(post)` in a shared lib (e.g. app-v2/src/lib/post-status.ts or a new helper); keep `post.id` for the Telegram command string.
 
 ### TASK-004: Make the post name in Approvals link to the Content Calendar
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: codex
@@ -111,7 +123,7 @@ notes:
 - Code evidence: `WaitingRow` in app-v2/src/routes/client/approvals.tsx currently renders the title as a plain `<h3>`.
 
 ### TASK-005: Calendar deep-links to a post from `?post=<id>`
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: codex
@@ -129,7 +141,7 @@ notes:
 - Technical scope: reuse `jumpToPost`; do not duplicate the selection logic.
 
 ### TASK-006: i18n copy for the friendly name + "view in calendar"
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: codex
@@ -147,7 +159,7 @@ notes:
 ## Verification
 
 ### TASK-007: Verify, changelog, and ship to staging
-status: todo
+status: in_progress
 owner: martin
 agent: claude
 reviewer: codex
