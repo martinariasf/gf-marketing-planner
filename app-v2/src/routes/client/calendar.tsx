@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { useOutletContext, useParams } from 'react-router'
+import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -37,7 +37,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl } from '@/lib/post-status'
+import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -78,12 +78,15 @@ import {
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 import {
+  addMonths,
   dateTiming,
   defaultCalendarRange,
   monthDiff,
+  monthKeyFromDate,
   monthKeyFromIso,
   monthsInRange,
   normalizeCalendarRange,
+  parseMonthKey,
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
@@ -143,6 +146,17 @@ export default function CalendarView() {
     plan.pillars.forEach((p) => (m[p.name] = p.color))
     return m
   }, [plan.pillars])
+
+  // GF-44 — friendly per-client post names ("Post 12") for user-facing strings
+  // (delete dialog, status/delete toasts) instead of the raw c-…/pNNN id.
+  const seqMap = useMemo(() => postSeqMap(posts), [posts])
+  const nameOf = useCallback(
+    (post: Post) => {
+      const n = seqMap.get(post.id)
+      return n ? t('post.nameN', { n }) : post.id
+    },
+    [seqMap, t],
+  )
 
   const defaultRange = useMemo(() => defaultCalendarRange(), [])
   const [calendarRange, setCalendarRange] = useState<CalendarRangeConfig>(defaultRange)
@@ -346,7 +360,7 @@ export default function CalendarView() {
     setApprovingId(post.id)
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(t('calendar.statusSet', { id: post.id, status: t(`status.${decision}`) }), { duration: 1600 })
+      toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
       refetch()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
@@ -361,7 +375,7 @@ export default function CalendarView() {
     setDeleting(true)
     try {
       await apiDeletePost(slug, deleteTarget.id)
-      toast(t('calendar.deleted', { id: deleteTarget.id }), { duration: 1600 })
+      toast(t('calendar.deleted', { id: nameOf(deleteTarget) }), { duration: 1600 })
       setDeleteTarget(null)
       setSlideIndex(0)
       refetch()
@@ -500,14 +514,60 @@ export default function CalendarView() {
 
   // CAL1 â€” from a compact card (Week/Quarter) jump into the Month viewer
   // focused on that exact post.
-  const jumpToPost = (post: Post) => {
-    const m = monthKeyFromIso(post.date)
-    const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
-    setActiveMonth(m)
-    setSlideIndex(idx < 0 ? 0 : idx)
-    setDirection(0)
-    setViewMode('month')
-  }
+  const jumpToPost = useCallback(
+    (post: Post) => {
+      const m = monthKeyFromIso(post.date)
+      const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
+      setActiveMonth(m)
+      setSlideIndex(idx < 0 ? 0 : idx)
+      setDirection(0)
+      setViewMode('month')
+    },
+    [postsByMonth],
+  )
+
+  // GF-13 — deep-link from Approvals: /:slug/calendar?post=<id> opens that exact
+  // post in Month view. Wait until posts are loaded so a valid id is not dropped.
+  // A waiting post can sit outside the saved calendar range, so first widen the
+  // range to include its month (capped at the 6-month window), let `monthKeys`
+  // recompute, then jump and clear the param so it does not re-fire or linger.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const consumedPostParam = useRef<string | null>(null)
+  useEffect(() => {
+    const targetId = searchParams.get('post')
+    if (!targetId || posts.length === 0 || consumedPostParam.current === targetId) return
+    const clearParam = () => {
+      consumedPostParam.current = targetId
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('post')
+      setSearchParams(nextParams, { replace: true })
+    }
+    const target = posts.find((p) => p.id === targetId)
+    const targetMonth = target ? monthKeyFromIso(target.date) : ''
+    if (!target || !targetMonth) {
+      clearParam()
+      return
+    }
+    // The post can sit outside the saved range; widen to include its month
+    // (capped at the 6-month window) and let this effect re-run on the new range.
+    if (targetMonth < calendarRange.startMonth || targetMonth > calendarRange.endMonth) {
+      setCalendarRange((cur) => {
+        if (targetMonth < cur.startMonth) {
+          const widened = { startMonth: targetMonth, endMonth: cur.endMonth }
+          return monthDiff(widened.startMonth, widened.endMonth) > 5
+            ? { startMonth: targetMonth, endMonth: monthKeyFromDate(addMonths(parseMonthKey(targetMonth)!, 5)) }
+            : widened
+        }
+        const widened = { startMonth: cur.startMonth, endMonth: targetMonth }
+        return monthDiff(widened.startMonth, widened.endMonth) > 5
+          ? { startMonth: monthKeyFromDate(addMonths(parseMonthKey(targetMonth)!, -5)), endMonth: targetMonth }
+          : widened
+      })
+      return // re-runs once calendarRange reflects the widened window
+    }
+    jumpToPost(target)
+    clearParam()
+  }, [searchParams, posts, calendarRange, jumpToPost, setSearchParams])
 
   return (
     <div className="space-y-6">
@@ -1189,7 +1249,7 @@ export default function CalendarView() {
         <DialogContent>
           <DialogTitle>{t('calendar.deleteTitle')}</DialogTitle>
           <DialogDescription>
-            {t('calendar.deleteBody', { id: deleteTarget?.id ?? '', title: deleteTarget?.title ?? '' })}
+            {t('calendar.deleteBody', { id: deleteTarget ? nameOf(deleteTarget) : '', title: deleteTarget?.title ?? '' })}
           </DialogDescription>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>

@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router'
+import { useOutletContext, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Pillar } from '@/components/pillar'
-import { MessageSquare, Copy, Check, Send, Ban, ShieldCheck, Clock, Calendar, Circle } from 'lucide-react'
+import { MessageSquare, Copy, Check, Send, Ban, ShieldCheck, Clock, Calendar, Circle, CalendarSearch } from 'lucide-react'
 import { fmtDateTime, fmtDateShort } from '@/lib/format'
 import { toast, Toaster } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, ApprovalLogEntry } from '@/types'
 import { isApiEnabled } from '@/lib/api-client'
+import { postSeqMap } from '@/lib/post-status'
 import { useT } from '@/lib/i18n'
 import { ApprovalKanban } from '@/components/approval-kanban'
 
@@ -36,6 +37,7 @@ const FALLBACK_ICON = { Icon: Circle, color: 'text-ink-muted bg-paper-muted' }
 
 export default function ApprovalsView() {
   const t = useT()
+  const navigate = useNavigate()
   const { posts, approvalsLog, plan, slug, refetch } = useOutletContext<
     ClientBundle & { refetch: () => void }
   >()
@@ -45,6 +47,12 @@ export default function ApprovalsView() {
     plan.pillars.forEach((p) => (m[p.name] = p.color))
     return m
   }, [plan.pillars])
+
+  // GF-44 — friendly per-client running numbers ("Post 12") shown instead of the
+  // raw c-…/pNNN id. GF-13 — open that post in the Content Calendar on click.
+  const seqMap = useMemo(() => postSeqMap(posts), [posts])
+  const openInCalendar = (id: string) =>
+    navigate(`/${slug}/calendar?post=${encodeURIComponent(id)}`)
 
   const waiting = useMemo(
     () =>
@@ -123,7 +131,13 @@ export default function ApprovalsView() {
         ) : (
           <div className="space-y-3">
             {waiting.map((p) => (
-              <WaitingRow key={p.id} post={p} pillarColor={pillarColor[p.pillar]} />
+              <WaitingRow
+                key={p.id}
+                post={p}
+                seq={seqMap.get(p.id)}
+                pillarColor={pillarColor[p.pillar]}
+                onOpen={() => openInCalendar(p.id)}
+              />
             ))}
           </div>
         )}
@@ -140,7 +154,12 @@ export default function ApprovalsView() {
           <CardContent className="p-0">
             <ul className="divide-y divide-border-subtle">
               {recentApprovals.map((e, i) => (
-                <LogRow key={i} entry={e} />
+                <LogRow
+                  key={i}
+                  entry={e}
+                  seq={seqMap.get(e.postId)}
+                  onOpen={posts.some((p) => p.id === e.postId) ? () => openInCalendar(e.postId) : undefined}
+                />
               ))}
             </ul>
           </CardContent>
@@ -204,14 +223,19 @@ function TelegramBanner({
 
 function WaitingRow({
   post,
+  seq,
   pillarColor,
+  onOpen,
 }: {
   post: Post
+  seq?: number
   pillarColor?: string
+  onOpen: () => void
 }) {
   const t = useT()
   const [copied, setCopied] = useState(false)
   const cmd = `approve ${post.id}`
+  const postName = seq ? t('post.nameN', { n: seq }) : post.id
   const copy = () => {
     navigator.clipboard.writeText(cmd).catch(() => {})
     setCopied(true)
@@ -231,8 +255,8 @@ function WaitingRow({
         <CardContent className="p-4 flex items-start gap-4 flex-wrap">
           <div className="flex-1 min-w-0 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {post.id}
+              <Badge variant="outline" className="text-[10px]">
+                {postName}
               </Badge>
               <span className="text-[11px] text-ink-muted">
                 {fmtDateShort(post.date)} · {post.channel} · {post.format}
@@ -246,7 +270,16 @@ function WaitingRow({
                 {post.status.replace('_', ' ')}
               </Badge>
             </div>
-            <h3 className="font-semibold">{post.title}</h3>
+            {/* GF-13 — the post name opens that post in the Content Calendar. */}
+            <button
+              type="button"
+              onClick={onOpen}
+              title={t('approvals.viewInCalendar')}
+              className="group flex items-center gap-1.5 text-left font-semibold hover:text-brand-blue transition-colors"
+            >
+              <span className="group-hover:underline">{post.title || postName}</span>
+              <CalendarSearch className="h-3.5 w-3.5 opacity-0 group-hover:opacity-70 shrink-0" />
+            </button>
             <div className="flex items-center gap-2 flex-wrap">
               <Pillar name={post.pillar} color={pillarColor} />
               {post.campaign && (
@@ -280,10 +313,21 @@ function WaitingRow({
   )
 }
 
-function LogRow({ entry }: { entry: ApprovalLogEntry }) {
+function LogRow({
+  entry,
+  seq,
+  onOpen,
+}: {
+  entry: ApprovalLogEntry
+  seq?: number
+  onOpen?: () => void
+}) {
   const t = useT()
   const { Icon, color } = ACTION_ICON[entry.action] ?? FALLBACK_ICON
   const label = entry.action.replace('_', ' ')
+  // GF-44 — show the friendly name; fall back to the raw id for posts no longer
+  // in the current set (e.g. deleted). GF-13 — clickable when it still exists.
+  const postName = seq ? t('post.nameN', { n: seq }) : entry.postId
   return (
     <li className="px-4 py-3 flex items-start gap-3">
       <div className={cn('h-7 w-7 rounded-full flex items-center justify-center shrink-0', color)}>
@@ -292,7 +336,19 @@ function LogRow({ entry }: { entry: ApprovalLogEntry }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm">
           <span className="font-semibold capitalize">{label}</span>
-          {' '}<code className="font-mono text-xs bg-paper-muted px-1 rounded">{entry.postId}</code>
+          {' '}
+          {onOpen ? (
+            <button
+              type="button"
+              onClick={onOpen}
+              title={t('approvals.viewInCalendar')}
+              className="text-xs font-medium text-brand-blue hover:underline"
+            >
+              {postName}
+            </button>
+          ) : (
+            <span className="text-xs font-medium">{postName}</span>
+          )}
           {' '}by <span className="font-medium">{entry.actor}</span>
           {entry.via && <> <span className="text-ink-muted">{t('approvals.via')} {entry.via}</span></>}
         </p>
