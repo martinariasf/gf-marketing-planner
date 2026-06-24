@@ -262,6 +262,9 @@ const collections: CollectionSpec[] = [
       { name: 'title', type: 'text', max: 200 },
       { name: 'rangeStart', type: 'text', required: true, max: 7 },
       { name: 'rangeEnd', type: 'text', required: true, max: 7 },
+      // GF-42 — optional subset of month keys (YYYY-MM) the sharer chose to
+      // expose. Empty/absent = all months in [rangeStart, rangeEnd].
+      { name: 'months', type: 'json', maxSize: 5_000 },
       { name: 'codeHash', type: 'text', required: true, max: 128 },
       { name: 'status', type: 'select', required: true, values: ['active', 'revoked'] },
       { name: 'expiresAt', type: 'text', max: 40 },
@@ -327,36 +330,40 @@ export async function ensureCollections(): Promise<void> {
     for (const spec of collections) {
       const current = existingByName.get(spec.name)
       if (current) {
-        if (spec.name === 'chat_messages') {
-          const currentFields = Array.isArray(current.fields) ? current.fields : []
-          const currentFieldNames = new Set(currentFields.map((f: { name?: string }) => f.name))
-          const needsField = spec.fields.some((field) => !currentFieldNames.has(field.name))
-          const needsRules =
-            current.listRule !== spec.listRule ||
+        const currentFields = Array.isArray(current.fields) ? current.fields : []
+        const currentFieldNames = new Set(currentFields.map((f: { name?: string }) => f.name))
+        const missingFields = spec.fields.filter((field) => !currentFieldNames.has(field.name))
+        // Rule drift is only reconciled for chat_messages (its rules are managed
+        // here); other collections just gain any newly-declared fields.
+        const needsRules =
+          spec.name === 'chat_messages' &&
+          (current.listRule !== spec.listRule ||
             current.viewRule !== spec.viewRule ||
             current.createRule !== (spec.createRule ?? null) ||
             current.updateRule !== (spec.updateRule ?? null) ||
-            current.deleteRule !== (spec.deleteRule ?? null)
+            current.deleteRule !== (spec.deleteRule ?? null))
 
-          if (needsField || needsRules) {
-            try {
-              await pb.collections.update(current.id, {
-                ...current,
-                listRule: spec.listRule ?? null,
-                viewRule: spec.viewRule ?? null,
-                createRule: spec.createRule ?? null,
-                updateRule: spec.updateRule ?? null,
-                deleteRule: spec.deleteRule ?? null,
-                fields: [
-                  ...currentFields,
-                  ...spec.fields.filter((field) => !currentFieldNames.has(field.name)),
-                ],
-                indexes: spec.indexes ?? current.indexes ?? [],
-              })
-              console.log('[ensureCollections] updated chat_messages')
-            } catch (err) {
-              console.warn('[ensureCollections] failed updating chat_messages', err)
+        if (missingFields.length > 0 || needsRules) {
+          try {
+            const patch: Record<string, unknown> = {
+              ...current,
+              fields: [...currentFields, ...missingFields],
+              indexes: spec.indexes ?? current.indexes ?? [],
             }
+            if (spec.name === 'chat_messages') {
+              patch.listRule = spec.listRule ?? null
+              patch.viewRule = spec.viewRule ?? null
+              patch.createRule = spec.createRule ?? null
+              patch.updateRule = spec.updateRule ?? null
+              patch.deleteRule = spec.deleteRule ?? null
+            }
+            await pb.collections.update(current.id, patch)
+            console.log(
+              `[ensureCollections] updated ${spec.name}` +
+                (missingFields.length ? ` (+${missingFields.map((f) => f.name).join(',')})` : ''),
+            )
+          } catch (err) {
+            console.warn(`[ensureCollections] failed updating ${spec.name}`, err)
           }
         }
         continue

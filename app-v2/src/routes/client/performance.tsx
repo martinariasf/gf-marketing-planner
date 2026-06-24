@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useOutletContext } from 'react-router'
+import { postSeqMap } from '@/lib/post-status'
 import { motion } from 'framer-motion'
 import {
   Line,
@@ -213,6 +214,10 @@ export default function PerformanceView() {
     posts.forEach((p) => (m[p.id] = p))
     return m
   }, [posts])
+
+  // GF-44 — friendly per-client "Post N" name, computed from the full post set so
+  // it matches the calendar/approvals numbering.
+  const seqMap = useMemo(() => postSeqMap(posts), [posts])
 
   if (!performance) {
     return (
@@ -663,8 +668,8 @@ export default function PerformanceView() {
                               {post.title}
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <Badge variant="outline" className="font-mono text-[10px]">
-                                {post.id}
+                              <Badge variant="outline" className="text-[10px]">
+                                {seqMap.get(post.id) ? t('post.nameN', { n: seqMap.get(post.id)! }) : post.id}
                               </Badge>
                               <Pillar
                                 name={post.pillar}

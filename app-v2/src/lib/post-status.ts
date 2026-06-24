@@ -80,3 +80,32 @@ export function laneFor(post: Post): Lane {
 export function publishedUrl(post: Post): string | null {
   return post.publishing?.publicUrl ?? null
 }
+
+// GF-44 — friendly post names. The internal id stays the stable key (Viktor's
+// `pNNN`, or the dashboard/chat `c-<base36 ts>-<rand>`), but users should never
+// see that machine string as the post's *name*. We derive a per-client running
+// number ("Post 1", "Post 2", …) purely on the client from the post set the
+// dashboard already holds — no API/schema change, since this is presentation
+// only. Ordering is by *creation* (Viktor's numbered files first, then created
+// posts by the timestamp embedded in their id), NOT by publish date, so editing
+// a post's date never reshuffles its number. A given post keeps its number on a
+// normal reload; only deleting an earlier post leaves a gap.
+function creationRank(id: string): [number, number, string] {
+  const disk = /^p(\d+)$/.exec(id)
+  if (disk) return [0, Number(disk[1]), id]
+  const created = /^c-([0-9a-z]+)-/.exec(id)
+  if (created) return [1, parseInt(created[1], 36) || 0, id]
+  return [2, 0, id]
+}
+
+/** Stable id → running number map for one client's posts (1-based). */
+export function postSeqMap(posts: Post[]): Map<string, number> {
+  const ordered = [...posts].sort((a, b) => {
+    const ra = creationRank(a.id)
+    const rb = creationRank(b.id)
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2])
+  })
+  const map = new Map<string, number>()
+  ordered.forEach((p, i) => map.set(p.id, i + 1))
+  return map
+}

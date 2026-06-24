@@ -611,6 +611,22 @@ export interface IntegrationInfo {
     curlReadBrief: string
     curlPatchPost: string
     curlSetApproval: string
+    curlAddSourceMaterial?: string
+  }
+  /**
+   * GF-27: single machine-ingestible connection blob. The Integration screen
+   * offers a one-click copy of JSON.stringify(agentConnection) so an external
+   * agent can self-configure from one paste instead of 3 separate fields.
+   */
+  agentConnection?: {
+    apiBase: string
+    slug: string
+    token: string
+    authHeader: string
+    openapiUrl: string
+    docsUrl: string
+    endpoints: Record<string, string>
+    instructions: string
   }
   assetsDir: string
   assetsManifestPath: string
@@ -741,6 +757,8 @@ export interface ReviewLink {
   title: string
   rangeStart: string
   rangeEnd: string
+  /** GF-42 — selected month keys (YYYY-MM); empty = all months in the range. */
+  months: string[]
   status: 'active' | 'revoked'
   state: 'active' | 'revoked' | 'expired'
   expiresAt: string | null
@@ -778,7 +796,7 @@ export interface ReviewEvent {
 
 export async function apiCreateReviewLink(
   slug: string,
-  body: { title?: string; rangeStart: string; rangeEnd: string; ttlDays?: number },
+  body: { title?: string; rangeStart: string; rangeEnd: string; months?: string[]; ttlDays?: number },
 ): Promise<ReviewLink> {
   return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
 }
@@ -922,7 +940,7 @@ export interface PublicReviewPayload {
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
-  link: { title: string; rangeStart: string; rangeEnd: string }
+  link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
   brand?: PublicReviewBrand
   posts: PublicReviewPost[]
   postDecisions?: PublicPostDecision[]

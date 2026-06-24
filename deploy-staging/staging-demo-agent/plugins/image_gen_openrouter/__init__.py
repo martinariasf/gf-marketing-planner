@@ -50,11 +50,47 @@ DEFAULT_VIDEO_RESOLUTION = "720p"
 DEFAULT_VIDEO_POLL_INTERVAL = 30.0
 DEFAULT_VIDEO_MAX_POLLS = 60
 
+# Channel-aware output sizes. Instagram feed images must be VERTICAL 4:5
+# (1080x1350) per GF-33; LinkedIn stays horizontal. `portrait_4_5` is the
+# explicit Instagram size; plain `portrait` remains the generic tall ratio.
 _ASPECT_TO_SIZE = {
     "landscape": "1536x1024",
     "square": "1024x1024",
     "portrait": "1024x1536",
+    "portrait_4_5": "1080x1350",  # Instagram feed (4:5)
+    "4:5": "1080x1350",
+    "instagram": "1080x1350",
 }
+
+# Map the friendly target-channel name to the aspect the model should render.
+# Instagram → vertical 4:5; LinkedIn/X/Facebook → horizontal. Format follows
+# the channel, never a global default (GF-33).
+_CHANNEL_TO_ASPECT = {
+    "instagram": "portrait_4_5",
+    "ig": "portrait_4_5",
+    "linkedin": "landscape",
+    "x": "landscape",
+    "twitter": "landscape",
+    "facebook": "landscape",
+    "fb": "landscape",
+}
+
+
+def _resolve_image_aspect(aspect_ratio: Any, channel: Any) -> str:
+    """Pick the render aspect from an explicit channel first, then aspect_ratio.
+
+    The target CHANNEL wins: Instagram is always vertical 4:5 (1080x1350),
+    LinkedIn/X/Facebook horizontal. Only if no channel is given do we honor an
+    explicit aspect_ratio. Falls back to the framework default otherwise.
+    """
+    ch = str(channel or "").strip().lower()
+    if ch in _CHANNEL_TO_ASPECT:
+        return _CHANNEL_TO_ASPECT[ch]
+    ar = str(aspect_ratio or "").strip().lower()
+    if ar in _ASPECT_TO_SIZE:
+        return ar
+    # Unknown/blank → defer to the framework's resolver for the legacy default.
+    return resolve_aspect_ratio(aspect_ratio)
 
 _ASPECT_TO_VIDEO_ASPECT = {
     "landscape": "16:9",
@@ -154,7 +190,10 @@ class OpenRouterImageGenProvider(ImageGenProvider):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         prompt = (prompt or "").strip()
-        aspect = resolve_aspect_ratio(aspect_ratio)
+        # Accept the channel-aware ratios (e.g. "portrait_4_5"/"4:5") directly;
+        # only defer to the framework resolver for the legacy enum values.
+        ar = str(aspect_ratio or "").strip().lower()
+        aspect = ar if ar in _ASPECT_TO_SIZE else resolve_aspect_ratio(aspect_ratio)
 
         if not prompt:
             return error_response(
@@ -1074,10 +1113,26 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                 "type": "string",
                 "description": "The text prompt describing the desired image. Be detailed and descriptive.",
             },
+            "channel": {
+                "type": "string",
+                "enum": ["instagram", "linkedin", "x", "facebook"],
+                "description": (
+                    "Target social channel for this image. The channel DECIDES the "
+                    "format: 'instagram' => VERTICAL 4:5 (1080x1350); "
+                    "'linkedin'/'x'/'facebook' => horizontal. Always pass this (or a "
+                    "post_id whose channel is known) so the size matches the channel "
+                    "— do NOT rely on a global default. Overrides aspect_ratio."
+                ),
+            },
             "aspect_ratio": {
                 "type": "string",
-                "enum": ["landscape", "square", "portrait"],
-                "description": "Aspect ratio: 'landscape' 16:9 wide, 'portrait' 16:9 tall, 'square' 1:1.",
+                "enum": ["landscape", "square", "portrait", "portrait_4_5"],
+                "description": (
+                    "Manual override, used ONLY when no channel is given. "
+                    "'landscape' 3:2 wide, 'portrait' tall 2:3, 'portrait_4_5' "
+                    "Instagram vertical 4:5 (1080x1350), 'square' 1:1. Prefer "
+                    "passing `channel` instead so format follows the channel."
+                ),
                 "default": DEFAULT_ASPECT_RATIO,
             },
             "fidelity": {
@@ -1202,9 +1257,18 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
             "error": "prompt is required for image generation",
             "error_type": "invalid_argument",
         })
-    aspect_ratio = args.get("aspect_ratio", DEFAULT_ASPECT_RATIO)
     model = _model_for_fidelity(args.get("fidelity"))
     post_id = (args.get("post_id") or "").strip()
+    # GF-33: format follows the TARGET CHANNEL, not a global default. Instagram
+    # ⇒ vertical 4:5 (1080x1350); LinkedIn/X/Facebook ⇒ horizontal. Prefer an
+    # explicit `channel` arg, fall back to the linked post's channel, then to
+    # any explicit aspect_ratio the agent passed.
+    channel = (args.get("channel") or "").strip().lower()
+    if not channel and post_id:
+        channel = str(_fetch_post(post_id).get("channel") or "").strip().lower()
+    aspect_ratio = _resolve_image_aspect(
+        args.get("aspect_ratio", DEFAULT_ASPECT_RATIO), channel
+    )
     # Accept reference_images as a list, or a single string for convenience.
     refs = args.get("reference_images") or args.get("reference_image") or []
     if isinstance(refs, str):
@@ -1213,9 +1277,31 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     current_image = _current_post_image(post_id) if post_id else ""
     if current_image:
         _append_unique_ref(refs, current_image)
-    if "logo" in prompt.lower():
+    # GF-28: NEVER invent a logo/isotipo. If the prompt asks for a brand mark,
+    # try to attach the REAL official logo from branding; if none is available
+    # and the caller passed no reference image, refuse rather than fabricate one.
+    prompt_lc = prompt.lower()
+    wants_logo = any(
+        kw in prompt_lc
+        for kw in ("logo", "isotipo", "isotype", "logotipo", "brand mark", "brandmark", "wordmark")
+    )
+    if wants_logo:
         for logo_ref in _branding_logo_refs():
             _append_unique_ref(refs, logo_ref)
+        if not refs:
+            return json.dumps({
+                "success": False,
+                "image": None,
+                "error": (
+                    "This image asks for the brand logo/isotipo, but no official "
+                    "logo file is available (none in branding.logos and none passed "
+                    "via reference_images). I will NOT invent a fake logo. Provide "
+                    "the official logo file (reference_images=[\"logo_official.png\"], "
+                    "an asset filename, or a URL), or ask me to generate the image "
+                    "WITHOUT a logo (e.g. leave clean space for it)."
+                ),
+                "error_type": "logo_reference_required",
+            })
     logger.info(
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,

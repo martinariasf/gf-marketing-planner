@@ -62,12 +62,52 @@ export interface ReviewLinkRecord {
   title?: string
   rangeStart: string
   rangeEnd: string
+  /**
+   * GF-42 — optional subset of month keys (YYYY-MM) within [rangeStart, rangeEnd]
+   * the sharer chose to expose. Empty/absent = all months in the range (the
+   * original, backward-compatible behavior). Stored in PB as a JSON field.
+   */
+  months?: string[]
   codeHash: string
   status: 'active' | 'revoked'
   expiresAt?: string
   createdBy?: string
   createdAt?: string
   revokedAt?: string
+}
+
+/**
+ * Normalize a stored `months` value (which PB may hand back as a JSON array, a
+ * JSON string, or undefined) into a clean, de-duplicated list of YYYY-MM keys.
+ * Returns an empty array when there is no usable selection — callers treat that
+ * as "all months in the range".
+ */
+export function parseMonthSelection(value: unknown): string[] {
+  let raw: unknown = value
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    try {
+      raw = JSON.parse(trimmed)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  for (const m of raw) {
+    if (typeof m === 'string' && /^\d{4}-\d{2}$/.test(m)) seen.add(m)
+  }
+  return [...seen].sort()
+}
+
+/**
+ * Whether a post (by its YYYY-MM month key) is visible given a link's month
+ * selection. An empty selection means every month in the range is visible.
+ */
+export function monthInSelection(monthKey: string, selection: string[]): boolean {
+  if (selection.length === 0) return true
+  return selection.includes(monthKey)
 }
 
 export type LinkState = 'active' | 'revoked' | 'expired'

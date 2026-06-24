@@ -19,13 +19,15 @@ import { z } from 'zod'
 import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
 import { disk } from '../diskData.js'
-import { listPostsInRange } from '../posts.js'
+import { listPostsInRange, monthKeyOf } from '../posts.js'
 import {
   verifyCode,
   linkState,
   sanitizePost,
   createReviewSession,
   getReviewSession,
+  parseMonthSelection,
+  monthInSelection,
   type ReviewLinkRecord,
   type ReviewSession,
 } from '../reviewLib.js'
@@ -125,9 +127,23 @@ async function listPostDecisions(
   }
 }
 
+/**
+ * Posts a link actually exposes: those in [rangeStart, rangeEnd] AND — when the
+ * sharer picked a subset of months (GF-42) — only within that subset. An empty
+ * selection means every month in the range, preserving the original behavior.
+ */
+async function listSharedPosts(link: ReviewLinkRecord) {
+  const selection = parseMonthSelection(link.months)
+  const posts = await listPostsInRange(link.slug, link.rangeStart, link.rangeEnd)
+  if (selection.length === 0) return posts
+  return posts.filter((p) =>
+    monthInSelection(monthKeyOf((p as Record<string, unknown>).date), selection),
+  )
+}
+
 /** Sanitized, reviewer-safe payload for a link's shared content + comments. */
 async function buildReviewPayload(link: ReviewLinkRecord) {
-  const posts = (await listPostsInRange(link.slug, link.rangeStart, link.rangeEnd)).map((p) =>
+  const posts = (await listSharedPosts(link)).map((p) =>
     sanitizePost(p as Record<string, unknown>),
   )
   let comments: Array<Record<string, unknown>> = []
@@ -156,6 +172,7 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
       title: link.title ?? '',
       rangeStart: link.rangeStart,
       rangeEnd: link.rangeEnd,
+      months: parseMonthSelection(link.months),
     },
     brand,
     posts,
@@ -318,7 +335,7 @@ reviewPublic.post('/review/:publicId/decision', async (c) => {
   // Per-post decision: a pure signal event tied to one shared post. The postId
   // must belong to the shared range — anything else is rejected without a write.
   if (parsed.data.postId) {
-    const shared = await listPostsInRange(ctx.link.slug, ctx.link.rangeStart, ctx.link.rangeEnd)
+    const shared = await listSharedPosts(ctx.link)
     const known = shared.some((p) => String((p as Record<string, unknown>).id ?? '') === parsed.data.postId)
     if (!known) {
       return problem(c, { title: 'Unprocessable Entity', status: 422, detail: 'Unknown post for this review link.' })
