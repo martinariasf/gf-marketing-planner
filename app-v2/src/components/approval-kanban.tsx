@@ -28,6 +28,7 @@ import {
   PUBLISHED_STEP,
   laneFor,
   publishedUrl,
+  postSeqMap,
   type Lane,
 } from '@/lib/post-status'
 import type { Post } from '@/types'
@@ -44,6 +45,12 @@ export function ApprovalKanban({
   onChanged: () => void
 }) {
   const t = useT()
+  // GF-44 — friendly per-client "Post N" name from the same post set.
+  const seqMap = useMemo(() => postSeqMap(posts), [posts])
+  const nameOf = (post: Post) => {
+    const n = seqMap.get(post.id)
+    return n ? t('post.nameN', { n }) : post.id
+  }
   // Optimistic overrides keyed by postId (workflow lanes only; never Published).
   const [overrides, setOverrides] = useState<Record<string, ApprovalDecision>>({})
   const [pending, setPending] = useState<Set<string>>(new Set())
@@ -81,7 +88,7 @@ export function ApprovalKanban({
     setPending((p) => new Set(p).add(post.id))
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(`${post.id} → ${t(`status.${decision}`)}`, { duration: 1800 })
+      toast(`${nameOf(post)} → ${t(`status.${decision}`)}`, { duration: 1800 })
       onChanged()
     } catch (err) {
       setOverrides((o) => {
@@ -186,8 +193,8 @@ export function ApprovalKanban({
                   >
                     <CardContent className="p-3 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className="font-mono text-[10px]">
-                          {post.id}
+                        <Badge variant="outline" className="text-[10px]">
+                          {nameOf(post)}
                         </Badge>
                         <span className="text-[10px] text-ink-muted">
                           {fmtDateShort(post.date)} · {post.channel}

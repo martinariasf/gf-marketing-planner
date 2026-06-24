@@ -851,6 +851,7 @@ export default function CalendarView() {
                     key={`copy-${activePost.id}`}
                     slug={slug}
                     post={activePost}
+                    postName={nameOf(activePost)}
                     pillarColor={pillarColor[activePost.pillar]}
                     onSaved={refetch}
                     approving={approvingId === activePost.id}
@@ -1729,6 +1730,7 @@ function StatusBadges({ post }: { post: Post }) {
 function CopyPane({
   slug,
   post,
+  postName,
   pillarColor,
   onSaved,
   approving,
@@ -1737,6 +1739,7 @@ function CopyPane({
 }: {
   slug: string
   post: Post
+  postName: string
   pillarColor?: string
   onSaved: () => void
   approving: boolean
@@ -1795,7 +1798,7 @@ function CopyPane({
     setSaving(true)
     try {
       await apiPatchPost(slug, post.id, patch)
-      toast(t('calendar.updated', { id: post.id }), { duration: 1600 })
+      toast(t('calendar.updated', { id: postName }), { duration: 1600 })
       onSaved()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.saveFailed'))
@@ -1829,7 +1832,7 @@ function CopyPane({
   return (
     <div className="p-6 lg:p-8 space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="font-mono text-[10px]">{post.id}</Badge>
+        <Badge variant="outline" className="text-[10px]">{postName}</Badge>
         <StatusBadges post={post} />
         <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
 
