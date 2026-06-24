@@ -1,5 +1,5 @@
 import { withPb } from './pb.js'
-import { env } from './env.js'
+import { env, resolveHermesAgent, type HermesAgent } from './env.js'
 
 export type AgentJobStatus =
   | 'queued'
@@ -164,9 +164,9 @@ export async function finalizeAgentJob(args: {
   })
 }
 
-async function getHermesRun(runId: string): Promise<HermesRun> {
-  const res = await fetch(`${env.hermesBaseUrl}/v1/runs/${runId}`, {
-    headers: { Authorization: `Bearer ${env.hermesApiKey}`, Accept: 'application/json' },
+async function getHermesRun(runId: string, agent: HermesAgent): Promise<HermesRun> {
+  const res = await fetch(`${agent.baseUrl}/v1/runs/${runId}`, {
+    headers: { Authorization: `Bearer ${agent.apiKey}`, Accept: 'application/json' },
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -176,7 +176,9 @@ async function getHermesRun(runId: string): Promise<HermesRun> {
 }
 
 async function reconcileOnce(): Promise<void> {
-  if (!env.hermesApiKey) return
+  // Disabled only when neither a global agent key nor any per-client agent
+  // override is configured; otherwise we still need to reconcile those runs.
+  if (!env.hermesApiKey && Object.keys(env.hermesAgents).length === 0) return
   const jobs = await withPb(async (pb) => {
     const queued = await pb.collection('agent_jobs').getList<AgentJobRecord>(1, 25, {
       filter: 'status="queued" && provider="hermes"',
@@ -210,7 +212,7 @@ async function reconcileOnce(): Promise<void> {
 
     let run: HermesRun
     try {
-      run = await getHermesRun(job.providerRunId)
+      run = await getHermesRun(job.providerRunId, resolveHermesAgent(job.slug))
     } catch (err) {
       if (ageMs > 10 * 60_000) {
         await finalizeAgentJob({

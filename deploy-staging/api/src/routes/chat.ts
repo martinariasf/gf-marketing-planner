@@ -21,7 +21,7 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { stream } from 'hono/streaming'
 import { withPb } from '../pb.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
-import { env } from '../env.js'
+import { env, resolveHermesAgent, type HermesAgent } from '../env.js'
 import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
 import {
@@ -80,9 +80,10 @@ interface HermesRunEvent {
 async function* hermesRunEvents(
   runId: string,
   signal: AbortSignal,
+  agent: HermesAgent,
 ): AsyncGenerator<HermesRunEvent> {
-  const res = await fetch(`${env.hermesBaseUrl}/v1/runs/${runId}/events`, {
-    headers: { Authorization: `Bearer ${env.hermesApiKey}`, Accept: 'text/event-stream' },
+  const res = await fetch(`${agent.baseUrl}/v1/runs/${runId}/events`, {
+    headers: { Authorization: `Bearer ${agent.apiKey}`, Accept: 'text/event-stream' },
     signal,
   })
   if (!res.ok || !res.body) {
@@ -128,6 +129,9 @@ chat.post(
   requireRole('dash', 'admin'),
   async (c) => {
     const slug = c.req.param('slug')
+    // Route this client's chat to its own Hermes agent if one is configured
+    // (HERMES_AGENTS_JSON), else the shared default agent.
+    const agent = resolveHermesAgent(slug)
     let body: {
       thread?: string
       message?: string
@@ -142,11 +146,11 @@ chat.post(
     const thread = (body.thread ?? 'default').slice(0, 100)
     const history = (body.history ?? []).slice(-10)
     if (!message) return problem(c, { title: 'Bad Request', status: 400, detail: 'message required' })
-    if (!env.hermesApiKey) {
+    if (!agent.apiKey) {
       return problem(c, {
         title: 'Misconfigured',
         status: 503,
-        detail: 'HERMES_API_KEY not set on mp-staging-api — chat proxy disabled',
+        detail: `No Hermes API key configured for "${slug}" — chat proxy disabled`,
       })
     }
 
@@ -225,10 +229,10 @@ chat.post(
       }, 15_000)
 
       try {
-        const runRes = await fetch(`${env.hermesBaseUrl}/v1/runs`, {
+        const runRes = await fetch(`${agent.baseUrl}/v1/runs`, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${env.hermesApiKey}`,
+            Authorization: `Bearer ${agent.apiKey}`,
             'Content-Type': 'application/json',
             // Scope long-term memory per client so different slugs don't bleed.
             'X-Hermes-Session-Key': `mp-${slug}-${thread}`,
@@ -252,7 +256,7 @@ chat.post(
           providerRunId: runId,
         })
 
-        for await (const ev of hermesRunEvents(runId, ac.signal)) {
+        for await (const ev of hermesRunEvents(runId, ac.signal, agent)) {
           if (ev.event === 'tool.started') {
             sawToolActivity = true
             void updateAgentJob(job.id, {
