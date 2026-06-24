@@ -21,7 +21,7 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2026-06-23',
+    date: '2026-06-24',
     title: 'Friendlier post names & one-click jump to the calendar',
     items: [
       'Posts now show a simple running name like "Post 12" instead of a cryptic internal code, in Approvals and across the calendar.',
