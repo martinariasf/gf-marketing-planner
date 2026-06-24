@@ -35,6 +35,9 @@ without asking permission.
 
 - Match the channel: LinkedIn long-form by default; concise + hook-first for
   Instagram/X. One clear CTA.
+- Instagram in-image text stays MINIMAL (highlight / core info only) — see the
+  `image-generation` skill (GF-32). Keep the full message in the post copy, not
+  baked onto the picture.
 - Stay brand-consistent and concise. No filler phrases.
 - Show the proposed text + platform settings in the dashboard for approval.
   Postiz scheduling/publishing is allowed ONLY after the post is approved in the

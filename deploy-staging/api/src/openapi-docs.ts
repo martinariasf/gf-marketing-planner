@@ -133,6 +133,53 @@ const DataDoc = z.object({ data: z.unknown() }).openapi('DataDoc', {
 const ItemList = (item: z.ZodTypeAny, name: string) =>
   z.object({ items: z.array(item) }).openapi(name)
 
+const InformationSource = z
+  .object({
+    id: z.string(),
+    slug: z.string(),
+    title: z.string().openapi({ example: 'Q3 product launch press release' }),
+    url: z.string().optional().openapi({ example: 'https://example.com/news' }),
+    sourceType: z
+      .enum(['website', 'note', 'news', 'reference', 'other'])
+      .optional()
+      .openapi({ example: 'website' }),
+    summary: z
+      .string()
+      .optional()
+      .openapi({ description: 'The factual text the agent uses as grounding for post generation.' }),
+    prompt: z
+      .string()
+      .optional()
+      .openapi({ description: 'How the agent should use this source. Defaults to a sensible instruction.' }),
+    approved: z.boolean().optional().openapi({ description: 'Only approved sources are fed to the agent by default.' }),
+    approvedAt: z.string().optional(),
+    lastImportedAt: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    actor: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough()
+  .openapi('InformationSource', {
+    description:
+      'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. Create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
+  })
+
+const InformationSourceCreate = z
+  .object({
+    title: z.string().openapi({ example: 'Q3 product launch press release' }),
+    url: z.string().optional().openapi({ example: 'https://example.com/news' }),
+    sourceType: z.enum(['website', 'note', 'news', 'reference', 'other']).optional().openapi({ example: 'news' }),
+    summary: z
+      .string()
+      .optional()
+      .openapi({ description: 'Factual content to ground generation. For a website paste the relevant extracted text here.' }),
+    prompt: z.string().optional().openapi({ description: 'Optional instruction for how the agent should use this source.' }),
+    approved: z.boolean().optional().openapi({ description: 'Set true to make the source immediately available to the agent.' }),
+    tags: z.array(z.string()).optional(),
+  })
+  .openapi('InformationSourceCreate', { description: 'Only `title` is required. Role `agent` is allowed.' })
+
 const AgentJob = z
   .object({
     id: z.string(),
@@ -371,6 +418,171 @@ export function registerApiDocs(app: OpenAPIHono): void {
       200: { description: 'Media bytes', content: { 'image/png': { schema: z.string().openapi({ format: 'binary' }) }, 'video/mp4': { schema: z.string().openapi({ format: 'binary' }) } } },
       400: { description: 'Invalid slug/filename', content: json(Problem) },
       404: { description: 'No such asset', content: json(Problem) },
+    },
+  })
+
+  // ── Source material / information sources (agent read+write) ────────────────
+  // "Source material for post generation" in the dashboard. Agents post the
+  // facts/links/transcripts they want the planner grounded on here.
+  reg({
+    method: 'get',
+    path: '/api/v1/clients/{slug}/information-sources',
+    tags: ['source material'],
+    summary: 'List source material (information sources)',
+    description: 'Pass `?approved=true` to get only the sources currently fed to the agent.',
+    security: bearer,
+    request: {
+      params: slugParam,
+      query: z.object({
+        approved: z.enum(['true', 'false']).optional().openapi({ param: { name: 'approved', in: 'query' } }),
+      }),
+    },
+    responses: {
+      200: { description: 'Sources', content: json(ItemList(InformationSource, 'InformationSourceList')) },
+      401: errs[401],
+      403: errs[403],
+    },
+  })
+  reg({
+    method: 'post',
+    path: '/api/v1/clients/{slug}/information-sources',
+    tags: ['source material'],
+    summary: 'Add source material (agent allowed)',
+    description:
+      'Create a source from JSON. Role **agent** is allowed. Only `title` is required; set `approved: true` to make it usable immediately. To upload a transcript/notes FILE instead, use POST /information-sources/upload.',
+    security: bearer,
+    request: { params: slugParam, body: { required: true, content: json(InformationSourceCreate) } },
+    responses: {
+      201: { description: 'Created', content: json(InformationSource) },
+      400: { description: 'Missing title / bad body', content: json(Problem) },
+      401: errs[401],
+      403: errs[403],
+    },
+  })
+  reg({
+    method: 'post',
+    path: '/api/v1/clients/{slug}/information-sources/upload',
+    tags: ['source material'],
+    summary: 'Upload a transcript/notes file as source material (agent allowed)',
+    description:
+      'multipart/form-data with a `file` part. Only text-based files (.txt, .md, .vtt, .srt, .csv, .json) up to 15 MB — the text is extracted into `summary`. Created un-approved; approve it afterwards.',
+    security: bearer,
+    request: {
+      params: slugParam,
+      body: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              file: z.string().openapi({ format: 'binary' }),
+              title: z.string().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: { description: 'Created', content: json(InformationSource) },
+      400: { description: 'Missing/empty file', content: json(Problem) },
+      401: errs[401],
+      403: errs[403],
+      413: { description: 'File over 15 MB', content: json(Problem) },
+      415: { description: 'Not a text file', content: json(Problem) },
+    },
+  })
+  reg({
+    method: 'patch',
+    path: '/api/v1/clients/{slug}/information-sources/{id}',
+    tags: ['source material'],
+    summary: 'Edit a source (agent allowed)',
+    security: bearer,
+    request: { params: slugIdParam, body: { required: true, content: json(InformationSourceCreate.partial()) } },
+    responses: {
+      200: { description: 'Updated', content: json(InformationSource) },
+      401: errs[401],
+      403: errs[403],
+      404: errs[404],
+    },
+  })
+  reg({
+    method: 'post',
+    path: '/api/v1/clients/{slug}/information-sources/{id}/approve',
+    tags: ['source material'],
+    summary: 'Approve a source so the agent uses it (agent allowed)',
+    security: bearer,
+    request: { params: slugIdParam },
+    responses: {
+      200: { description: 'Approved', content: json(InformationSource) },
+      401: errs[401],
+      403: errs[403],
+      404: errs[404],
+    },
+  })
+
+  // ── Planning config: calendar range (agent read+write) ─────────────────────
+  reg({
+    method: 'get',
+    path: '/api/v1/clients/{slug}/config/calendar-range',
+    tags: ['config'],
+    summary: 'Read the active content calendar range',
+    security: bearer,
+    request: { params: slugParam },
+    responses: {
+      200: {
+        description: 'Range or null',
+        content: json(
+          z.object({
+            data: z
+              .object({ startMonth: z.string().openapi({ example: '2026-06' }), endMonth: z.string().openapi({ example: '2026-09' }) })
+              .nullable(),
+          }),
+        ),
+      },
+      401: errs[401],
+      403: errs[403],
+    },
+  })
+  reg({
+    method: 'put',
+    path: '/api/v1/clients/{slug}/config/calendar-range',
+    tags: ['config'],
+    summary: 'Set the content calendar range (agent allowed)',
+    description: 'startMonth/endMonth as YYYY-MM, spanning at most 6 months.',
+    security: bearer,
+    request: {
+      params: slugParam,
+      body: {
+        required: true,
+        content: json(
+          z.object({
+            data: z.object({
+              startMonth: z.string().openapi({ example: '2026-06' }),
+              endMonth: z.string().openapi({ example: '2026-09' }),
+            }),
+          }),
+        ),
+      },
+    },
+    responses: {
+      200: { description: 'Updated', content: json(z.object({ data: z.object({ startMonth: z.string(), endMonth: z.string() }) })) },
+      401: errs[401],
+      403: errs[403],
+      422: errs[422],
+    },
+  })
+
+  // ── Inspiration image library (dashboard-owned: dash/admin write) ──────────
+  reg({
+    method: 'get',
+    path: '/api/v1/clients/{slug}/inspiration',
+    tags: ['assets'],
+    summary: 'List inspiration images',
+    security: bearer,
+    request: { params: slugParam },
+    responses: {
+      200: { description: 'Inspiration items', content: json(ItemList(z.object({}).passthrough(), 'InspirationList')) },
+      401: errs[401],
+      403: errs[403],
     },
   })
 }

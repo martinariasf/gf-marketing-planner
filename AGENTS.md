@@ -239,7 +239,51 @@ Don't claim success from a green CI run alone — confirm the live result:
 
 ---
 
-## 10. Quick reference
+## 10. Independent review runbook
+
+Use this when asked to review "the last N branches pushed to staging /
+experimental" and test what actually shipped.
+
+1. **Start from deployed truth.** Fetch/switch to `experimental`, then identify
+   the review window from first-parent history and PR/merge context:
+   `git log --first-parent --oneline origin/experimental`.
+2. **Map branches to surfaces.** For each merge, read the changed source and
+   list the user/API surfaces it should affect before clicking around. Do not
+   assume the branch title covers all behavior.
+3. **Verify the staging boundary first.**
+   - API-mode bundle:
+     `ssh root@100.92.24.75 'grep -l api/v1 /opt/marketing-planner-staging/app-dist/assets/api-client*.js'`
+   - API health:
+     `ssh root@100.92.24.75 'docker exec mp-staging-api wget -qO- http://localhost:8080/api/v1/health'`
+   - Token exchange + `/api/v1/clients` must return real clients; this is the
+     quickest canary that auth, Caddy, SPA mode, and API are aligned.
+4. **Use realistic browser auth.** In automated browser tests, prefer
+   Playwright `httpCredentials` for the edge basicauth. Do **not** treat
+   `https://user:pass@host` as authoritative: it can create false render
+   failures on this app/origin even when the normal basicauth flow is clean.
+5. **Test both read and write paths.** Read-only smoke is not enough for review
+   branches that add controls. For reversible writes, use `staging-demo`,
+   capture the created id, and clean it up in the same test run (for example:
+   create an "Add post" draft in the selected month, then delete it; create a
+   review link with selected months, then revoke it).
+6. **Fix from source when review finds a bug.** Patch only source in the repo,
+   run focused type/build checks, commit, push to `experimental`, watch CI, and
+   repeat post-deploy verification. Never patch the deployed bundle.
+7. **Report evidence, not vibes.** The summary should name the failing surface,
+   the observed error/status, what was fixed or left open, and the exact smoke
+   checks that passed afterward.
+
+Useful browser smoke targets:
+
+- `/` client picker
+- `/staging-demo/context` visual/context surfaces
+- `/staging-demo/integration` agent payload and Postiz key controls
+- `/staging-demo/calendar` Add Post, Share/review links, month navigation
+- `/api/v1/openapi.json` and `/api/v1/clients/:slug/information-sources`
+
+---
+
+## 11. Quick reference
 
 ```bash
 # Canonical checkout
@@ -262,5 +306,5 @@ ssh root@100.92.24.75 'grep -l api/v1 /opt/marketing-planner-staging/app-dist/as
 
 ---
 
-*Last updated: 2026-06-04, after the file-mode outage + Codex compiled-bundle
-recovery incident.*
+*Last updated: 2026-06-19, after the independent review of the latest staging
+experimental branches and the scheduling-state fix.*

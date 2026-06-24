@@ -413,6 +413,29 @@ export default function ContextView() {
         branding={brief.branding}
         set={(path, value) => set(['branding', ...path], value)}
       />
+
+      <Separator />
+
+      {/* GF-34: free-text visual/brand guidelines. Viktor pre-fills it; the
+          human edits it afterwards. Persists through the same setField path as
+          every other editable field on this page. */}
+      <Section
+        title={t('context.visualGuidelinesTitle')}
+        description={t('context.visualGuidelinesDesc')}
+        accent="branding"
+      >
+        <Card>
+          <CardContent className="pt-4">
+            <EditableTextarea
+              value={brief.visualGuidelines ?? ''}
+              onChange={(v) => set(['visualGuidelines'], v)}
+              placeholder={t('context.visualGuidelinesPlaceholder')}
+              rows={6}
+              className="text-sm"
+            />
+          </CardContent>
+        </Card>
+      </Section>
     </div>
   )
 }

@@ -70,5 +70,9 @@ export interface Brief {
     logos: Array<{ variant: string; url: string }>
     toneKeywords: string[]
   }
+  // GF-34: free-text visual/brand guidelines (layout, text placement, colour
+  // zones, font scale). Viktor pre-fills it; the human edits it afterwards.
+  // Optional so existing briefs without the field still round-trip.
+  visualGuidelines?: string
   expectations: string
 }

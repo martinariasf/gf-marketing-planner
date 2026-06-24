@@ -37,6 +37,7 @@ import { toast } from 'sonner'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { CalendarRangeConfig } from '@/lib/planning-range'
+import { monthsInRange } from '@/lib/planning-range'
 import {
   apiCreateReviewLink,
   apiListReviewLinks,
@@ -76,6 +77,16 @@ export function ReviewShareDialog({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [revealed, setRevealed] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  // GF-42 — months the next link will share. Empty = all months in the range.
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
+
+  // The months the sharer can pick from = the months covered by the visible range.
+  const availableMonths = monthsInRange(range)
+
+  const toggleMonth = (key: string) =>
+    setSelectedMonths((cur) =>
+      cur.includes(key) ? cur.filter((m) => m !== key) : [...cur, key],
+    )
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -93,15 +104,25 @@ export function ReviewShareDialog({
   }, [slug, onUnreadChange])
 
   useEffect(() => {
-    if (open) void refresh()
+    if (open) {
+      setSelectedMonths([])
+      void refresh()
+    }
   }, [open, refresh])
 
   const create = async () => {
     setCreating(true)
     try {
+      // Only send a subset when the user actually narrowed it AND it isn't the
+      // full range (an all-months pick is equivalent to the legacy default).
+      const months =
+        selectedMonths.length > 0 && selectedMonths.length < availableMonths.length
+          ? selectedMonths
+          : undefined
       const link = await apiCreateReviewLink(slug, {
         rangeStart: range.startMonth,
         rangeEnd: range.endMonth,
+        months,
         title: t('review.defaultTitle', { start: range.startMonth, end: range.endMonth }),
       })
       if (link.code) setRevealed((r) => ({ ...r, [link.id]: link.code! }))
@@ -247,6 +268,48 @@ export function ReviewShareDialog({
               </Button>
             </div>
 
+            {/* GF-42 — choose which months the next link exposes. No selection
+                shares the whole range (the original behavior). */}
+            {availableMonths.length > 1 && (
+              <div className="rounded-lg border border-border-subtle bg-paper p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                    {t('review.monthsLabel')}
+                  </span>
+                  <span className="text-[10px] text-ink-muted">
+                    {selectedMonths.length === 0
+                      ? t('review.monthsAll')
+                      : t('review.monthsSelected', {
+                          n: selectedMonths.length,
+                          total: availableMonths.length,
+                        })}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableMonths.map((m) => {
+                    const active = selectedMonths.includes(m.key)
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => toggleMonth(m.key)}
+                        className={cn(
+                          'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
+                          active
+                            ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
+                            : 'border-border-subtle text-ink-muted hover:text-ink',
+                        )}
+                        aria-pressed={active}
+                      >
+                        {m.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-ink-muted">{t('review.monthsAllHint')}</p>
+              </div>
+            )}
+
             {loading && links.length === 0 ? (
               <div className="py-8 flex justify-center text-ink-muted">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -270,7 +333,9 @@ export function ReviewShareDialog({
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{link.title || url}</p>
                           <p className="text-[11px] text-ink-muted">
-                            {link.rangeStart} – {link.rangeEnd}
+                            {link.months && link.months.length > 0
+                              ? link.months.join(', ')
+                              : `${link.rangeStart} – ${link.rangeEnd}`}
                             {link.commentCount ? ` · ${t('review.commentsN', { n: link.commentCount })}` : ''}
                           </p>
                         </div>

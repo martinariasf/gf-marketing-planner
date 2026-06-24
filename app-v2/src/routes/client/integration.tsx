@@ -31,6 +31,9 @@ import {
   Send,
   Trash2,
   ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import {
@@ -47,6 +50,10 @@ export default function IntegrationView() {
   const { slug = '' } = useParams<{ slug: string }>()
   const [info, setInfo] = useState<IntegrationInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // GF-27 (TASK-021a): the detailed, agent-facing manual setup (curl examples +
+  // asset workflow) is hidden by default so humans aren't shown it. They expand
+  // it on demand; agents get the machine-readable OpenAPI docs + one-click blob.
+  const [showDetails, setShowDetails] = useState(false)
 
   useEffect(() => {
     if (!slug) return
@@ -158,35 +165,76 @@ export default function IntegrationView() {
 
       <Separator />
 
-      {/* ── Asset workflow ──────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          <ImageIcon className="h-4 w-4 text-brand-blue" />
-          {t('integration.imagesTitle')}
-        </h2>
-        <Card>
-          <CardContent className="p-5 space-y-3 text-sm">
-            <p className="text-xs text-ink-muted bg-paper-muted rounded px-2 py-1.5">
-              {t('integration.imagesOptional')}
-            </p>
-            <p>
-              {t('integration.imagesIntro')}
-            </p>
-            <Field label={t('integration.assetsDir')} value={info.assetsDir} />
-            <Field label={t('integration.manifestFile')} value={info.assetsManifestPath} />
-            <p className="text-xs text-ink-muted leading-relaxed">
-              {t('integration.hermesNote')}
-            </p>
-          </CardContent>
-        </Card>
-      </section>
+      {/* ── One-click agent payload (GF-27) ─────────────────────────── */}
+      {info.agentConnection && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-brand-blue" />
+            {t('integration.oneClickTitle')}
+          </h2>
+          <OneClickCard
+            payload={info.agentConnection}
+            docsUrl={info.docsUrl}
+          />
+        </section>
+      )}
 
-      {/* ── Examples ────────────────────────────────────────────────── */}
+      {/* ── Manual setup (agent-facing details, hidden by default) ──── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">{t('integration.quickStart')}</h2>
-        <CodeBlock label={t('integration.curlReadBrief')} code={info.examples.curlReadBrief} />
-        <CodeBlock label={t('integration.curlPatchPost')} code={info.examples.curlPatchPost} />
-        <CodeBlock label={t('integration.curlSetApproval')} code={info.examples.curlSetApproval} />
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="flex items-center gap-1.5 text-sm font-semibold text-ink hover:text-brand-blue transition-colors"
+          aria-expanded={showDetails}
+        >
+          {showDetails ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          {showDetails ? t('integration.hideAgentDetails') : t('integration.showAgentDetails')}
+        </button>
+
+        {showDetails && (
+          <div className="space-y-6 pl-1">
+            <p className="text-xs text-ink-muted max-w-2xl">{t('integration.manualNote')}</p>
+
+            {/* Asset workflow */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-brand-blue" />
+                {t('integration.imagesTitle')}
+              </h3>
+              <Card>
+                <CardContent className="p-5 space-y-3 text-sm">
+                  <p className="text-xs text-ink-muted bg-paper-muted rounded px-2 py-1.5">
+                    {t('integration.imagesOptional')}
+                  </p>
+                  <p>{t('integration.imagesIntro')}</p>
+                  <Field label={t('integration.assetsDir')} value={info.assetsDir} />
+                  <Field label={t('integration.manifestFile')} value={info.assetsManifestPath} />
+                  <p className="text-xs text-ink-muted leading-relaxed">
+                    {t('integration.hermesNote')}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Examples */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">{t('integration.quickStart')}</h3>
+              <CodeBlock label={t('integration.curlReadBrief')} code={info.examples.curlReadBrief} />
+              <CodeBlock label={t('integration.curlPatchPost')} code={info.examples.curlPatchPost} />
+              <CodeBlock label={t('integration.curlSetApproval')} code={info.examples.curlSetApproval} />
+              {info.examples.curlAddSourceMaterial && (
+                <CodeBlock
+                  label={t('integration.oneClickTitle')}
+                  code={info.examples.curlAddSourceMaterial}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <Separator />
@@ -375,6 +423,52 @@ function TokenCard({ token }: { token: string }) {
             {t('integration.noExpiry')}
           </Badge>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// GF-27 (TASK-021b): one-click copy of the full agent connection payload. A
+// single button puts a self-contained JSON blob on the clipboard — base URL,
+// slug, token, auth header, OpenAPI URL and key endpoints (incl. source
+// material) — so an external agent can ingest it in one paste.
+function OneClickCard({
+  payload,
+  docsUrl,
+}: {
+  payload: NonNullable<IntegrationInfo['agentConnection']>
+  docsUrl: string
+}) {
+  const t = useT()
+  const [copied, setCopied] = useState(false)
+  const json = JSON.stringify(payload, null, 2)
+  const copy = () => {
+    navigator.clipboard.writeText(json).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+    toast.success(t('integration.oneClickCopied'), { duration: 1500 })
+  }
+  return (
+    <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
+      <CardContent className="p-5 space-y-3 text-sm">
+        <p className="text-xs text-ink-muted max-w-2xl">{t('integration.oneClickIntro')}</p>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-ink-muted">payload.json</span>
+          <Button onClick={copy} size="sm" className="h-8 shrink-0">
+            {copied ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+            {copied ? t('integration.oneClickCopied') : t('integration.oneClickCopy')}
+          </Button>
+        </div>
+        <pre className="text-[11px] bg-paper border border-border-subtle rounded p-3 overflow-x-auto font-mono leading-relaxed max-h-72">
+          {json}
+        </pre>
+        <p className="flex items-start gap-1.5 text-[11px] text-ink-muted">
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
+          {t('integration.agentDocsHint')}{' '}
+          <a href={docsUrl} target="_blank" rel="noreferrer" className="text-brand-blue hover:underline">
+            {docsUrl}
+          </a>
+        </p>
       </CardContent>
     </Card>
   )

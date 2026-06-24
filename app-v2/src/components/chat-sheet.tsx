@@ -566,6 +566,13 @@ export function ChatSheet({
       } finally {
         setBusy(false)
         abortRef.current = null
+        // GF-29 — a turn just ended: always resync the dashboard, not only when
+        // we saw a successful write tool_result above. If the live SSE stream
+        // dropped mid-run (common on the slow image model), the tool_result
+        // never reached the browser, so a chat-driven edit (e.g. a changed
+        // image) wouldn't appear until a manual page refresh. A turn-end refetch
+        // closes that gap without reloading the page.
+        onWroteSomething?.()
       }
     },
     [busy, messages, slug, thread, onWroteSomething, t],

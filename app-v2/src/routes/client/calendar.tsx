@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { useOutletContext, useParams } from 'react-router'
+import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -37,7 +37,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl } from '@/lib/post-status'
+import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -47,6 +47,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  RefreshCw,
   Tag,
   ImageIcon,
   Maximize2,
@@ -77,12 +78,15 @@ import {
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 import {
+  addMonths,
   dateTiming,
   defaultCalendarRange,
   monthDiff,
+  monthKeyFromDate,
   monthKeyFromIso,
   monthsInRange,
   normalizeCalendarRange,
+  parseMonthKey,
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
@@ -142,6 +146,17 @@ export default function CalendarView() {
     plan.pillars.forEach((p) => (m[p.name] = p.color))
     return m
   }, [plan.pillars])
+
+  // GF-44 — friendly per-client post names ("Post 12") for user-facing strings
+  // (delete dialog, status/delete toasts) instead of the raw c-…/pNNN id.
+  const seqMap = useMemo(() => postSeqMap(posts), [posts])
+  const nameOf = useCallback(
+    (post: Post) => {
+      const n = seqMap.get(post.id)
+      return n ? t('post.nameN', { n }) : post.id
+    },
+    [seqMap, t],
+  )
 
   const defaultRange = useMemo(() => defaultCalendarRange(), [])
   const [calendarRange, setCalendarRange] = useState<CalendarRangeConfig>(defaultRange)
@@ -208,6 +223,9 @@ export default function CalendarView() {
     const m: Record<string, Post[]> = {}
     monthKeys.forEach((key) => (m[key] = []))
     posts.forEach((p) => {
+      // GF-35 — rejected posts are hidden from the active calendar views; they
+      // live in a collapsible "Rejected" section below and stay recoverable.
+      if ((p.approval.status || p.status) === 'rejected') return
       const k = monthKeyFromIso(p.date)
       if (m[k]) m[k].push(p)
     })
@@ -217,11 +235,29 @@ export default function CalendarView() {
     return m
   }, [posts, monthKeys])
 
+  // GF-35 — rejected posts within the visible range, surfaced (collapsed) so they
+  // don't clutter the calendar but can still be restored or deleted.
+  const rejectedInRange = useMemo(
+    () =>
+      posts
+        .filter(
+          (p) =>
+            (p.approval.status || p.status) === 'rejected' &&
+            monthKeys.includes(monthKeyFromIso(p.date)),
+        )
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [posts, monthKeys],
+  )
+
   // GF-9 — content-mix vs strategy for the visible range: actual share of posts
   // per content pillar against each pillar's target weight. Posts whose pillar
   // isn't a known strategy pillar are grouped under "Other".
   const contentMix = useMemo(() => {
-    const inRange = posts.filter((p) => monthKeys.includes(monthKeyFromIso(p.date)))
+    const inRange = posts.filter(
+      (p) =>
+        monthKeys.includes(monthKeyFromIso(p.date)) &&
+        (p.approval.status || p.status) !== 'rejected',
+    )
     const total = inRange.length
     const byPillar = new Map<string, number>()
     inRange.forEach((p) => {
@@ -261,7 +297,11 @@ export default function CalendarView() {
 
   // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
-  const [activeMonth, setActiveMonth] = useState(rangeMonths[0]?.key ?? defaultRange.startMonth)
+  // GF-31 — default to the current month (if in range) so a manually created
+  // post lands where the user is, not on the range's first month.
+  const defaultActiveMonth =
+    rangeMonths.find((m) => m.isCurrent)?.key ?? rangeMonths[0]?.key ?? defaultRange.startMonth
+  const [activeMonth, setActiveMonth] = useState(defaultActiveMonth)
   const [slideIndex, setSlideIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   // Right-pane mode: the full picture (default) or the social-platform mockup.
@@ -273,6 +313,8 @@ export default function CalendarView() {
   const [imageSlide, setImageSlide] = useState(0)
   // CAL2 â€” direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
+  // GF-35 — collapsed by default; expands the recoverable rejected list.
+  const [showRejected, setShowRejected] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const monthPosts = postsByMonth[activeMonth] ?? []
@@ -287,11 +329,11 @@ export default function CalendarView() {
 
   useEffect(() => {
     if (!rangeMonths.some((m) => m.key === activeMonth)) {
-      setActiveMonth(rangeMonths[0]?.key ?? defaultRange.startMonth)
+      setActiveMonth(defaultActiveMonth)
       setSlideIndex(0)
       setDirection(0)
     }
-  }, [activeMonth, defaultRange.startMonth, rangeMonths])
+  }, [activeMonth, defaultActiveMonth, rangeMonths])
 
   const saveRange = async () => {
     const diff = monthDiff(rangeDraft.startMonth, rangeDraft.endMonth)
@@ -318,7 +360,7 @@ export default function CalendarView() {
     setApprovingId(post.id)
     try {
       await apiSetApproval(slug, post.id, decision)
-      toast(t('calendar.statusSet', { id: post.id, status: t(`status.${decision}`) }), { duration: 1600 })
+      toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
       refetch()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
@@ -333,7 +375,7 @@ export default function CalendarView() {
     setDeleting(true)
     try {
       await apiDeletePost(slug, deleteTarget.id)
-      toast(t('calendar.deleted', { id: deleteTarget.id }), { duration: 1600 })
+      toast(t('calendar.deleted', { id: nameOf(deleteTarget) }), { duration: 1600 })
       setDeleteTarget(null)
       setSlideIndex(0)
       refetch()
@@ -344,12 +386,14 @@ export default function CalendarView() {
     }
   }
 
-  // GF-15 — create a blank draft post in the active month, then jump to it.
-  const createPost = useCallback(async () => {
+  // GF-15 — create a blank draft post, then jump to it.
+  // GF-31 — create in the explicitly chosen month (Quarter passes the column's
+  // month); defaults to the active month tab in Week/Month views.
+  const createPost = useCallback(async (month: string = activeMonth) => {
     if (creating) return
     setCreating(true)
     try {
-      const date = `${activeMonth}-01`
+      const date = `${month}-01`
       const created = await apiCreatePost(slug, {
         date,
         title: t('calendar.newPostTitle'),
@@ -470,14 +514,60 @@ export default function CalendarView() {
 
   // CAL1 â€” from a compact card (Week/Quarter) jump into the Month viewer
   // focused on that exact post.
-  const jumpToPost = (post: Post) => {
-    const m = monthKeyFromIso(post.date)
-    const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
-    setActiveMonth(m)
-    setSlideIndex(idx < 0 ? 0 : idx)
-    setDirection(0)
-    setViewMode('month')
-  }
+  const jumpToPost = useCallback(
+    (post: Post) => {
+      const m = monthKeyFromIso(post.date)
+      const idx = (postsByMonth[m] ?? []).findIndex((p) => p.id === post.id)
+      setActiveMonth(m)
+      setSlideIndex(idx < 0 ? 0 : idx)
+      setDirection(0)
+      setViewMode('month')
+    },
+    [postsByMonth],
+  )
+
+  // GF-13 — deep-link from Approvals: /:slug/calendar?post=<id> opens that exact
+  // post in Month view. Wait until posts are loaded so a valid id is not dropped.
+  // A waiting post can sit outside the saved calendar range, so first widen the
+  // range to include its month (capped at the 6-month window), let `monthKeys`
+  // recompute, then jump and clear the param so it does not re-fire or linger.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const consumedPostParam = useRef<string | null>(null)
+  useEffect(() => {
+    const targetId = searchParams.get('post')
+    if (!targetId || posts.length === 0 || consumedPostParam.current === targetId) return
+    const clearParam = () => {
+      consumedPostParam.current = targetId
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('post')
+      setSearchParams(nextParams, { replace: true })
+    }
+    const target = posts.find((p) => p.id === targetId)
+    const targetMonth = target ? monthKeyFromIso(target.date) : ''
+    if (!target || !targetMonth) {
+      clearParam()
+      return
+    }
+    // The post can sit outside the saved range; widen to include its month
+    // (capped at the 6-month window) and let this effect re-run on the new range.
+    if (targetMonth < calendarRange.startMonth || targetMonth > calendarRange.endMonth) {
+      setCalendarRange((cur) => {
+        if (targetMonth < cur.startMonth) {
+          const widened = { startMonth: targetMonth, endMonth: cur.endMonth }
+          return monthDiff(widened.startMonth, widened.endMonth) > 5
+            ? { startMonth: targetMonth, endMonth: monthKeyFromDate(addMonths(parseMonthKey(targetMonth)!, 5)) }
+            : widened
+        }
+        const widened = { startMonth: cur.startMonth, endMonth: targetMonth }
+        return monthDiff(widened.startMonth, widened.endMonth) > 5
+          ? { startMonth: monthKeyFromDate(addMonths(parseMonthKey(targetMonth)!, -5)), endMonth: targetMonth }
+          : widened
+      })
+      return // re-runs once calendarRange reflects the widened window
+    }
+    jumpToPost(target)
+    clearParam()
+  }, [searchParams, posts, calendarRange, jumpToPost, setSearchParams])
 
   return (
     <div className="space-y-6">
@@ -518,6 +608,17 @@ export default function CalendarView() {
         <div className="flex items-center gap-2 flex-wrap">
           {isApiEnabled && (
             <>
+              {/* GF-41 — manual reload of the content calendar. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-1.5"
+                title={t('calendar.reload')}
+                aria-label={t('calendar.reload')}
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-brand-blue" />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -623,9 +724,24 @@ export default function CalendarView() {
                     {m.name}
                     {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
                   </h3>
-                  <span className="text-[11px] text-ink-muted">
-                    {t('calendar.postsCount', { n: list.length })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-ink-muted">
+                      {t('calendar.postsCount', { n: list.length })}
+                    </span>
+                    {/* GF-31 — add directly into this month (unambiguous in Quarter). */}
+                    {isApiEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => createPost(m.key)}
+                        disabled={creating}
+                        title={t('calendar.addPost')}
+                        aria-label={t('calendar.addPost')}
+                        className="text-brand-blue hover:text-brand-blue/80 disabled:opacity-50"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {list.length === 0 ? (
                   <p className="text-xs text-ink-muted py-4 text-center">
@@ -724,12 +840,18 @@ export default function CalendarView() {
 
             <Card className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-stretch">
+                {/* min height keeps the card from collapsing when a post has
+                    little content. (The real GF-30 bug — arrows jumping on click —
+                    was the Button's base `active:translate-y-px` overriding the
+                    arrows' `-translate-y-1/2` centering on press; fixed on the
+                    arrows themselves below with `active:-translate-y-1/2!`.) */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-stretch lg:min-h-[34rem]">
                   {/* Left: copy (editable) */}
                   <CopyPane
                     key={`copy-${activePost.id}`}
                     slug={slug}
                     post={activePost}
+                    postName={nameOf(activePost)}
                     pillarColor={pillarColor[activePost.pillar]}
                     onSaved={refetch}
                     approving={approvingId === activePost.id}
@@ -872,7 +994,7 @@ export default function CalendarView() {
                   size="icon"
                   onClick={prev}
                   aria-label={t('calendar.previousPost')}
-                  className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
+                  className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 active:-translate-y-1/2! h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
@@ -881,7 +1003,7 @@ export default function CalendarView() {
                   size="icon"
                   onClick={next}
                   aria-label={t('calendar.nextPost')}
-                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
+                  className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 active:-translate-y-1/2! h-10 w-10 rounded-full bg-paper shadow-md hover:bg-brand-blue hover:text-white hover:border-brand-blue z-10"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </Button>
@@ -1019,13 +1141,15 @@ export default function CalendarView() {
         </>
       ) : null)}
 
-      {/* GF-15 — add a post manually, at the bottom of the calendar. */}
-      {isApiEnabled && (
+      {/* GF-15 — add a post manually, at the bottom of the calendar.
+          GF-31 — hidden in Quarter view, which has an explicit per-month add
+          button (the single bottom button there has no unambiguous month). */}
+      {isApiEnabled && viewMode !== 'quarter' && (
         <div className="flex justify-center pt-1">
           <Button
             variant="outline"
             size="sm"
-            onClick={createPost}
+            onClick={() => createPost()}
             disabled={creating}
             className="gap-1.5"
           >
@@ -1036,6 +1160,40 @@ export default function CalendarView() {
             )}
             {t('calendar.addPost')}
           </Button>
+        </div>
+      )}
+
+      {/* GF-35 — rejected posts: hidden from the active calendar, recoverable
+          here (restore via the status control, or delete for good). */}
+      {isApiEnabled && rejectedInRange.length > 0 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowRejected((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition-colors"
+          >
+            {showRejected ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            {t('status.rejected')} · {t('calendar.postsCount', { n: rejectedInRange.length })}
+          </button>
+          {showRejected && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {rejectedInRange.map((p) => (
+                <CompactPostCard
+                  key={p.id}
+                  post={p}
+                  feedback={reviewFeedback.byPost[p.id]}
+                  approving={approvingId === p.id}
+                  onSetStatus={(d) => setStatus(p, d)}
+                  onDelete={() => setDeleteTarget(p)}
+                  onSelect={() => {}}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1092,7 +1250,7 @@ export default function CalendarView() {
         <DialogContent>
           <DialogTitle>{t('calendar.deleteTitle')}</DialogTitle>
           <DialogDescription>
-            {t('calendar.deleteBody', { id: deleteTarget?.id ?? '', title: deleteTarget?.title ?? '' })}
+            {t('calendar.deleteBody', { id: deleteTarget ? nameOf(deleteTarget) : '', title: deleteTarget?.title ?? '' })}
           </DialogDescription>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>
@@ -1572,6 +1730,7 @@ function StatusBadges({ post }: { post: Post }) {
 function CopyPane({
   slug,
   post,
+  postName,
   pillarColor,
   onSaved,
   approving,
@@ -1580,6 +1739,7 @@ function CopyPane({
 }: {
   slug: string
   post: Post
+  postName: string
   pillarColor?: string
   onSaved: () => void
   approving: boolean
@@ -1638,7 +1798,7 @@ function CopyPane({
     setSaving(true)
     try {
       await apiPatchPost(slug, post.id, patch)
-      toast(t('calendar.updated', { id: post.id }), { duration: 1600 })
+      toast(t('calendar.updated', { id: postName }), { duration: 1600 })
       onSaved()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.saveFailed'))
@@ -1672,7 +1832,7 @@ function CopyPane({
   return (
     <div className="p-6 lg:p-8 space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="font-mono text-[10px]">{post.id}</Badge>
+        <Badge variant="outline" className="text-[10px]">{postName}</Badge>
         <StatusBadges post={post} />
         <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
 
@@ -1961,7 +2121,7 @@ function PicturePane({
             size="icon"
             onClick={() => go(idx - 1)}
             aria-label={t('calendar.previousSlide')}
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+            className="absolute left-2 top-1/2 -translate-y-1/2 active:-translate-y-1/2! h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -1970,7 +2130,7 @@ function PicturePane({
             size="icon"
             onClick={() => go(idx + 1)}
             aria-label={t('calendar.nextSlide')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+            className="absolute right-2 top-1/2 -translate-y-1/2 active:-translate-y-1/2! h-8 w-8 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -2072,7 +2232,7 @@ function LightboxCarousel({
           size="icon"
           onClick={() => go(idx - 1)}
           aria-label={t('calendar.previousSlide')}
-          className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+          className="absolute left-2 top-1/2 -translate-y-1/2 active:-translate-y-1/2! h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -2081,7 +2241,7 @@ function LightboxCarousel({
           size="icon"
           onClick={() => go(idx + 1)}
           aria-label={t('calendar.nextSlide')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
+          className="absolute right-2 top-1/2 -translate-y-1/2 active:-translate-y-1/2! h-10 w-10 rounded-full bg-paper/90 shadow hover:bg-brand-blue hover:text-white hover:border-brand-blue"
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
