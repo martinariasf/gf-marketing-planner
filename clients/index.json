@@ -7,7 +7,8 @@
       "logoInitials": "GF",
       "quarter": "Q2 2026",
       "headline": "Q2 is about turning the April 14 workshop into a repeatable inbound channel.",
-      "status": "active"
+      "status": "active",
+      "agency": "gf"
     },
     {
       "slug": "fitvibe-demo",
@@ -16,7 +17,8 @@
       "logoInitials": "FV",
       "quarter": "Q3 2026",
       "headline": "Summer Strength: turn the July dip into our biggest brand moment of the year",
-      "status": "demo"
+      "status": "demo",
+      "agency": "gf"
     }
   ]
 }

@@ -15,7 +15,8 @@
 
 import type { Context, MiddlewareHandler } from 'hono'
 import { env } from './env.js'
-import { withPb } from './pb.js'
+import { withPb, verifyUserToken } from './pb.js'
+import { agencyForClient, resolveUserScope } from './tenancy.js'
 
 export type Role = 'agent' | 'dash' | 'admin'
 
@@ -26,7 +27,19 @@ export interface TokenPrincipal {
   slug: string
   /** Free-form label, e.g. "viktor-staging-demo" or "martin". */
   label?: string
+  // ── GF-58 dashboard-account fields (set only for PocketBase user JWTs) ──
+  /** PocketBase `users` record id, when the principal is a logged-in person. */
+  userId?: string
+  /** Agency slugs this user belongs to (empty for platform admins). */
+  agencyScopes?: string[]
+  /** GF staff — sees every agency/client (equivalent to slug `*`). */
+  platformAdmin?: boolean
 }
+
+// A dashboard user authenticates with a PocketBase JWT (three dot-separated
+// base64url segments). agent_*/dash_*/bootstrap tokens never contain dots, so
+// this cleanly disambiguates a user JWT without a wasted PB query.
+const JWT_RE = /^[\w-]+\.[\w-]+\.[\w-]+$/
 
 type AppEnv = {
   Variables: {
@@ -79,6 +92,24 @@ async function lookupToken(token: string): Promise<TokenPrincipal | null> {
   const fromBootstrap = bootstrap.find((p) => p.token === token)
   if (fromBootstrap) return fromBootstrap
 
+  // GF-58 — a logged-in dashboard person presents a PocketBase user JWT.
+  if (JWT_RE.test(token)) {
+    const user = await verifyUserToken(token)
+    if (user) {
+      const agencyScopes = user.isPlatformAdmin ? [] : await resolveUserScope(user.id)
+      return {
+        token,
+        role: user.isPlatformAdmin ? 'admin' : 'dash',
+        slug: user.isPlatformAdmin ? '*' : '',
+        label: `user:${user.email}`,
+        userId: user.id,
+        platformAdmin: user.isPlatformAdmin,
+        agencyScopes,
+      }
+    }
+    // Not a valid user token — fall through (nothing else matches a JWT shape).
+  }
+
   try {
     const record = await withPb((pb) =>
       pb
@@ -129,16 +160,30 @@ export const requireScope = (paramName = 'slug'): MiddlewareHandler<AppEnv> => {
         400,
       )
     }
-    if (principal.slug !== '*' && principal.slug !== requested) {
-      return c.json(
-        {
-          type: 'about:blank',
-          title: 'Forbidden',
-          status: 403,
-          detail: `Token scoped to "${principal.slug}", refused access to "${requested}"`,
-        },
-        403,
-      )
+
+    const forbidden = (detail: string) =>
+      c.json({ type: 'about:blank', title: 'Forbidden', status: 403, detail }, 403)
+
+    // Platform admins (and legacy slug:'*' tokens) pass everything.
+    if (principal.slug === '*' || principal.platformAdmin) {
+      await next()
+      return
+    }
+
+    // GF-58 — an agency-scoped dashboard user may reach a client only if that
+    // client's agency is one of theirs (tenant isolation).
+    if (principal.agencyScopes && principal.agencyScopes.length > 0) {
+      const agency = await agencyForClient(requested)
+      if (agency && principal.agencyScopes.includes(agency)) {
+        await next()
+        return
+      }
+      return forbidden(`User not a member of the agency owning "${requested}"`)
+    }
+
+    // Legacy single-client tokens (agent_*, bootstrap, ephemeral dash_*).
+    if (principal.slug !== requested) {
+      return forbidden(`Token scoped to "${principal.slug}", refused access to "${requested}"`)
     }
     await next()
   }

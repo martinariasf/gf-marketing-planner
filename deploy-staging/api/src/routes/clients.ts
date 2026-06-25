@@ -46,16 +46,21 @@ type ClientRecord = {
   quarter?: string
   headline?: string
   status?: 'active' | 'demo' | 'archived'
+  /** GF-58 — owning agency slug (disk: index.json `agency`; PB: `agency_slug`). */
+  agency?: string
 }
 
 async function clientList(): Promise<ClientRecord[]> {
   const idx = await disk.clientIndex()
   const diskRecords = ((idx?.clients ?? []) as ClientRecord[]).filter((r) => r.slug)
   try {
-    const pbRecords = await withPb((pb) => pb.collection('clients').getFullList<ClientRecord>())
+    const pbRecords = await withPb((pb) =>
+      pb.collection('clients').getFullList<ClientRecord & { agency_slug?: string }>(),
+    )
     const bySlug = new Map<string, ClientRecord>()
     for (const record of diskRecords) bySlug.set(record.slug, record)
-    for (const record of pbRecords) bySlug.set(record.slug, record)
+    // Normalise PB's `agency_slug` onto the shared `agency` field.
+    for (const record of pbRecords) bySlug.set(record.slug, { ...record, agency: record.agency ?? record.agency_slug })
     return Array.from(bySlug.values())
   } catch {
     return diskRecords
@@ -65,8 +70,19 @@ async function clientList(): Promise<ClientRecord[]> {
 clients.openapi(listRoute, async (c) => {
   const principal = c.get('principal')
   const records = await clientList()
-  const filtered =
-    principal.slug === '*' ? records : records.filter((r) => r.slug === principal.slug)
+  // GF-58 — scope the list:
+  //   platform admin / legacy '*'  → all clients
+  //   agency-scoped dashboard user → clients whose agency is one of theirs
+  //   legacy single-slug token     → just that slug
+  let filtered: ClientRecord[]
+  if (principal.slug === '*' || principal.platformAdmin) {
+    filtered = records
+  } else if (principal.agencyScopes && principal.agencyScopes.length > 0) {
+    const scopes = new Set(principal.agencyScopes)
+    filtered = records.filter((r) => r.agency && scopes.has(r.agency))
+  } else {
+    filtered = records.filter((r) => r.slug === principal.slug)
+  }
   return c.json({
     items: filtered.map((r) => ({
       slug: r.slug,

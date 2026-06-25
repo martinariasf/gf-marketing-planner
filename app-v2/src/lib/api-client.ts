@@ -1,11 +1,10 @@
 /**
- * Phase 3 dashboard data layer — calls the staging REST API at /api/v1/*.
+ * Dashboard data layer — calls the REST API at /api/v1/*.
  *
- * Enabled when `VITE_API_BASE` is set at build time. The dashboard ships a
- * `VITE_API_TOKEN` bearer token (a dash_* admin scope) — for staging this is
- * acceptable because the whole site is behind basicauth at the edge.
- * Phase 7 will replace the build-time token with a runtime basicauth→token
- * exchange.
+ * Enabled when `VITE_API_BASE` is set at build time. Auth (GF-58): a person logs
+ * in with email + password (POST /auth/login) and the returned PocketBase JWT is
+ * stored as the session bearer token. `VITE_API_TOKEN` remains an optional
+ * build-time fallback for local dev / CI smoke tests only.
  */
 
 import type {
@@ -34,94 +33,139 @@ const API_TOKEN_FALLBACK = import.meta.env.VITE_API_TOKEN as string | undefined
 
 export const isApiEnabled = !!API_BASE
 
-// Phase 7: runtime token, populated by ensureApiToken() at app boot. Held in
-// sessionStorage so refresh keeps the same token (cheaper than re-exchanging
-// on every tab focus) but new tabs / new sessions get fresh ones.
-const STORAGE_KEY = 'mp.dashToken'
-let runtimeToken: string | null = null
+// ── GF-58 dashboard session ──────────────────────────────────────────────────
+// A logged-in person holds a PocketBase auth JWT obtained from POST /auth/login.
+// Stored in localStorage so a refresh (and other tabs) stay logged in; cleared
+// on logout or when the API rejects the token (401). This replaces the old
+// basicauth → /auth/exchange dash_* token.
+const SESSION_KEY = 'mp.session'
 
-function loadToken(): string | null {
-  if (runtimeToken) return runtimeToken
+export interface DashSession {
+  token: string
+  expiresAt: string
+  role: 'admin' | 'dash'
+  platformAdmin: boolean
+  agencies: string[]
+  user: { id: string; email: string; name: string }
+}
+
+let sessionCache: DashSession | null = null
+
+export function getSession(): DashSession | null {
+  if (sessionCache) return sessionCache
   try {
-    const stored = sessionStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored) as { token: string; expiresAt: string }
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as DashSession
       if (Date.parse(parsed.expiresAt) > Date.now() + 60_000) {
-        runtimeToken = parsed.token
-        return runtimeToken
+        sessionCache = parsed
+        return sessionCache
       }
-      sessionStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(SESSION_KEY)
     }
   } catch {
-    // ignore parse errors
+    // ignore parse / storage errors
   }
   return null
 }
 
-function saveToken(token: string, expiresAt: string): void {
-  runtimeToken = token
+function saveSession(session: DashSession): void {
+  sessionCache = session
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token, expiresAt }))
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
   } catch {
-    // sessionStorage may be unavailable (private mode); fall back to memory only
+    // localStorage may be unavailable (private mode); keep in memory only
   }
 }
 
-function clearToken(): void {
-  runtimeToken = null
+export function clearSession(): void {
+  sessionCache = null
   try {
-    sessionStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(SESSION_KEY)
   } catch {
     // ignore
   }
 }
 
+/** True once a person is authenticated (or a build-time fallback token exists). */
+export function isLoggedIn(): boolean {
+  return !!getSession() || !!API_TOKEN_FALLBACK
+}
+
 /**
- * Trade the active basicauth session for a short-lived dash_* token.
- * Idempotent and cached — safe to call from app boot and on 401 retries.
+ * Whether the app must show the login screen: only when it talks to the API and
+ * has neither a stored session nor a baked-in fallback token (local dev / CI).
  */
+export function needsLogin(): boolean {
+  return isApiEnabled && !API_TOKEN_FALLBACK && !getSession()
+}
+
 export class ApiAuthError extends Error {
   status: number
   hint: string
   constructor(status: number, hint: string) {
-    super(`Auth exchange failed: ${status} (${hint})`)
+    super(`Auth failed: ${status} (${hint})`)
     this.status = status
     this.hint = hint
   }
 }
 
-export async function ensureApiToken(force = false): Promise<string | null> {
-  if (!API_BASE) return null
-  if (force) clearToken()
-  const cached = loadToken()
-  if (cached) return cached
+/** Authenticate with email + password; stores the session on success. */
+export async function login(email: string, password: string): Promise<DashSession> {
+  if (!API_BASE) throw new Error('VITE_API_BASE not set')
   let res: Response
   try {
-    res = await fetch(`${API_BASE}/auth/exchange`, {
-      credentials: 'include',
+    res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
       cache: 'no-store',
     })
-  } catch (err) {
-    console.warn('[api] /auth/exchange network error', err)
-    if (API_TOKEN_FALLBACK) return API_TOKEN_FALLBACK
-    throw new ApiAuthError(0, 'network error reaching /auth/exchange')
+  } catch {
+    throw new ApiAuthError(0, 'Network error reaching the server')
   }
   if (!res.ok) {
-    console.warn('[api] /auth/exchange returned', res.status, res.statusText)
-    if (API_TOKEN_FALLBACK) return API_TOKEN_FALLBACK
-    const hint =
-      res.status === 401
-        ? 'browser basicauth credentials were not auto-attached. Try a hard refresh (Ctrl+Shift+R), then re-enter the basicauth prompt.'
-        : `unexpected ${res.status} ${res.statusText}`
-    throw new ApiAuthError(res.status, hint)
+    let detail = 'Invalid email or password'
+    try {
+      const body = (await res.json()) as { detail?: string }
+      if (body.detail) detail = body.detail
+    } catch {
+      /* keep default */
+    }
+    throw new ApiAuthError(res.status, detail)
   }
-  const data = (await res.json()) as { token: string; expiresAt: string }
-  saveToken(data.token, data.expiresAt)
-  return data.token
+  const data = (await res.json()) as DashSession
+  saveSession(data)
+  return data
+}
+
+/** Clear the local session and best-effort notify the server. */
+export async function logout(): Promise<void> {
+  const token = getSession()?.token
+  clearSession()
+  if (API_BASE && token) {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      /* ignore — token already cleared locally */
+    }
+  }
+}
+
+/**
+ * Returns the current bearer token (session or build-time fallback). Retained
+ * (async; callers await it before a fetch) but no longer does a network
+ * round-trip now that auth is a real login rather than a basicauth exchange.
+ */
+export async function ensureApiToken(): Promise<string | null> {
+  return getSession()?.token ?? API_TOKEN_FALLBACK ?? null
 }
 
 function currentToken(): string | undefined {
-  return loadToken() ?? API_TOKEN_FALLBACK ?? undefined
+  return getSession()?.token ?? API_TOKEN_FALLBACK ?? undefined
 }
 
 function authHeaders(extra: Record<string, string> = {}): HeadersInit {
@@ -131,22 +175,18 @@ function authHeaders(extra: Record<string, string> = {}): HeadersInit {
   return h
 }
 
-// Wraps a fetch so a 401 (the api forgot our ephemeral token across a
-// restart) triggers exactly one forced re-exchange + retry. Anything else
-// surfaces normally so callers can show the real error.
-async function authedFetch(
-  path: string,
-  init: RequestInit,
-  retried = false,
-): Promise<Response> {
-  await ensureApiToken(retried)
+// Wraps a fetch with the current bearer token. A 401 means the token is
+// missing/expired/revoked: drop the session so the app's auth gate routes the
+// user back to the login screen on the next render. Anything else surfaces
+// normally so callers can show the real error.
+async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: { ...(init.headers as Record<string, string> | undefined), ...authHeaders() },
   })
-  if (res.status === 401 && !retried) {
-    console.warn('[api] 401, re-exchanging token and retrying', path)
-    return authedFetch(path, init, true)
+  if (res.status === 401) {
+    console.warn('[api] 401 — clearing session', path)
+    clearSession()
   }
   return res
 }

@@ -1,9 +1,11 @@
 import { lazy, Suspense, Component, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { EditProvider } from '@/lib/edit-store'
 import { LanguageProvider } from '@/lib/i18n'
+import { needsLogin } from '@/lib/api-client'
 
+const Login         = lazy(() => import('@/routes/login'))
 const ClientPicker  = lazy(() => import('@/routes/index'))
 const ClientLayout  = lazy(() => import('@/routes/client/layout'))
 const ContextView   = lazy(() => import('@/routes/client/context'))
@@ -28,6 +30,16 @@ function RouteFallback() {
       <Loader2 className="h-5 w-5 animate-spin" />
     </div>
   )
+}
+
+/**
+ * GF-58 — auth gate. When the SPA talks to the API and has no session (and no
+ * build-time fallback token), send the user to the login screen. Public routes
+ * (external review, changelog, login) live OUTSIDE this gate.
+ */
+function RequireAuth() {
+  if (needsLogin()) return <Navigate to="/login" replace />
+  return <Outlet />
 }
 
 /**
@@ -112,23 +124,28 @@ export default function App() {
           <Route path="/review/:publicId" element={<ExternalReview />} />
           {/* Changelog — also must precede /:slug or it'd be read as a client slug. */}
           <Route path="/changelog" element={<Changelog />} />
-          <Route path="/" element={<ClientPicker />} />
-          <Route path="/:slug" element={<ClientLayout />}>
-            <Route index element={<Navigate to="context" replace />} />
-            <Route path="context"     element={<ContextView />} />
-            <Route path="goals"       element={<GoalsView />} />
-            <Route path="strategy"    element={<StrategyView />} />
-            <Route path="calendar"    element={<CalendarView />} />
-            <Route path="approvals"   element={<ApprovalsView />} />
-            <Route path="assets"      element={<AssetsView />} />
-            <Route path="performance" element={<PerformanceView />} />
-            <Route path="learnings"   element={<LearningsView />} />
-            <Route path="suggestions" element={<SuggestionsView />} />
-            <Route path="integration" element={<IntegrationView />} />
-            <Route path="videos"      element={<VideosView />} />
-            <Route path="brand-kit"   element={<Navigate to="../context" replace />} />
-            <Route path="references"  element={<Navigate to="../assets" replace />} />
-            <Route path="*"           element={<Navigate to="context" replace />} />
+          {/* Public login — outside the auth gate. */}
+          <Route path="/login" element={<Login />} />
+          {/* Everything below requires a logged-in dashboard session (GF-58). */}
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<ClientPicker />} />
+            <Route path="/:slug" element={<ClientLayout />}>
+              <Route index element={<Navigate to="context" replace />} />
+              <Route path="context"     element={<ContextView />} />
+              <Route path="goals"       element={<GoalsView />} />
+              <Route path="strategy"    element={<StrategyView />} />
+              <Route path="calendar"    element={<CalendarView />} />
+              <Route path="approvals"   element={<ApprovalsView />} />
+              <Route path="assets"      element={<AssetsView />} />
+              <Route path="performance" element={<PerformanceView />} />
+              <Route path="learnings"   element={<LearningsView />} />
+              <Route path="suggestions" element={<SuggestionsView />} />
+              <Route path="integration" element={<IntegrationView />} />
+              <Route path="videos"      element={<VideosView />} />
+              <Route path="brand-kit"   element={<Navigate to="../context" replace />} />
+              <Route path="references"  element={<Navigate to="../assets" replace />} />
+              <Route path="*"           element={<Navigate to="context" replace />} />
+            </Route>
           </Route>
         </Routes>
       </Suspense>

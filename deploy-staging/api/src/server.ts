@@ -20,6 +20,7 @@ import { auditRoute } from './routes/audit.js'
 import { notifyRoute } from './routes/notify.js'
 import { chat } from './routes/chat.js'
 import { authExchange } from './routes/authExchange.js'
+import { authLogin } from './routes/authLogin.js'
 import { reviewPublic } from './routes/reviewPublic.js'
 import { reviewLinks } from './routes/reviewLinks.js'
 import { integration } from './routes/integration.js'
@@ -113,6 +114,9 @@ app.route('/api/v1', assetFiles)
 // dashboard token (mirrors assetFiles + authExchange).
 app.route('/api/v1', reviewPublic)
 app.route('/api/v1', authExchange)
+// GF-58 — dashboard account login (/auth/login, /auth/me, /auth/logout).
+// Mounted before the bearer-gated subapps, like authExchange.
+app.route('/api/v1', authLogin)
 app.route('/api/v1', clients)
 // GF-4 dashboard review-link management (bearer-gated).
 app.route('/api/v1', reviewLinks)
