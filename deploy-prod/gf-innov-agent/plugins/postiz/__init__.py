@@ -230,7 +230,12 @@ POSTIZ_SCHEDULE_POST_SCHEMA: Dict[str, Any] = {
             },
             "content": {
                 "type": "string",
-                "description": "The post text from the approved dashboard post. Plain text; platform-specific formatting handled by Postiz.",
+                "description": (
+                    "IGNORED. The tool always publishes the approved dashboard "
+                    "post's stored title + copy verbatim, so the real post is "
+                    "byte-identical to what the user approved. Do not retype the "
+                    "copy here."
+                ),
             },
             "integration_ids": {
                 "type": "array",
@@ -254,7 +259,7 @@ POSTIZ_SCHEDULE_POST_SCHEMA: Dict[str, Any] = {
                 ),
             },
         },
-        "required": ["post_id", "content", "integration_ids"],
+        "required": ["post_id", "integration_ids"],
     },
 }
 
@@ -302,6 +307,35 @@ def _load_approved_dashboard_post(post_id: str) -> Dict[str, Any]:
     return {"ok": True, "post": post}
 
 
+def _normalize_newlines(s: str) -> str:
+    """Collapse literal escape sequences into real characters (GF-63).
+
+    The model often re-emits multi-paragraph copy with a literal ``\\n`` (the two
+    characters backslash + n) instead of a real newline. Postiz then publishes
+    the visible ``\\n``. Stored copy is normally clean (the dashboard renders it
+    fine), so this is a belt-and-suspenders pass on the publish path; a real
+    newline already present is left untouched. ``\\r\\n`` is handled before
+    ``\\n`` so no stray ``\\r`` is left behind.
+    """
+    return s.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+
+def _caption_from_post(post: Dict[str, Any]) -> str:
+    """Build the caption from the approved post's STORED title + copy (GF-63).
+
+    Mirrors the platform scheduling adapter (`toPostizPayload`): title and copy
+    joined by a blank line. Publishing the stored copy — not the model's re-typed
+    ``content`` argument — makes the real post byte-identical to what the user
+    approved and removes the literal-``\\n`` corruption (and any copy drift) at
+    the source.
+    """
+    parts = [
+        _normalize_newlines(str(post.get("title") or "")).strip(),
+        _normalize_newlines(str(post.get("copy") or "")).strip(),
+    ]
+    return "\n\n".join(p for p in parts if p).strip()
+
+
 def _upload_image_cli(path: str) -> Optional[str]:
     """Run `postiz upload <path>` and return the uploaded URL/path, or None."""
     result = _run_cli(["upload", path, "--json"])
@@ -325,13 +359,16 @@ def _handle_postiz_schedule_post(args: Dict[str, Any], **kw: Any) -> str:
     if not approved.get("ok"):
         return json.dumps({"success": False, "error": approved.get("error")})
 
-    content = (args.get("content") or "").strip()
+    # GF-63: publish the dashboard's STORED copy, never the model's re-typed
+    # `content` argument. The arg is ignored on purpose so the real Postiz post is
+    # byte-identical to the approved dashboard post (no literal "\n", no drift).
+    content = _caption_from_post(approved["post"])
     integration_ids = args.get("integration_ids") or []
     scheduled_for = args.get("scheduled_for")
     image_paths = args.get("image_paths") or []
 
     if not content:
-        return json.dumps({"success": False, "error": "content is required"})
+        return json.dumps({"success": False, "error": f"{post_id} has no title or copy to publish"})
     if not integration_ids:
         return json.dumps({"success": False, "error": "integration_ids is required"})
 
