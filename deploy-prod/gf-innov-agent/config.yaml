@@ -348,6 +348,14 @@ platform_toolsets:
 # Modes: off | new | all | verbose. Live override: /verbose in the chat.
 # =============================================================================
 display:
+  # GF-61: localize Hermes' OWN static messages (slash-command replies, approval
+  # prompts, /usage token reports, restart/compression notices) to Spanish via
+  # locales/es.yaml. Does NOT touch agent-generated text (the LLM already mirrors
+  # language) — it fixes the automatic/non-LLM replies that were stuck in English.
+  language: es
+  # GF-39: suppress the hardcoded English "File-mutation verifier: N file(s) were
+  # NOT modified" footer — internal jargon, not localized, not for the end user.
+  file_mutation_verifier: false
   # Allow users to cycle the tool-progress mode live with /verbose
   # (off | new | all | verbose). Gated off by default; enabled here.
   tool_progress_command: false
