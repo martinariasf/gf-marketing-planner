@@ -1082,14 +1082,22 @@ def _link_slide_to_post(
     idx = slide_index - 1
     if idx < len(slides):
         slides[idx] = entry          # re-generation of an existing slide
+        actual_index = idx
     else:
         # Normal next-slide append. If the caller skips ahead, append at the end
         # rather than create empty gaps — the API's strict slide shape rejects
-        # placeholder slides, and the agent is told to go in order.
+        # placeholder slides, and the agent is told to go in order. We report the
+        # ACTUAL landing position (not the requested index) so the caller isn't
+        # misled about where the slide ended up.
         slides.append(entry)
+        actual_index = len(slides) - 1
 
-    cover = slides[0]["image"] if slides else url
-    body = {"slides": slides, "image": cover, "format": "carousel"}
+    cover = slides[0]["image"]
+    # Let the post's type follow its real shape: a 2+ slide deck is a carousel;
+    # a transient 1-slide post stays a normal single image (it renders as the
+    # cover and isn't mislabeled mid-build). `format` is an accepted PATCH field.
+    fmt = "carousel" if len(slides) >= 2 else "single image"
+    body = {"slides": slides, "image": cover, "format": fmt}
     headers = {**_api_headers(), "Content-Type": "application/json"}
     try:
         with httpx.Client(timeout=30.0) as client:
@@ -1113,13 +1121,18 @@ def _link_slide_to_post(
     except Exception as exc:
         return {"linked": False, "url": url, "error": f"PATCH /posts/{post_id} slides failed: {exc}"}
 
-    linked = isinstance(served_slides, list) and any(
-        isinstance(s, dict) and s.get("image") == url for s in served_slides
+    # `linked` is True only when the slide landed at the position we report — a
+    # GET that finds our URL merely "somewhere" would mask a misplacement.
+    linked = (
+        isinstance(served_slides, list)
+        and actual_index < len(served_slides)
+        and isinstance(served_slides[actual_index], dict)
+        and served_slides[actual_index].get("image") == url
     )
     return {
         "linked": linked,
         "url": url,
-        "slide_index": slide_index,
+        "slide_index": actual_index + 1,
         "slide_count": len(served_slides) if isinstance(served_slides, list) else 0,
         "post_id": post_id,
     }
