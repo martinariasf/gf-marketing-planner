@@ -39,6 +39,11 @@ services:
       # config.yaml extra.key). Until the prod agent exists, leave chat disabled.
       HERMES_BASE_URL: "${HERMES_BASE_URL:-}"
       HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      # Per-client agent overrides (JSON slug -> {baseUrl, apiKey}); routes a
+      # client's dashboard chat to its own agent (e.g. biomas -> viktor-biomas).
+      # Slugs absent here fall back to HERMES_BASE_URL/HERMES_API_KEY. Value lives
+      # in the box-local .env (secret); empty = every client uses the default.
+      HERMES_AGENTS_JSON: "${HERMES_AGENTS_JSON:-}"
       # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
       # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
       # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.
