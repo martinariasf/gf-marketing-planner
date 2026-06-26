@@ -314,10 +314,16 @@ def _normalize_newlines(s: str) -> str:
     characters backslash + n) instead of a real newline. Postiz then publishes
     the visible ``\\n``. Stored copy is normally clean (the dashboard renders it
     fine), so this is a belt-and-suspenders pass on the publish path; a real
-    newline already present is left untouched. ``\\r\\n`` is handled before
-    ``\\n`` so no stray ``\\r`` is left behind.
+    newline already present is left untouched. ``\\r\\n`` is collapsed first, then
+    a lone literal ``\\r`` (old-Mac break) also maps to a newline, so no stray
+    ``\\r`` is ever published.
     """
-    return s.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    return (
+        s.replace("\\r\\n", "\n")
+        .replace("\\r", "\n")
+        .replace("\\n", "\n")
+        .replace("\\t", "\t")
+    )
 
 
 def _caption_from_post(post: Dict[str, Any]) -> str:
@@ -329,9 +335,12 @@ def _caption_from_post(post: Dict[str, Any]) -> str:
     approved and removes the literal-``\\n`` corruption (and any copy drift) at
     the source.
     """
+    # Mirror the platform exactly: [title, copy].filter(Boolean).join('\n\n').trim()
+    # — only falsy parts are dropped and only the whole is trimmed, so intentional
+    # internal whitespace/newlines in the approved copy are preserved verbatim.
     parts = [
-        _normalize_newlines(str(post.get("title") or "")).strip(),
-        _normalize_newlines(str(post.get("copy") or "")).strip(),
+        _normalize_newlines(str(post.get("title") or "")),
+        _normalize_newlines(str(post.get("copy") or "")),
     ]
     return "\n\n".join(p for p in parts if p).strip()
 
