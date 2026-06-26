@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-06-26',
+    title: 'Viktor speaks Spanish even in his automatic messages',
+    items: [
+      "Viktor's built-in system replies (command responses, confirmations, session notices) now appear in Spanish instead of English — previously only his written answers followed your language.",
+      'Removed an internal technical note ("file-mutation verifier") that occasionally leaked into the chat and was never meant for you.',
+    ],
+  },
+  {
+    date: '2026-06-26',
     title: 'Carousels now keep all their slides',
     items: [
       'When Viktor builds an Instagram carousel, every slide is now saved to the post and shown in the calendar — previously only the cover image appeared.',
