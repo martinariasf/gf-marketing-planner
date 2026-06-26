@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-06-26',
+    title: 'Sign in with your own account',
+    items: [
+      'You now sign in to the dashboard with your own email and password instead of a shared site password.',
+      'You only see the clients your account is allowed to access, can switch between them, and can sign out cleanly — no more browser login pop-ups.',
+    ],
+  },
+  {
     date: '2026-06-23',
     title: 'Friendlier post names & one-click jump to the calendar',
     items: [
