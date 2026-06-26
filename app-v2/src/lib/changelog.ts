@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-06-26',
+    title: 'Carousels now keep all their slides',
+    items: [
+      'When Viktor builds an Instagram carousel, every slide is now saved to the post and shown in the calendar — previously only the cover image appeared.',
+      'Each slide is attached the moment it is created, so a carousel is never left half-built if a generation is interrupted.',
+    ],
+  },
+  {
+    date: '2026-06-26',
     title: 'Sign in with your own account',
     items: [
       'You now sign in to the dashboard with your own email and password instead of a shared site password.',
