@@ -13,7 +13,7 @@
 model:
   provider: openrouter
   base_url: https://openrouter.ai/api/v1
-  default: google/gemini-3.1-pro-preview
+  default: anthropic/claude-opus-4.8
   # Cap per-response output. Marketing chat doesn't need 65k tokens and
   # OpenRouter rejects requests that exceed the API key's daily limit.
   max_tokens: 4096
@@ -33,6 +33,11 @@ image_gen:
 
 # System prompt — the agent's persona. German marketing assistant.
 agent:
+  # Thinking ON. Claude Opus 4.8 is an adaptive-thinking model; via OpenRouter
+  # Hermes maps this knob to the request's reasoning parameter. Values:
+  # none | minimal | low | medium | high | xhigh (default when unset: medium).
+  # Runtime override: /reasoning <level> in chat.
+  reasoning_effort: medium
   system_prompt: |
     LANGUAGE RULE (top priority, overrides everything below): Detect the language of the latest user message and write your ENTIRE reply in that SAME language. Supported: Spanish, German, English. If the user writes in English, reply ONLY in English; if in German, ONLY German; if in Spanish, ONLY Spanish. Re-check on EVERY message (the user may switch language mid-conversation). If the language is unclear or not one of these three, reply in English. Only exception: if the user explicitly asks for content in a specific language (e.g. post copy), produce that content in the requested language. This language rule also applies to greetings and self-introductions: never default to one language just because these instructions happen to be written in English.
 
