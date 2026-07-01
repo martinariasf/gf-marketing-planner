@@ -18,6 +18,10 @@ test('classify: OpenRouter daily-limit / billing → quota_exhausted', () => {
     'You exceeded your current quota, please check your plan',
     'Your credits have been exhausted',
     'Payment Required',
+    // bare "quota" is a daily-limit signal per the contract, not a transient
+    // throttle — must not degrade to rate_limited "try again shortly".
+    'quota exceeded',
+    'You have reached your quota',
   ]) {
     assert.equal(classify(raw), 'quota_exhausted', raw)
   }

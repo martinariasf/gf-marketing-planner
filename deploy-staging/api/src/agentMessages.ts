@@ -46,6 +46,9 @@ const QUOTA_PATTERNS = [
   'exceeded your current quota',
   'credits have been exhausted',
   'billing',
+  'quota', // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+  // Checked before RATE_LIMIT, so a quota-flavoured error gets the "come back
+  // tomorrow" message rather than the transient "try again shortly" one.
 ]
 
 const RATE_LIMIT_PATTERNS = [
@@ -55,7 +58,6 @@ const RATE_LIMIT_PATTERNS = [
   'too many requests',
   'resource_exhausted',
   'throttled',
-  'quota', // generic "quota" without a billing word lands here as transient
 ]
 
 /**
