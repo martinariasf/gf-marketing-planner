@@ -941,8 +941,12 @@ const TOOL_ICON: Record<string, typeof Wrench> = {
 function ToolCallChip({ tc }: { tc: ToolCall }) {
   const t = useT()
   const Icon = TOOL_ICON[tc.name] ?? Wrench
+  // Map the raw Hermes tool name to a friendly localized label. The relay can
+  // forward ANY tool name the agent defines, so an unknown name must NOT leak
+  // verbatim (GF-39); fall back to a generic localized "working" label instead.
   const labelKey = `chat.tool.${tc.name}`
-  const label = t(labelKey) === labelKey ? tc.name : t(labelKey)
+  const translated = t(labelKey)
+  const label = translated === labelKey ? t('chat.tool.generic') : translated
   const write = isWriteTool(tc.name)
   const args = parseArgs(tc.arguments)
   const ok = tc.done && typeof tc.result === 'object' && tc.result !== null && (tc.result as { ok?: boolean }).ok !== false

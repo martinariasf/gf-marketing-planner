@@ -202,6 +202,8 @@ const en: Dict = {
   'chat.tool.patch_plan':       'Update plan',
   'chat.tool.patch_goals':      'Update goals',
   'chat.tool.patch_learnings':  'Update learnings',
+  'chat.tool.image_generate':   'Generate image',
+  'chat.tool.generic':          'Working…',
 
   // Context page
   'context.eyebrow':              'Company context',
@@ -1032,6 +1034,8 @@ const de: Dict = {
   'chat.tool.patch_plan':       'Plan aktualisieren',
   'chat.tool.patch_goals':      'Ziele aktualisieren',
   'chat.tool.patch_learnings':  'Erkenntnisse aktualisieren',
+  'chat.tool.image_generate':   'Bild generieren',
+  'chat.tool.generic':          'Arbeitet…',
 
   'context.eyebrow':              'Unternehmenskontext',
   'context.industry':             'Branche',
@@ -1846,6 +1850,8 @@ const es: Dict = {
   'chat.tool.patch_plan':       'Actualizar plan',
   'chat.tool.patch_goals':      'Actualizar metas',
   'chat.tool.patch_learnings':  'Actualizar aprendizajes',
+  'chat.tool.image_generate':   'Generar imagen',
+  'chat.tool.generic':          'Trabajando…',
 
   'context.eyebrow':              'Contexto de la empresa',
   'context.industry':             'Sector',
