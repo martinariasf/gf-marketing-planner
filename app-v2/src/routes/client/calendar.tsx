@@ -608,16 +608,18 @@ export default function CalendarView() {
         <div className="flex items-center gap-2 flex-wrap">
           {isApiEnabled && (
             <>
-              {/* GF-41 — manual reload of the content calendar. */}
+              {/* GF-41 — manual reload of the content calendar. GF-29: green
+                  accent so this "update to see the post" action stands out from
+                  the sibling blue outline buttons. */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => refetch()}
-                className="gap-1.5"
+                className="gap-1.5 border-brand-green-300 bg-brand-green-50 hover:bg-brand-green-100"
                 title={t('calendar.reload')}
                 aria-label={t('calendar.reload')}
               >
-                <RefreshCw className="h-3.5 w-3.5 text-brand-blue" />
+                <RefreshCw className="h-3.5 w-3.5 text-brand-green-600" />
               </Button>
               <Button
                 variant="outline"
