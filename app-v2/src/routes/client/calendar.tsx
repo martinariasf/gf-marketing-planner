@@ -357,6 +357,11 @@ export default function CalendarView() {
   // GF-23 — set a post to any workflow status (Draft/Review/Approved/
   // Programmed/Rechecked/Rejected). Published is terminal and never set here.
   const setStatus = async (post: Post, decision: ApprovalDecision) => {
+    // GF-37 — a post cannot be scheduled (Programmed) for a date in the past.
+    if (decision === 'scheduled' && dateTiming(post.date) === 'past') {
+      toast.error(t('calendar.pastDateNoSchedule'))
+      return
+    }
     setApprovingId(post.id)
     try {
       await apiSetApproval(slug, post.id, decision)
@@ -1429,11 +1434,14 @@ function StatusSelect({
       <DropdownMenuContent align="start">
         {WORKFLOW.map((s) => {
           const Icon = s.Icon
+          // GF-37 — block scheduling (Programmed) a post dated in the past.
+          const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
           return (
             <DropdownMenuItem
               key={s.key}
-              disabled={s.key === current}
+              disabled={s.key === current || pastSchedule}
               onClick={() => onSetStatus(s.key)}
+              title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
             >
               <Icon className="h-3.5 w-3.5 mr-2" />
               {t(s.labelKey)}
@@ -1747,6 +1755,8 @@ function CopyPane({
   onDelete: () => void
 }) {
   const t = useT()
+  // GF-37 — a published post is terminal: the editor is read-only / greyed out.
+  const locked = isPublished(post)
   const initialHashtags = (post.hashtags ?? []).join(' ')
   const initialDate = toDateInputValue(post.date)
   const [title, setTitle] = useState(post.title ?? '')
@@ -1771,6 +1781,10 @@ function CopyPane({
     channelsChanged
 
   const save = async () => {
+    if (locked) {
+      toast(t('calendar.publishedReadOnly'))
+      return
+    }
     if (!dirty || saving) return
     const patch: Record<string, unknown> = {}
     if (title !== post.title) patch.title = title
@@ -1830,7 +1844,16 @@ function CopyPane({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-4">
+    <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
+      {locked && (
+        <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-paper-muted px-3 py-2 text-[11px] text-ink-muted">
+          <Send className="h-3.5 w-3.5 shrink-0" />
+          <span>{t('calendar.publishedReadOnly')}</span>
+        </div>
+      )}
+      {/* GF-37 — disabled fieldset makes every nested control read-only when the
+          post is published; `contents` keeps the existing layout intact. */}
+      <fieldset disabled={locked} className="contents">
       <div className="flex items-center gap-2 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{postName}</Badge>
         <StatusBadges post={post} />
@@ -2028,6 +2051,7 @@ function CopyPane({
           </Button>
         </div>
       )}
+      </fieldset>
     </div>
   )
 }
