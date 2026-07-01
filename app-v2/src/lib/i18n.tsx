@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { translations } from './i18n-dict'
+import { setFormatLocale } from './format'
 
 export type Lang = 'en' | 'de' | 'es'
 
@@ -35,6 +36,10 @@ function interpolate(s: string, vars?: Record<string, string | number>) {
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readInitial)
 
+  // Keep the date/number formatters (format.ts) on the active language. Set during
+  // render so the first paint already formats correctly, and again on every change.
+  setFormatLocale(lang)
+
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, lang) } catch {/* ignore */}
     document.documentElement.lang = lang
@@ -61,4 +66,16 @@ export function useI18n() {
 
 export function useT() {
   return useI18n().t
+}
+
+/**
+ * Non-hook translation lookup for code that runs outside the React tree or in a
+ * class component (e.g. the top-level error boundary). Reads the persisted
+ * language directly instead of from context. Falls back to English, then the key.
+ */
+export function tStatic(key: string, vars?: Record<string, string | number>): string {
+  const lang = readInitial()
+  const dict = translations[lang]
+  const raw = dict[key] ?? translations.en[key] ?? key
+  return interpolate(raw, vars)
 }

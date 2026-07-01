@@ -788,6 +788,7 @@ function isUploadableSourceFile(file: File): boolean {
 }
 
 function InformationSourcesBoard({ slug }: { slug: string }) {
+  const t = useT()
   const [items, setItems] = useState<InformationSource[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -815,7 +816,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
 
   const create = async () => {
     if (!draft.title.trim()) {
-      toast.error('Add a title first.')
+      toast.error(t('assets.addTitleFirst'))
       return
     }
     setSaving(true)
@@ -871,12 +872,12 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
       if (list.length === 0) return
       const tooBig = list.find((f) => f.size > INFO_SOURCE_MAX_BYTES)
       if (tooBig) {
-        toast.error(`"${tooBig.name}" is over ${INFO_SOURCE_MAX_MB} MB. Max ${INFO_SOURCE_MAX_MB} MB per file.`)
+        toast.error(t('assets.fileTooBig', { name: tooBig.name, max: INFO_SOURCE_MAX_MB }))
         return
       }
       const accepted = list.filter(isUploadableSourceFile)
       if (accepted.length === 0) {
-        toast.error('Only text files (.txt, .md, .vtt, .srt, .csv, .json) are supported.')
+        toast.error(t('assets.onlyTextFiles'))
         return
       }
       setUploading(true)
@@ -900,11 +901,11 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
           <Globe2 className="h-3 w-3" />
-          Information Sources
+          {t('assets.info.eyebrow')}
         </p>
-        <h2 className="text-lg font-semibold">Source material for post generation</h2>
+        <h2 className="text-lg font-semibold">{t('assets.info.heading')}</h2>
         <p className="text-sm text-ink-muted">
-          Save websites, notes, references, or news here before Viktor uses them. Approved sources are available to the agent by default.
+          {t('assets.info.desc')}
         </p>
       </div>
 
@@ -946,9 +947,9 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
             <Upload className="h-6 w-6" />
           )}
           <p className="text-sm">
-            <span className="text-brand-blue font-medium">Drag &amp; drop a transcript</span> or click to upload
+            <span className="text-brand-blue font-medium">{t('assets.info.dropCta')}</span>{t('assets.info.dropOr')}
           </p>
-          <p className="text-[11px]">Text files (.txt, .md, .vtt, .srt, .csv, .json) · max {INFO_SOURCE_MAX_MB} MB each</p>
+          <p className="text-[11px]">{t('assets.info.fileHint', { max: INFO_SOURCE_MAX_MB })}</p>
         </div>
       </div>
 
@@ -957,7 +958,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
           <input
             value={draft.title}
             onChange={(e) => setDraft((cur) => ({ ...cur, title: e.target.value }))}
-            placeholder="Source title"
+            placeholder={t('assets.info.titlePh')}
             className="rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
           <div className="grid grid-cols-[120px_1fr] gap-2">
@@ -967,7 +968,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
               className="rounded-md border border-border-subtle bg-paper px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30"
             >
               {(['website', 'note', 'news', 'reference', 'other'] as InformationSourceType[]).map((type) => (
-                <option key={type} value={type}>{type}</option>
+                <option key={type} value={type}>{t(`assets.srcType.${type}`)}</option>
               ))}
             </select>
             <input
@@ -980,33 +981,33 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
           <textarea
             value={draft.summary}
             onChange={(e) => setDraft((cur) => ({ ...cur, summary: e.target.value }))}
-            placeholder="Imported/saved information or short summary"
+            placeholder={t('assets.info.summaryPh')}
             rows={3}
             className="md:col-span-2 rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
           />
           <textarea
             value={draft.prompt}
             onChange={(e) => setDraft((cur) => ({ ...cur, prompt: e.target.value }))}
-            placeholder="Agent prompt for how to use this source"
+            placeholder={t('assets.info.promptPh')}
             rows={2}
             className="md:col-span-2 rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
           />
           <div className="md:col-span-2 flex justify-end">
             <Button onClick={create} disabled={saving}>
               {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              Save source
+              {t('assets.info.saveSource')}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {loading ? (
-        <p className="text-xs text-ink-muted">Loading sources...</p>
+        <p className="text-xs text-ink-muted">{t('assets.info.loading')}</p>
       ) : items.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center text-ink-muted">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No information sources saved yet.</p>
+            <p className="text-sm">{t('assets.info.empty')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -1017,14 +1018,14 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline">{item.sourceType ?? 'source'}</Badge>
+                      <Badge variant="outline">{t(`assets.srcType.${item.sourceType ?? 'source'}`)}</Badge>
                       {item.approved ? (
                         <Badge className="bg-brand-green-100 text-brand-green-600">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Approved
+                          {t('assets.info.approved')}
                         </Badge>
                       ) : (
-                        <Badge className="bg-amber-100 text-amber-800">Needs approval</Badge>
+                        <Badge className="bg-amber-100 text-amber-800">{t('assets.info.needsApproval')}</Badge>
                       )}
                     </div>
                     <h3 className="font-semibold mt-1">{item.title}</h3>
@@ -1037,13 +1038,13 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
                   {!item.approved && (
                     <Button size="sm" variant="outline" onClick={() => approve(item)}>
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                      Approve
+                      {t('assets.info.approve')}
                     </Button>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <label className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">Saved information</span>
+                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">{t('assets.info.savedInfo')}</span>
                     <textarea
                       defaultValue={item.summary ?? ''}
                       onBlur={(e) => {
@@ -1054,7 +1055,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
                     />
                   </label>
                   <label className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">Agent prompt</span>
+                    <span className="text-[10px] uppercase tracking-wider text-ink-muted">{t('assets.info.agentPrompt')}</span>
                     <textarea
                       defaultValue={item.prompt ?? ''}
                       onBlur={(e) => {

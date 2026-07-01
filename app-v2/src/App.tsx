@@ -2,7 +2,7 @@ import { lazy, Suspense, Component, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { EditProvider } from '@/lib/edit-store'
-import { LanguageProvider } from '@/lib/i18n'
+import { LanguageProvider, tStatic } from '@/lib/i18n'
 import { needsLogin } from '@/lib/api-client'
 
 const Login         = lazy(() => import('@/routes/login'))
@@ -80,12 +80,10 @@ class AppErrorBoundary extends Component<
       <div className="min-h-screen flex items-center justify-center p-8 bg-paper-muted">
         <div className="max-w-md space-y-4 text-center">
           <h1 className="text-lg font-semibold text-rose-700">
-            Something went wrong rendering this page
+            {tStatic('errorBoundary.title')}
           </h1>
           <p className="text-sm text-ink-muted">
-            This is usually caused by an unsaved local edit. Discarding unsaved
-            edits and reloading almost always fixes it — your saved data is not
-            affected.
+            {tStatic('errorBoundary.body')}
           </p>
           <pre className="text-left text-[11px] text-ink-muted bg-paper border border-border-subtle rounded-md p-2 overflow-auto max-h-32">
             {this.state.error.message}
@@ -96,14 +94,14 @@ class AppErrorBoundary extends Component<
               onClick={this.discardEditsAndReload}
               className="rounded-md bg-brand-blue px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-blue-700"
             >
-              Discard local edits &amp; reload
+              {tStatic('errorBoundary.discardReload')}
             </button>
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="rounded-md border border-border-subtle px-3 py-1.5 text-sm hover:bg-paper"
             >
-              Just reload
+              {tStatic('errorBoundary.justReload')}
             </button>
           </div>
         </div>

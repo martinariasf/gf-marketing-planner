@@ -294,13 +294,20 @@ function EditableNumberField({
 }
 
 function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
+  const { lang, t } = useI18n()
   if (!active || !payload?.length) return null
+  const seriesLabel = (key: string) =>
+    key === 'target' ? t('goals.seriesTarget') : key === 'actual' ? t('goals.seriesActual') : key
+  const monthLabel =
+    typeof label === 'string' && label
+      ? monthNameToDate(label, new Date().getFullYear()).toLocaleString(LOCALE[lang], { month: 'long' })
+      : label
   return (
     <div className="rounded-md border border-border-subtle bg-paper px-3 py-2 shadow-md text-xs">
-      <p className="font-semibold mb-1">{label}</p>
+      <p className="font-semibold mb-1">{monthLabel}</p>
       {payload.map((p) => (
         <p key={p.dataKey} style={{ color: p.color }}>
-          {p.dataKey}: {fmtCompact(p.value ?? 0)}
+          {seriesLabel(p.dataKey)}: {fmtCompact(p.value ?? 0)}
         </p>
       ))}
     </div>
@@ -706,6 +713,9 @@ export default function GoalsView() {
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
+                    tickFormatter={(v: string) =>
+                      monthNameToDate(v, now.getFullYear()).toLocaleString(LOCALE[lang], { month: 'short' })
+                    }
                   />
                   <YAxis
                     stroke={BRAND.inkMuted}

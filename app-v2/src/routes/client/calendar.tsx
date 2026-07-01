@@ -338,7 +338,7 @@ export default function CalendarView() {
   const saveRange = async () => {
     const diff = monthDiff(rangeDraft.startMonth, rangeDraft.endMonth)
     if (!Number.isFinite(diff) || diff < 0 || diff > 5) {
-      toast.error('Choose a range up to 6 months.')
+      toast.error(t('calendar.rangeMax6'))
       return
     }
     const next = normalizeCalendarRange(rangeDraft)

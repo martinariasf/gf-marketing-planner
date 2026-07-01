@@ -15,6 +15,11 @@ type Dict = Record<string, string>
 
 // ─── English ────────────────────────────────────────────────────────────────
 const en: Dict = {
+  // Error boundary (App.tsx — shown via tStatic, outside React context)
+  'errorBoundary.title':         'Something went wrong rendering this page',
+  'errorBoundary.body':          'This is usually caused by an unsaved local edit. Discarding unsaved edits and reloading almost always fixes it — your saved data is not affected.',
+  'errorBoundary.discardReload': 'Discard local edits & reload',
+  'errorBoundary.justReload':    'Just reload',
   // Common
   'common.cancel':           'Cancel',
   'common.save':             'Save',
@@ -67,6 +72,17 @@ const en: Dict = {
   'nav.videos':      'Videos',
   'nav.performance': 'Performance',
   'nav.learnings':   'Learnings',
+  // Videos page
+  'videos.eyebrow':        'Videos',
+  'videos.heading':        'Generated videos',
+  'videos.intro':          'Viktor can now turn prompts, post ideas, and source material into short Seedance clips. Finished videos appear here after they are saved into the client assets manifest.',
+  'videos.postMedia':      'Post media',
+  'videos.draft':          'Draft',
+  'videos.ready':          'Ready',
+  'videos.agentGenerated': 'Agent-generated',
+  'videos.example1':       'Post-to-video drafts',
+  'videos.example2':       'Campaign video ideas',
+  'videos.example3':       'Channel-ready clips',
   'nav.integration': 'Integration',
   'nav.brandKit':    'Brand Identity Kit',
   'nav.references':  'References',
@@ -304,6 +320,8 @@ const en: Dict = {
   'goals.monthlyTitle':            'Monthly reach: target vs actual',
   'goals.periodHeader':            '{month} · Week {n}',
   'goals.todayMarker':             'Today',
+  'goals.seriesTarget':            'target',
+  'goals.seriesActual':            'actual',
   'goals.legendTarget':            'Target',
   'goals.legendAhead':             'On / ahead of pace',
   'goals.legendBehind':            'Behind',
@@ -393,6 +411,7 @@ const en: Dict = {
   'confidence.low':    'low',
 
   // Calendar page
+  'calendar.rangeMax6':       'Choose a range up to 6 months.',
   'calendar.eyebrow':         'Content calendar',
   'calendar.viewWeek':        'Week',
   'calendar.viewMonth':       'Month',
@@ -501,6 +520,32 @@ const en: Dict = {
   'calendar.viewPublished':     'View post',
 
   // Assets page
+  'assets.addTitleFirst':      'Add a title first.',
+  'assets.fileTooBig':         '"{name}" is over {max} MB. Max {max} MB per file.',
+  'assets.onlyTextFiles':      'Only text files (.txt, .md, .vtt, .srt, .csv, .json) are supported.',
+  'assets.info.eyebrow':       'Information Sources',
+  'assets.info.heading':       'Source material for post generation',
+  'assets.info.desc':          'Save websites, notes, references, or news here before Viktor uses them. Approved sources are available to the agent by default.',
+  'assets.info.dropCta':       'Drag & drop a transcript',
+  'assets.info.dropOr':        ' or click to upload',
+  'assets.info.fileHint':      'Text files (.txt, .md, .vtt, .srt, .csv, .json) · max {max} MB each',
+  'assets.info.titlePh':       'Source title',
+  'assets.info.summaryPh':     'Imported/saved information or short summary',
+  'assets.info.promptPh':      'Agent prompt for how to use this source',
+  'assets.info.saveSource':    'Save source',
+  'assets.info.loading':       'Loading sources…',
+  'assets.info.empty':         'No information sources saved yet.',
+  'assets.info.approved':      'Approved',
+  'assets.info.needsApproval': 'Needs approval',
+  'assets.info.approve':       'Approve',
+  'assets.info.savedInfo':     'Saved information',
+  'assets.info.agentPrompt':   'Agent prompt',
+  'assets.srcType.website':    'website',
+  'assets.srcType.note':       'note',
+  'assets.srcType.news':       'news',
+  'assets.srcType.reference':  'reference',
+  'assets.srcType.other':      'other',
+  'assets.srcType.source':     'source',
   'assets.eyebrow':            'Assets',
   'assets.heading':            'Visual library',
   'assets.introPrefix':        'Every asset Viktor or Pilar dropped into ',
@@ -856,6 +901,10 @@ const en: Dict = {
 
 // ─── German ─────────────────────────────────────────────────────────────────
 const de: Dict = {
+  'errorBoundary.title':         'Beim Anzeigen dieser Seite ist ein Fehler aufgetreten',
+  'errorBoundary.body':          'Das liegt meist an einer nicht gespeicherten lokalen Änderung. Lokale Änderungen verwerfen und neu laden behebt es fast immer — deine gespeicherten Daten bleiben unberührt.',
+  'errorBoundary.discardReload': 'Lokale Änderungen verwerfen & neu laden',
+  'errorBoundary.justReload':    'Nur neu laden',
   'common.cancel':        'Abbrechen',
   'common.save':          'Speichern',
   'common.saveChanges':   'Änderungen speichern',
@@ -906,6 +955,17 @@ const de: Dict = {
   'nav.videos':      'Videos',
   'nav.performance': 'Performance',
   'nav.learnings':   'Erkenntnisse',
+  // Videos page
+  'videos.eyebrow':        'Videos',
+  'videos.heading':        'Generierte Videos',
+  'videos.intro':          'Viktor kann jetzt aus Prompts, Post-Ideen und Quellmaterial kurze Seedance-Clips erstellen. Fertige Videos erscheinen hier, sobald sie im Asset-Manifest des Kunden gespeichert sind.',
+  'videos.postMedia':      'Post-Medien',
+  'videos.draft':          'Entwurf',
+  'videos.ready':          'Bereit',
+  'videos.agentGenerated': 'Agent-generiert',
+  'videos.example1':       'Post-zu-Video-Entwürfe',
+  'videos.example2':       'Kampagnen-Videoideen',
+  'videos.example3':       'Kanalfertige Clips',
   'nav.integration': 'Integration',
   'nav.brandKit':    'Markenidentität',
   'nav.references':  'Referenzen',
@@ -1132,6 +1192,8 @@ const de: Dict = {
   'goals.monthlyTitle':            'Monatliche Reichweite: Ziel vs. Ist',
   'goals.periodHeader':            '{month} · Woche {n}',
   'goals.todayMarker':             'Heute',
+  'goals.seriesTarget':            'Ziel',
+  'goals.seriesActual':            'Ist',
   'goals.legendTarget':            'Ziel',
   'goals.legendAhead':             'Auf / über Kurs',
   'goals.legendBehind':            'Hinterher',
@@ -1216,6 +1278,7 @@ const de: Dict = {
   'confidence.medium': 'mittel',
   'confidence.low':    'niedrig',
 
+  'calendar.rangeMax6':       'Wähle einen Zeitraum von höchstens 6 Monaten.',
   'calendar.eyebrow':         'Content-Kalender',
   'calendar.viewWeek':        'Woche',
   'calendar.viewMonth':       'Monat',
@@ -1320,6 +1383,32 @@ const de: Dict = {
   'calendar.deleteFailed':      'Post konnte nicht gelöscht werden',
   'calendar.viewPublished':     'Post ansehen',
 
+  'assets.addTitleFirst':      'Zuerst einen Titel hinzufügen.',
+  'assets.fileTooBig':         '„{name}“ ist größer als {max} MB. Max. {max} MB pro Datei.',
+  'assets.onlyTextFiles':      'Nur Textdateien (.txt, .md, .vtt, .srt, .csv, .json) werden unterstützt.',
+  'assets.info.eyebrow':       'Informationsquellen',
+  'assets.info.heading':       'Quellmaterial für die Post-Erstellung',
+  'assets.info.desc':          'Speichere hier Websites, Notizen, Referenzen oder News, bevor Viktor sie verwendet. Freigegebene Quellen stehen dem Agenten standardmäßig zur Verfügung.',
+  'assets.info.dropCta':       'Transkript per Drag & Drop ablegen',
+  'assets.info.dropOr':        ' oder zum Hochladen klicken',
+  'assets.info.fileHint':      'Textdateien (.txt, .md, .vtt, .srt, .csv, .json) · max. {max} MB pro Datei',
+  'assets.info.titlePh':       'Titel der Quelle',
+  'assets.info.summaryPh':     'Importierte/gespeicherte Informationen oder Kurzfassung',
+  'assets.info.promptPh':      'Agent-Prompt zur Nutzung dieser Quelle',
+  'assets.info.saveSource':    'Quelle speichern',
+  'assets.info.loading':       'Quellen werden geladen…',
+  'assets.info.empty':         'Noch keine Informationsquellen gespeichert.',
+  'assets.info.approved':      'Freigegeben',
+  'assets.info.needsApproval': 'Freigabe erforderlich',
+  'assets.info.approve':       'Freigeben',
+  'assets.info.savedInfo':     'Gespeicherte Informationen',
+  'assets.info.agentPrompt':   'Agent-Prompt',
+  'assets.srcType.website':    'Website',
+  'assets.srcType.note':       'Notiz',
+  'assets.srcType.news':       'News',
+  'assets.srcType.reference':  'Referenz',
+  'assets.srcType.other':      'Sonstiges',
+  'assets.srcType.source':     'Quelle',
   'assets.eyebrow':            'Assets',
   'assets.heading':            'Visuelle Bibliothek',
   'assets.introPrefix':        'Jedes Asset, das Viktor oder Pilar abgelegt haben in ',
@@ -1670,6 +1759,10 @@ const de: Dict = {
 
 // ─── Spanish ────────────────────────────────────────────────────────────────
 const es: Dict = {
+  'errorBoundary.title':         'Algo salió mal al mostrar esta página',
+  'errorBoundary.body':          'Suele deberse a una edición local sin guardar. Descartar las ediciones sin guardar y recargar casi siempre lo soluciona — tus datos guardados no se ven afectados.',
+  'errorBoundary.discardReload': 'Descartar ediciones locales y recargar',
+  'errorBoundary.justReload':    'Solo recargar',
   'common.cancel':        'Cancelar',
   'common.save':          'Guardar',
   'common.saveChanges':   'Guardar cambios',
@@ -1720,6 +1813,17 @@ const es: Dict = {
   'nav.videos':      'Videos',
   'nav.performance': 'Rendimiento',
   'nav.learnings':   'Aprendizajes',
+  // Videos page
+  'videos.eyebrow':        'Videos',
+  'videos.heading':        'Videos generados',
+  'videos.intro':          'Viktor ahora puede convertir prompts, ideas de publicaciones y material de origen en clips cortos de Seedance. Los videos terminados aparecen aquí una vez guardados en el manifiesto de recursos del cliente.',
+  'videos.postMedia':      'Medios de la publicación',
+  'videos.draft':          'Borrador',
+  'videos.ready':          'Listo',
+  'videos.agentGenerated': 'Generado por el agente',
+  'videos.example1':       'Borradores de publicación a video',
+  'videos.example2':       'Ideas de video para campañas',
+  'videos.example3':       'Clips listos para el canal',
   'nav.integration': 'Integración',
   'nav.brandKit':    'Identidad de marca',
   'nav.references':  'Referencias',
@@ -1946,6 +2050,8 @@ const es: Dict = {
   'goals.monthlyTitle':            'Alcance mensual: meta vs. real',
   'goals.periodHeader':            '{month} · Semana {n}',
   'goals.todayMarker':             'Hoy',
+  'goals.seriesTarget':            'meta',
+  'goals.seriesActual':            'real',
   'goals.legendTarget':            'Meta',
   'goals.legendAhead':             'En / por delante de plan',
   'goals.legendBehind':            'Por detrás',
@@ -2030,6 +2136,7 @@ const es: Dict = {
   'confidence.medium': 'media',
   'confidence.low':    'baja',
 
+  'calendar.rangeMax6':       'Elige un rango de hasta 6 meses.',
   'calendar.eyebrow':         'Calendario de contenido',
   'calendar.viewWeek':        'Semana',
   'calendar.viewMonth':       'Mes',
@@ -2134,6 +2241,32 @@ const es: Dict = {
   'calendar.deleteFailed':      'No se pudo eliminar la publicación',
   'calendar.viewPublished':     'Ver publicación',
 
+  'assets.addTitleFirst':      'Primero añade un título.',
+  'assets.fileTooBig':         '«{name}» supera los {max} MB. Máx. {max} MB por archivo.',
+  'assets.onlyTextFiles':      'Solo se admiten archivos de texto (.txt, .md, .vtt, .srt, .csv, .json).',
+  'assets.info.eyebrow':       'Fuentes de información',
+  'assets.info.heading':       'Material de origen para generar publicaciones',
+  'assets.info.desc':          'Guarda aquí sitios web, notas, referencias o noticias antes de que Viktor las use. Las fuentes aprobadas están disponibles para el agente de forma predeterminada.',
+  'assets.info.dropCta':       'Arrastra y suelta una transcripción',
+  'assets.info.dropOr':        ' o haz clic para subir',
+  'assets.info.fileHint':      'Archivos de texto (.txt, .md, .vtt, .srt, .csv, .json) · máx. {max} MB cada uno',
+  'assets.info.titlePh':       'Título de la fuente',
+  'assets.info.summaryPh':     'Información importada/guardada o resumen breve',
+  'assets.info.promptPh':      'Prompt del agente sobre cómo usar esta fuente',
+  'assets.info.saveSource':    'Guardar fuente',
+  'assets.info.loading':       'Cargando fuentes…',
+  'assets.info.empty':         'Aún no hay fuentes de información guardadas.',
+  'assets.info.approved':      'Aprobada',
+  'assets.info.needsApproval': 'Requiere aprobación',
+  'assets.info.approve':       'Aprobar',
+  'assets.info.savedInfo':     'Información guardada',
+  'assets.info.agentPrompt':   'Prompt del agente',
+  'assets.srcType.website':    'sitio web',
+  'assets.srcType.note':       'nota',
+  'assets.srcType.news':       'noticias',
+  'assets.srcType.reference':  'referencia',
+  'assets.srcType.other':      'otro',
+  'assets.srcType.source':     'fuente',
   'assets.eyebrow':            'Recursos',
   'assets.heading':            'Biblioteca visual',
   'assets.introPrefix':        'Cada recurso que Viktor o Pilar dejaron en ',
@@ -2483,3 +2616,17 @@ const es: Dict = {
 }
 
 export const translations: Record<Lang, Dict> = { en, de, es }
+
+// Dev-only regression guard: English is canonical, so warn when de/es drift from
+// the en key set. Catches a new hardcoded string that was only added to en, or a
+// key missing a de/es translation (which would silently fall back to English in
+// lib/i18n.tsx). No-op in production builds.
+if (import.meta.env?.DEV) {
+  const enKeys = Object.keys(en)
+  for (const [lang, dict] of [['de', de], ['es', es]] as const) {
+    const missing = enKeys.filter((k) => !(k in dict))
+    const extra = Object.keys(dict).filter((k) => !(k in en))
+    if (missing.length) console.warn(`[i18n] "${lang}" is missing ${missing.length} key(s):`, missing)
+    if (extra.length) console.warn(`[i18n] "${lang}" has ${extra.length} key(s) not in "en":`, extra)
+  }
+}

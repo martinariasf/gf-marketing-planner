@@ -4,6 +4,7 @@ import { Film, Sparkles, Wand2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { fmtDate } from '@/lib/format'
+import { useT } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
 import type { AssetItem } from '@/types'
 
@@ -36,6 +37,7 @@ function mergeVideo(items: Map<string, VideoLibraryItem>, next: VideoLibraryItem
 }
 
 export default function VideosView() {
+  const t = useT()
   const { assets, posts } = useOutletContext<ClientBundle>()
   const videos = useMemo(() => {
     const byUrl = new Map<string, VideoLibraryItem>()
@@ -75,13 +77,13 @@ export default function VideosView() {
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
           <Film className="h-3 w-3" />
-          Videos
+          {t('videos.eyebrow')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue tracking-tight">
-          Generated videos
+          {t('videos.heading')}
         </h1>
         <p className="text-sm text-ink-muted mt-2 max-w-2xl">
-          Viktor can now turn prompts, post ideas, and source material into short Seedance clips. Finished videos appear here after they are saved into the client assets manifest.
+          {t('videos.intro')}
         </p>
       </div>
 
@@ -100,12 +102,12 @@ export default function VideosView() {
                   </Badge>
                   {item.source === 'post' && (
                     <Badge variant="outline" className="border-brand-blue/30 text-brand-blue">
-                      Post media
+                      {t('videos.postMedia')}
                     </Badge>
                   )}
                   {item.finalApproved === false && (
                     <Badge variant="secondary" className="bg-amber-100 text-amber-800">
-                      Draft
+                      {t('videos.draft')}
                     </Badge>
                   )}
                 </div>
@@ -139,14 +141,14 @@ export default function VideosView() {
             </div>
             <div className="space-y-4">
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge className="bg-brand-blue text-white">Ready</Badge>
+                <Badge className="bg-brand-blue text-white">{t('videos.ready')}</Badge>
                 <Badge variant="outline" className="gap-1">
                   <Sparkles className="h-3 w-3" />
-                  Agent-generated
+                  {t('videos.agentGenerated')}
                 </Badge>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {['Post-to-video drafts', 'Campaign video ideas', 'Channel-ready clips'].map((label) => (
+                {[t('videos.example1'), t('videos.example2'), t('videos.example3')].map((label) => (
                   <div key={label} className="rounded-md border border-border-subtle bg-paper/80 p-4">
                     <p className="text-sm font-medium">{label}</p>
                     <div className="mt-3 aspect-video rounded bg-paper-muted border border-border-subtle" />
