@@ -70,6 +70,16 @@ def check(name, cond):
         _failures.append(name)
 
 
+def _reset():
+    """Reset module caches + env so tests don't leak state into each other."""
+    m._SERVICE = None
+    m._SERVICE_TRIED = False
+    m._SA_INFO = None
+    m._SA_INFO_TRIED = False
+    for k in ("GDRIVE_FOLDER_ID", "GDRIVE_SA_KEY", "GDRIVE_SA_KEY_FILE", "GDRIVE_MAX_READ_MB"):
+        os.environ.pop(k, None)
+
+
 # --- _valid_id ------------------------------------------------------------
 check("valid_id accepts a normal drive id", m._valid_id("1J18Qnm1V_MNfGQ9-abc"))
 check("valid_id rejects empty", not m._valid_id(""))
@@ -112,7 +122,32 @@ check("cycle terminates and is not within root", not m._is_within_root(_svc(g), 
 # file not visible to SA (get 404) -> not within root
 check("invisible file (404) is NOT within root", not m._is_within_root(_svc({}), _id("GHOST"), ROOT))
 
+# --- streaming download cap (_download_capped, the Round-1 blocker fix) ----
+import googleapiclient.http as _gh  # noqa: E402
+
+
+class _FakeDL:
+    """Writes `request` bytes on the first chunk, then reports done."""
+    def __init__(self, fd, request, chunksize=None):
+        self._fd, self._n = fd, request
+
+    def next_chunk(self):
+        self._fd.write(b"x" * self._n)
+        return (None, True)
+
+
+_orig_dl = _gh.MediaIoBaseDownload
+_gh.MediaIoBaseDownload = _FakeDL
+try:
+    check("download over cap returns None (streamed, not buffered whole)",
+          m._download_capped(200, 100) is None)
+    check("download under cap returns the bytes",
+          m._download_capped(50, 100) == b"x" * 50)
+finally:
+    _gh.MediaIoBaseDownload = _orig_dl
+
 # --- read cap / degradation ----------------------------------------------
+_reset()
 big = _id("BIGFILE")
 os.environ["GDRIVE_FOLDER_ID"] = ROOT
 m._SERVICE = _svc({big: {"id": big, "name": "huge.pdf", "mimeType": "application/pdf",
@@ -128,8 +163,8 @@ m._SERVICE = _svc({mine: {"id": mine, "parents": [ROOT]}})  # foreign not in gra
 res = json.loads(m._handle_drive_read_file({"file_id": foreign}))
 check("foreign file read is refused", res.get("success") is False and "outside" in res.get("error", ""))
 
-# not-connected degradation
-os.environ.pop("GDRIVE_FOLDER_ID", None)
+# not-connected degradation (fully reset first, so this doesn't rely on order)
+_reset()
 res = json.loads(m._handle_drive_list_files({}))
 check("no folder connected -> clean error, no crash", res.get("success") is False)
 

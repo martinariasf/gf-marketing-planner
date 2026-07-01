@@ -4,3 +4,4 @@
 #   /opt/hermes/.venv/bin/pip install -r plugins/drive/requirements.txt
 google-api-python-client>=2.100.0
 google-auth>=2.23.0
+google-auth-httplib2>=0.2.0

@@ -45,6 +45,8 @@ logger = logging.getLogger(__name__)
 SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 _DEFAULT_MAX_READ_MB = 10
 _CHUNK = 1024 * 1024  # 1 MiB download chunks
+_LIST_LIMIT = 200     # max children returned per folder
+_WALK_LIMIT = 1000    # max files returned in a recursive walk
 
 # Drive file ids are URL-safe base64-ish tokens; reject anything else before it
 # ever reaches a query string (defense-in-depth against query injection).
@@ -88,7 +90,12 @@ def _max_read_bytes() -> int:
 
 
 def _load_sa_info() -> Optional[Dict[str, Any]]:
-    """Return the service-account key as a dict, from file or base64 env (cached)."""
+    """Return the service-account key as a dict, from file or base64 env (cached).
+
+    If GDRIVE_SA_KEY_FILE is explicitly set it is authoritative — a missing or
+    unreadable file returns None rather than silently falling back to the env
+    blob (which would mask the operator's intent).
+    """
     global _SA_INFO, _SA_INFO_TRIED
     if _SA_INFO is not None or _SA_INFO_TRIED:
         return _SA_INFO
@@ -96,26 +103,37 @@ def _load_sa_info() -> Optional[Dict[str, Any]]:
 
     key_file = os.environ.get("GDRIVE_SA_KEY_FILE", "").strip()
     raw: Optional[str] = None
-    if key_file and os.path.exists(key_file):
+    if key_file:
+        if not os.path.exists(key_file):
+            logger.warning("drive: GDRIVE_SA_KEY_FILE set but file not found: %s", key_file)
+            return None
         try:
             with open(key_file, "r", encoding="utf-8") as fh:
                 raw = fh.read()
         except OSError as exc:
             logger.warning("drive: cannot read GDRIVE_SA_KEY_FILE: %s", exc)
-    if raw is None:
+            return None
+    else:
         b64 = os.environ.get("GDRIVE_SA_KEY", "").strip()
         if b64:
             try:
                 raw = base64.b64decode(b64).decode("utf-8")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("drive: GDRIVE_SA_KEY is not valid base64 JSON: %s", exc)
+                return None
     if not raw:
         return None
     try:
-        _SA_INFO = json.loads(raw)
+        info = json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning("drive: service-account key is not valid JSON: %s", exc)
-        _SA_INFO = None
+        return None
+    # Structural sanity so a valid-JSON-but-wrong-shape key fails at check_fn,
+    # not with a cryptic auth error on the first tool call.
+    if info.get("type") != "service_account" or not info.get("private_key") or not info.get("client_email"):
+        logger.warning("drive: key JSON is not a service_account (missing type/private_key/client_email)")
+        return None
+    _SA_INFO = info
     return _SA_INFO
 
 
@@ -196,7 +214,7 @@ def _is_within_root(svc: Any, file_id: str, root: str, max_nodes: int = 200) -> 
     return False
 
 
-def _list_children(svc: Any, parent_id: str, page_limit: int = 200) -> List[Dict[str, Any]]:
+def _list_children(svc: Any, parent_id: str, page_limit: int = _LIST_LIMIT) -> List[Dict[str, Any]]:
     """List immediate children of parent_id (non-trashed), following pagination."""
     if not _valid_id(parent_id):
         return []
@@ -292,14 +310,15 @@ def _handle_drive_list_files(args: Dict[str, Any], **kw: Any) -> str:
     try:
         if not recursive:
             children = _list_children(svc, start)
-            return json.dumps({"success": True, "folder_id": start, "files": [_shape(f) for f in children]})
+            return json.dumps({"success": True, "folder_id": start,
+                               "truncated": len(children) >= _LIST_LIMIT,
+                               "files": [_shape(f) for f in children]})
 
         # Breadth-first walk, bounded, starting at `start`.
         out: List[Dict[str, Any]] = []
         queue = [start]
         visited = set()
-        max_total = 1000
-        while queue and len(out) < max_total:
+        while queue and len(out) < _WALK_LIMIT:
             pid = queue.pop(0)
             if pid in visited:
                 continue
@@ -308,7 +327,8 @@ def _handle_drive_list_files(args: Dict[str, Any], **kw: Any) -> str:
                 out.append(_shape(f))
                 if f.get("mimeType") == "application/vnd.google-apps.folder":
                     queue.append(f["id"])
-        return json.dumps({"success": True, "folder_id": start, "recursive": True, "files": out[:max_total]})
+        return json.dumps({"success": True, "folder_id": start, "recursive": True,
+                           "truncated": len(out) >= _WALK_LIMIT, "files": out[:_WALK_LIMIT]})
     except Exception as exc:  # noqa: BLE001
         return json.dumps({"success": False, "error": f"Drive list failed: {exc}"})
 
