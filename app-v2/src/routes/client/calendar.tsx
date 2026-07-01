@@ -76,7 +76,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useT } from '@/lib/i18n'
+import { useT, useI18n } from '@/lib/i18n'
 import {
   addMonths,
   dateTiming,
@@ -135,7 +135,7 @@ function requestPictureChange(message: string) {
 }
 
 export default function CalendarView() {
-  const t = useT()
+  const { t, lang } = useI18n()
   const { plan, posts, brief, refetch } = useOutletContext<
     ClientBundle & { refetch: () => void }
   >()
@@ -216,7 +216,8 @@ export default function CalendarView() {
     }
   }, [slug])
 
-  const rangeMonths = useMemo(() => monthsInRange(calendarRange), [calendarRange])
+  // `lang` is a dep so month names re-localise when the language switches live.
+  const rangeMonths = useMemo(() => monthsInRange(calendarRange), [calendarRange, lang])
   const monthKeys = useMemo(() => rangeMonths.map((m) => m.key), [rangeMonths])
 
   const postsByMonth = useMemo(() => {

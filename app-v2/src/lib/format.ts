@@ -23,6 +23,9 @@ export function getFormatLocale(): string {
 }
 
 // Formatters are cached per locale+shape so switching language rebuilds them once.
+// The cache is intentionally append-only: keys are prefixed with the locale, so a
+// locale change reuses/creates a different entry rather than invalidating. Bounded
+// by locales × shapes (~3 × 5), so do not "optimise" by dropping the locale prefix.
 const numberCache = new Map<string, Intl.NumberFormat>()
 const dateCache = new Map<string, Intl.DateTimeFormat>()
 

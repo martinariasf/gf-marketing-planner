@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { fmtDateShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
-import { useT } from '@/lib/i18n'
+import { useT, useI18n } from '@/lib/i18n'
 import { useEdit } from '@/lib/edit-store'
 import { apiLoadCalendarRange, isApiEnabled } from '@/lib/api-client'
 import {
@@ -289,7 +289,7 @@ function ReviewButton({ message }: { message: string }) {
 // ─── Main view ────────────────────────────────────────────────────────────
 
 export default function StrategyView() {
-  const t = useT()
+  const { t, lang } = useI18n()
   const { plan } = useOutletContext<ClientBundle>()
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode, setField } = useEdit()
@@ -307,7 +307,8 @@ export default function StrategyView() {
     }
   }, [slug])
 
-  const planningMonths = useMemo(() => monthsInRange(planningRange), [planningRange])
+  // `lang` is a dep so month names re-localise when the language switches live.
+  const planningMonths = useMemo(() => monthsInRange(planningRange), [planningRange, lang])
   const totalWeeks = planningMonths.length * 4
   const keyDatesInRange = useMemo(
     () => plan.keyDates.filter((date) => isIsoInMonthRange(date.date, planningRange)),

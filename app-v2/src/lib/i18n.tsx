@@ -20,6 +20,12 @@ function readInitial(): Lang {
   return DEFAULT_LANG
 }
 
+// Initialise the date/number format locale (format.ts) from the persisted language
+// at module load — before any component renders — so the very first paint already
+// formats dates in the right language. Subsequent changes are handled in the effect
+// below; this avoids a render-time side effect while still covering first paint.
+setFormatLocale(readInitial())
+
 interface I18nCtx {
   lang: Lang
   setLang: (l: Lang) => void
@@ -36,10 +42,6 @@ function interpolate(s: string, vars?: Record<string, string | number>) {
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readInitial)
 
-  // Keep the date/number formatters (format.ts) on the active language. Set during
-  // render so the first paint already formats correctly, and again on every change.
-  setFormatLocale(lang)
-
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, lang) } catch {/* ignore */}
     document.documentElement.lang = lang
@@ -52,7 +54,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       const raw = dict[key] ?? enDict[key] ?? key
       return interpolate(raw, vars)
     }
-    return { lang, setLang: setLangState, t }
+    // Sync the format locale in the setter (an event handler, not render) so that
+    // when the user switches language the date/number formatters are already on the
+    // new locale before consumers re-render — no render-phase side effect, no lag.
+    const setLang = (l: Lang) => {
+      setFormatLocale(l)
+      setLangState(l)
+    }
+    return { lang, setLang, t }
   }, [lang])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

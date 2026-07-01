@@ -98,6 +98,14 @@ const isAiSource = (s: AssetSource) => s !== 'unsplash' && s !== 'canva' && s !=
 
 type Folder = 'viktor' | 'uploads' | 'references' | 'brandkit' | 'information'
 
+// Map a source's type to a known i18n key suffix. Guards against unexpected/absent
+// backend values so `t('assets.srcType.<x>')` never leaks a raw key to the user.
+const KNOWN_SRC_TYPES = ['website', 'note', 'news', 'reference', 'other', 'source'] as const
+function srcTypeKey(sourceType: string | null | undefined): string {
+  if (!sourceType) return 'source'
+  return (KNOWN_SRC_TYPES as readonly string[]).includes(sourceType) ? sourceType : 'other'
+}
+
 function matchesSearch(item: AssetItem, q: string): boolean {
   if (!q) return true
   const lower = q.toLowerCase()
@@ -1018,7 +1026,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline">{t(`assets.srcType.${item.sourceType ?? 'source'}`)}</Badge>
+                      <Badge variant="outline">{t(`assets.srcType.${srcTypeKey(item.sourceType)}`)}</Badge>
                       {item.approved ? (
                         <Badge className="bg-brand-green-100 text-brand-green-600">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
