@@ -13,7 +13,8 @@ Identity & isolation
        Google itself returns 403/404 for anything else.
     2. Code — every listing is constrained to descendants of GDRIVE_FOLDER_ID,
        and every read verifies the file's parent chain resolves to that root
-       before returning content. No broad "shared with me" call is ever made.
+       (following ALL parents) before returning content. No broad "shared with
+       me" call is ever made.
   A buggy/compromised agent therefore cannot read another client's folder.
 
 Environment (per-stack, like POSTIZ_API_KEY):
@@ -35,6 +36,7 @@ import io
 import json
 import logging
 import os
+import re
 import tempfile
 from typing import Any, Dict, List, Optional
 
@@ -42,6 +44,11 @@ logger = logging.getLogger(__name__)
 
 SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 _DEFAULT_MAX_READ_MB = 10
+_CHUNK = 1024 * 1024  # 1 MiB download chunks
+
+# Drive file ids are URL-safe base64-ish tokens; reject anything else before it
+# ever reaches a query string (defense-in-depth against query injection).
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{5,256}$")
 
 # Google Workspace export mappings: native Google file -> (export mime, extension)
 _GOOGLE_EXPORT = {
@@ -52,10 +59,12 @@ _GOOGLE_EXPORT = {
 
 _FILE_FIELDS = "id, name, mimeType, modifiedTime, size, parents"
 
-# Cached, lazily-built Drive service for the process lifetime. The container is
-# restarted on deploy/key rotation, so a per-process cache is sufficient.
+# Process-lifetime caches. The container restarts on deploy/key rotation, so a
+# per-process cache is sufficient and keeps secrets out of repeated file reads.
 _SERVICE: Any = None
 _SERVICE_TRIED = False
+_SA_INFO: Optional[Dict[str, Any]] = None
+_SA_INFO_TRIED = False
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +73,10 @@ _SERVICE_TRIED = False
 
 def _folder_id() -> str:
     return os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+
+
+def _valid_id(file_id: str) -> bool:
+    return bool(file_id) and bool(_ID_RE.match(file_id))
 
 
 def _max_read_bytes() -> int:
@@ -75,7 +88,12 @@ def _max_read_bytes() -> int:
 
 
 def _load_sa_info() -> Optional[Dict[str, Any]]:
-    """Return the service-account key as a dict, from file or base64 env."""
+    """Return the service-account key as a dict, from file or base64 env (cached)."""
+    global _SA_INFO, _SA_INFO_TRIED
+    if _SA_INFO is not None or _SA_INFO_TRIED:
+        return _SA_INFO
+    _SA_INFO_TRIED = True
+
     key_file = os.environ.get("GDRIVE_SA_KEY_FILE", "").strip()
     raw: Optional[str] = None
     if key_file and os.path.exists(key_file):
@@ -94,10 +112,11 @@ def _load_sa_info() -> Optional[Dict[str, Any]]:
     if not raw:
         return None
     try:
-        return json.loads(raw)
+        _SA_INFO = json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning("drive: service-account key is not valid JSON: %s", exc)
-        return None
+        _SA_INFO = None
+    return _SA_INFO
 
 
 def _service() -> Any:
@@ -126,7 +145,8 @@ def _service() -> Any:
 
 
 def _check_drive_available() -> bool:
-    """Cheap gate: config + libs present. Network errors surface in handlers."""
+    """Cheap gate: config + libs present (all cached). Network errors surface in
+    handlers, not here."""
     if not _folder_id():
         return False
     if _load_sa_info() is None:
@@ -143,40 +163,43 @@ def _check_drive_available() -> bool:
 # Drive helpers (all scoped to the configured root folder)
 # ---------------------------------------------------------------------------
 
-def _is_within_root(svc: Any, file_id: str, root: str, max_hops: int = 25) -> bool:
-    """True iff file_id is the root or a descendant of it. Walks parents up.
+def _is_within_root(svc: Any, file_id: str, root: str, max_nodes: int = 200) -> bool:
+    """True iff file_id is the root or a descendant of it.
 
-    This is the code-layer guard. The credential is the primary wall (the SA
-    can only see what was shared with it), but we never return content for a
-    file whose ancestry does not resolve to the configured root.
+    Walks the FULL parent graph (a Drive file may have multiple parents), with a
+    visited-set cycle guard and a node budget. This is the code-layer guard; the
+    credential is the primary wall (the SA can only see what was shared with it),
+    but we never return content for a file whose ancestry does not resolve to the
+    configured root.
     """
-    if not file_id or not root:
+    if not _valid_id(file_id) or not _valid_id(root):
         return False
     if file_id == root:
         return True
     seen = set()
-    current = file_id
-    for _ in range(max_hops):
+    queue = [file_id]
+    while queue and len(seen) < max_nodes:
+        current = queue.pop(0)
         if current in seen:
-            return False
+            continue
         seen.add(current)
         try:
             meta = svc.files().get(
                 fileId=current, fields="id, parents", supportsAllDrives=True
             ).execute()
         except Exception:  # noqa: BLE001 — 403/404 => not reachable => not ours
-            return False
+            continue
         parents = meta.get("parents") or []
         if root in parents:
             return True
-        if not parents:
-            return False
-        current = parents[0]
+        queue.extend(p for p in parents if p not in seen)
     return False
 
 
 def _list_children(svc: Any, parent_id: str, page_limit: int = 200) -> List[Dict[str, Any]]:
     """List immediate children of parent_id (non-trashed), following pagination."""
+    if not _valid_id(parent_id):
+        return []
     items: List[Dict[str, Any]] = []
     page_token: Optional[str] = None
     while True:
@@ -205,6 +228,20 @@ def _shape(f: Dict[str, Any]) -> Dict[str, Any]:
         "modifiedTime": f.get("modifiedTime"),
         "size": f.get("size"),
     }
+
+
+def _download_capped(request: Any, cap: int) -> Optional[bytes]:
+    """Stream a media/export request in chunks, stopping if it exceeds cap.
+    Returns the bytes, or None if the cap was exceeded."""
+    from googleapiclient.http import MediaIoBaseDownload  # type: ignore
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request, chunksize=_CHUNK)
+    done = False
+    while not done:
+        _status, done = downloader.next_chunk()
+        if buf.tell() > cap:
+            return None
+    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -247,8 +284,9 @@ def _handle_drive_list_files(args: Dict[str, Any], **kw: Any) -> str:
         return json.dumps({"success": False, "error": "Drive is not connected (service-account key missing or invalid)."})
 
     start = (args.get("folder_id") or "").strip() or root
-    if start != root and not _is_within_root(svc, start, root):
-        return json.dumps({"success": False, "error": "Requested folder is outside the connected workspace folder; refused."})
+    if start != root:
+        if not _valid_id(start) or not _is_within_root(svc, start, root):
+            return json.dumps({"success": False, "error": "Requested folder is outside the connected workspace folder; refused."})
 
     recursive = bool(args.get("recursive"))
     try:
@@ -307,13 +345,12 @@ def _handle_drive_read_file(args: Dict[str, Any], **kw: Any) -> str:
         return json.dumps({"success": False, "error": "Drive is not connected (service-account key missing or invalid)."})
 
     file_id = (args.get("file_id") or "").strip()
-    if not file_id:
-        return json.dumps({"success": False, "error": "file_id is required."})
+    if not _valid_id(file_id):
+        return json.dumps({"success": False, "error": "file_id is required and must be a valid Drive id."})
     if not _is_within_root(svc, file_id, root):
         return json.dumps({"success": False, "error": "File is outside the connected workspace folder; refused."})
 
     try:
-        from googleapiclient.http import MediaIoBaseDownload  # type: ignore
         meta = svc.files().get(
             fileId=file_id, fields=_FILE_FIELDS, supportsAllDrives=True
         ).execute()
@@ -324,42 +361,40 @@ def _handle_drive_read_file(args: Dict[str, Any], **kw: Any) -> str:
     mime = meta.get("mimeType", "")
     cap = _max_read_bytes()
 
-    # Native Google Workspace files -> export as text.
+    # Native Google Workspace files -> export as text, streamed with a cap.
     if mime in _GOOGLE_EXPORT:
         export_mime, _ext = _GOOGLE_EXPORT[mime]
         try:
-            data = svc.files().export(fileId=file_id, mimeType=export_mime).execute()
+            data = _download_capped(
+                svc.files().export_media(fileId=file_id, mimeType=export_mime), cap
+            )
         except Exception as exc:  # noqa: BLE001
             return json.dumps({"success": False, "error": f"Drive export failed: {exc}"})
-        text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else str(data)
-        truncated = len(text.encode("utf-8")) > cap
-        if truncated:
-            text = text.encode("utf-8")[:cap].decode("utf-8", errors="ignore")
+        if data is None:
+            return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "skipped",
+                               "note": f"Export exceeded the {cap}-byte read cap; not returned."})
+        # utf-8-sig drops any leading BOM Google prepends to exports.
+        text = data.decode("utf-8-sig", errors="replace")
         return json.dumps({"success": True, "name": name, "mimeType": mime,
-                           "kind": "text", "truncated": truncated, "content": text})
+                           "kind": "text", "content": text})
 
     if mime == "application/vnd.google-apps.folder":
         return json.dumps({"success": False, "error": f"{name} is a folder; use drive_list_files with folder_id={file_id}."})
 
-    # Size guard before downloading binaries.
+    # Size guard before downloading binaries (when Drive reports a size).
     size = int(meta.get("size") or 0)
     if size and size > cap:
         return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "skipped",
                            "size": size, "note": f"File is {size} bytes, over the {cap}-byte read cap; not downloaded."})
 
-    # Download bytes.
+    # Download bytes, streamed with the same cap (covers unknown-size files).
     try:
-        buf = io.BytesIO()
-        downloader = MediaIoBaseDownload(buf, svc.files().get_media(fileId=file_id, supportsAllDrives=True))
-        done = False
-        while not done:
-            _status, done = downloader.next_chunk()
-            if buf.tell() > cap:
-                return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "skipped",
-                                   "note": f"Stopped: exceeded the {cap}-byte read cap."})
-        raw = buf.getvalue()
+        raw = _download_capped(svc.files().get_media(fileId=file_id, supportsAllDrives=True), cap)
     except Exception as exc:  # noqa: BLE001
         return json.dumps({"success": False, "error": f"Drive download failed: {exc}"})
+    if raw is None:
+        return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "skipped",
+                           "note": f"Stopped: exceeded the {cap}-byte read cap."})
 
     # Images -> save to a local file and return the path (usable by image_generate).
     if mime.startswith("image/"):
@@ -377,10 +412,10 @@ def _handle_drive_read_file(args: Dict[str, Any], **kw: Any) -> str:
                            "local_path": path, "size": len(raw),
                            "note": "Pass local_path to image_generate as a reference image."})
 
-    # Text-ish -> return decoded content.
+    # Text-ish -> return decoded content (utf-8-sig strips any BOM).
     if mime.startswith("text/") or mime in ("application/json", "application/xml"):
         return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "text",
-                           "content": raw.decode("utf-8", errors="replace")})
+                           "content": raw.decode("utf-8-sig", errors="replace")})
 
     # Anything else: metadata only.
     return json.dumps({"success": True, "name": name, "mimeType": mime, "kind": "binary",

@@ -1,0 +1,6 @@
+# Runtime deps for the read-only `drive` plugin (GF-19).
+# The in-repo prod Dockerfile installs these; the hand-managed staging box
+# (/opt/agents/staging-demo, no in-repo Dockerfile) needs the same install:
+#   /opt/hermes/.venv/bin/pip install -r plugins/drive/requirements.txt
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
