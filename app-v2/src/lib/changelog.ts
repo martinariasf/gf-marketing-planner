@@ -21,6 +21,15 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-07-01',
+    title: 'Clearer "out of credits" and error messages in the chat',
+    items: [
+      'When the daily usage limit is reached, the chat now says so in plain language ("You\'ve reached today\'s usage limit — credits renew at midnight") in your client\'s language, instead of showing a raw English error code.',
+      'Other automatic notices — a run that could not finish, timed out, or ended without a written reply — now appear as friendly, localized messages, and they read the same when you reload the conversation.',
+      'The activity chips that show Viktor working no longer display internal tool names for actions without a friendly label — they show a neutral "Working…" instead.',
+    ],
+  },
+  {
     date: '2026-06-26',
     title: 'Viktor speaks Spanish even in his automatic messages',
     items: [
