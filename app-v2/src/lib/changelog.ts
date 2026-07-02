@@ -21,7 +21,7 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2026-06-30',
+    date: '2026-07-02',
     title: 'Months, dates and more now follow your chosen language',
     items: [
       'Months and dates across the dashboard (calendar, goals, post dates) now appear in the language you pick — German and Spanish no longer showed English months.',
