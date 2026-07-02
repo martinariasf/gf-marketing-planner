@@ -18,18 +18,12 @@ RUN npm install -g postiz@latest && postiz --version
 RUN /opt/hermes/.venv/bin/pip install --no-cache-dir \
       google-api-python-client google-auth google-auth-httplib2
 
-# Marketing/sales focus — strip skills the bot doesn't need.
-# Each company can override this layer by editing its own Dockerfile.
-RUN cd /opt/hermes/skills && \
-    rm -rf apple autonomous-ai-agents data-science devops dogfood gaming github \
-           inference-sh mcp mlops red-teaming smart-home software-development yuanbao && \
-    rm -rf creative/ascii-art creative/ascii-video creative/comfyui \
-           creative/manim-video creative/p5js creative/architecture-diagram \
-           creative/pixel-art creative/sketch creative/songwriting-and-ai-music \
-           creative/touchdesigner-mcp creative/pretext && \
-    rm -rf productivity/linear && \
-    rm -rf media/heartmula media/songsee media/spotify && \
-    rm -rf research/arxiv research/llm-wiki research/polymarket research/research-paper-writing
+# Strip ALL bundled Hermes skills. Startup re-syncs /opt/hermes/skills into
+# the agent's data/skills on every boot, so anything left here silently
+# reappears (and re-consumes context) even after being parked on the box.
+# The agent's real skills are repo-canonical (agent-skills/ core + client)
+# and are deployed to the data/skills bind mount by sync-agent-skills.sh.
+RUN cd /opt/hermes/skills && rm -rf -- */ && ls -A
 
 # [mp-prod parity 2026-06-05] Patch the api_server platform (/v1/runs etc.) so
 # the in-app dashboard chat (a) inherits the configured agent.system_prompt when

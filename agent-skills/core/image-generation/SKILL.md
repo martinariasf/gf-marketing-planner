@@ -1,12 +1,12 @@
 ---
 name: image-generation
 description: Generating or changing images for posts and assets. ALWAYS read the brand identity (colors, typography, logos, tone) AND the Visual Guidelines from the brief BEFORE generating, so the image is on-brand and cohesive across posts. Covers per-channel format (Instagram vertical 4:5, LinkedIn horizontal), fidelity, post_id auto-link, never inventing logos, and using the real logo as a reference image.
-tags: [marketing, images, branding, staging]
+tags: [marketing, images, branding]
 ---
 
 # Image Generation (on-brand)
 
-For the client **staging-demo** on the Marketing-Planner staging server.
+For the client `$CLIENT_SLUG` on the Marketing-Planner server.
 
 ## STEP 0 — READ THE BRAND IDENTITY + VISUAL GUIDELINES FIRST (non-negotiable)
 
@@ -14,7 +14,7 @@ Never generate an image before you know the brand. If you have not already read
 the brief this conversation, your first action is:
 
 ```
-GET /clients/staging-demo/brief    →  use data.branding  +  the Visual Guidelines
+GET /clients/$CLIENT_SLUG/brief    →  use data.branding  +  the Visual Guidelines
 ```
 
 From `data.branding` take:
@@ -145,4 +145,4 @@ think nothing happened.
 - `video-generation` - create Seedance 2.0 MP4 assets with `video_generate`.
 
 - `copywriting` — read the VOICE before writing the post text.
-- `marketing-planner-staging` — full API write-contract, assets, carousels.
+- The platform API write-contract skill (when present on this box) — full API write-contract, assets, carousels.

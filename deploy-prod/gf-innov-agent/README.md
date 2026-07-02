@@ -52,3 +52,27 @@ API-integrated persona.
    connectivity check.
 8. **Smoke test agent behavior:** `hi viktor` → `suggest` → `draft …` → `approve p###`
    (Telegram and in-app chat). Roll back to the `.bak` config if anything fails.
+
+## Skills
+
+On the box, the agent's skills live in the bind-mounted
+`/opt/agents/<slug>/data/skills/` (in-container `/opt/data/skills/`):
+
+- `core/` — generic skills shared by every company agent.
+- `client/` — skills specific to this company.
+- `_disabled-skills/` — parked skills; the underscore prefix means they are
+  NOT loaded. Park, never delete.
+
+The canonical source is `agent-skills/` at the repo root
+(`core/` + `clients/<slug>/`). Never hand-edit box skills and walk away —
+that caused GF-32 drift. Deploy with:
+
+```bash
+bash agent-skills/sync-agent-skills.sh <slug>   # rsync + chown 10000 + restart
+```
+
+Skills reload only on container restart. Review agent self-edits with
+`sync-agent-skills.sh <slug> --pull`, then commit what's worth keeping.
+Config / system-prompt changes are NOT covered by the sync script and still
+follow the timestamped-backup convention
+(`config.yaml.bak.skills-reorg-YYYYMMDD-HHMMSS`, surgical edits only).
