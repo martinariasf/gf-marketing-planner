@@ -13,7 +13,7 @@ This is the **agent-side** counterpart to the dashboard's Approvals view. The cl
 
 - Runs on the per-client Hermes agent box (`/opt/agents/<slug>/`).
 - Working directory: `/opt/marketing-planner/clients/<slug>/` — the shared filesystem the Caddy container also reads from.
-- Git: the repo is checked out so commits push to `martinariasf/gf-marketing-planner` automatically.
+- Git: the platform repo is checked out so commits push to its remote automatically.
 
 ## Input grammar
 

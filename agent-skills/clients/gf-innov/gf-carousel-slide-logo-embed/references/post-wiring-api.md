@@ -2,7 +2,8 @@
 
 Marketing Platform API. Auth: `Authorization: Bearer $API_TOKEN`.
 Base: `$API_BASE/clients/$CLIENT_SLUG`. Asset files are served at
-`https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/<filename>`.
+`https://marketing.gfinnov.com/api/v1/clients/$CLIENT_SLUG/assets/files/<filename>`
+(on the GF box, `CLIENT_SLUG=gf-internal`).
 
 ## API quirks observed
 - **GET `/posts/{id}` returns null/None fields** for these draft posts — do NOT

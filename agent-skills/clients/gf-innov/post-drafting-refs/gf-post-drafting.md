@@ -1,5 +1,7 @@
 # GF post drafting reference
 
+> NOTE (2026-07-02): superseded where it conflicts with gf-instagram-strategy.md — Instagram-only is the current strategy; this file remains for background.
+
 This reference captures the practical drafting rules observed while creating GF posts.
 
 ## Useful facts from the current client setup

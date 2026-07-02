@@ -42,7 +42,7 @@ Rules:
   - Good: "Sign-ups pacing 15% behind. Hard-sell window (week 6) underperformed."
   - Bad: "Conversions were weak."
 - **Next test**: ONE specific experiment for next week. Must be falsifiable. Must change behavior, not just observe.
-  - Good: "Week 9: shift to founder-narrated transformation Reels (member-first POV) vs week 5-8 coach-led baseline. Measure save + share lift."
+  - Good: "Week 9: shift to founder-narrated Reels (customer POV) vs the week 5-8 baseline format. Measure save + share lift."
   - Bad: "Keep monitoring engagement."
 
 If a learning has already been logged with the same `recommendedBehaviorChange`, do NOT propose it again. Pick the next-best alternative.
@@ -54,14 +54,14 @@ If a learning has already been logged with the same `recommendedBehaviorChange`,
 
 WINS
 ✓ Save rate 4.8% (above 4.5% target). p003 hit 940 saves.
-✓ p004 challenge launch: 41 qualified DMs in 48h - highest ever.
+✓ p004 campaign launch: 41 qualified DMs in 48h - highest ever.
 
 LOSSES
 ✗ Sign-ups 15% behind. Week-6 hard-sell underperformed.
 ✗ TikTok experiment flat (watch time <8s).
 
 NEXT TEST
-Week 9: shift to founder-narrated transformation Reels (member POV). Measure save + share lift vs coach-led baseline.
+Week 9: shift to founder-narrated Reels (customer POV). Measure save + share lift vs the previous baseline format.
 
 Full: <dashboard base>/clients/$CLIENT_SLUG/performance
 ```
@@ -75,12 +75,12 @@ If `nextTest` is a NEW hypothesis (not already in learnings) AND the loss was hi
 ```jsonc
 {
   "id": "l007",
-  "title": "[HYPOTHESIS] Founder-narrated Reels outperform coach-led",
+  "title": "[HYPOTHESIS] Founder-narrated Reels outperform the baseline format",
   "platform": "instagram",
   "relatedPostId": null,
-  "whatHappened": "Hard-sell week-6 missed plan by 15%. Audience disengaged from coach-led urgency.",
+  "whatHappened": "Hard-sell week-6 missed plan by 15%. Audience disengaged from the hard-sell urgency.",
   "lesson": "Untested - to be validated week 9.",
-  "recommendedBehaviorChange": "Shift narrator to member POV for transformation content.",
+  "recommendedBehaviorChange": "Shift narrator to customer POV for story-driven content.",
   "confidence": "low",
   "createdAt": "<now>"
 }

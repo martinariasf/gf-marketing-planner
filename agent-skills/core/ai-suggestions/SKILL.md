@@ -23,7 +23,8 @@ This is the AI in "AI Marketing Assistant." Everything else Viktor does is patte
 
 For each client at `/opt/marketing-planner/clients/<slug>/`:
 
-- Read `references/brief-positioning.md` when the commercial model changes or seems broader than the examples in the main spec.
+> Client-specific positioning references (if any) live in the client skills folder
+> (`skills/client/ai-suggestions-refs/` on the box). Read them when present.
 
 | File | Used for |
 |---|---|
@@ -44,11 +45,11 @@ Full-file rewrite (atomic write to tmp + `mv`). Schema:
     {
       "id": "s007",                                // unique per client. monotonic. format sNNN.
       "kind": "post_idea",                         // see "Kinds" below
-      "title": "Coach Spotlight #2 on LinkedIn before the founder Aug 26 moment",
-      "rationale": "Coach Spotlight series has 1 published entry (p002). Adding a second coach 1-2 weeks before the founder moment warms the LinkedIn audience and gives the algorithm signal on the format.",
-      "suggestedAction": "draft p009 linkedin \"Article post\" pillar=\"Brand & Lifestyle\" campaign=\"Coach Spotlight Series\" date=2026-08-19 hook=\"Coach Diego doesn't talk about discipline. He talks about Tuesday.\"",
+      "title": "Team Spotlight #2 on LinkedIn before the founder Aug 26 moment",
+      "rationale": "Team Spotlight series has 1 published entry (p002). Adding a second entry 1-2 weeks before the founder moment warms the LinkedIn audience and gives the algorithm signal on the format.",
+      "suggestedAction": "draft p009 linkedin \"Article post\" pillar=\"Brand & Lifestyle\" campaign=\"Team Spotlight Series\" date=2026-08-19 hook=\"<hook drawn from the client's voice guidelines>\"",
       "relatedPostId": null,                       // optional. set if this references a specific post
-      "relatedCampaign": "Coach Spotlight Series", // optional
+      "relatedCampaign": "Team Spotlight Series",  // optional
       "relatedPillar": "Brand & Lifestyle",        // optional. must match plan.pillars[].name when set
       "confidence": "low",                         // low | medium | high
       "status": "open",                            // open | accepted | dismissed - leave open on create
@@ -108,10 +109,10 @@ If no entries changed (`git diff --quiet`), skip the commit.
   ```
   💡 3 suggestions for <Client> this week:
 
-  1. [HIGH] Run a second empathy-framed Reel before the August dip
-     → paste: draft hydration-2 ...
+  1. [HIGH] Run a second Reel in the top-performing format before the August dip
+     → paste: draft p009 ...
 
-  2. [HIGH] Founder LinkedIn moment on Women's Equality Day is highest-leverage
+  2. [HIGH] Founder LinkedIn moment on the upcoming key date is highest-leverage
      → paste: draft p010 ...
 
   3. [MED] Community pillar is under-used relative to its 25% weight

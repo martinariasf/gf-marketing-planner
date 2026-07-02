@@ -26,7 +26,7 @@ drawtext=fontfile=$F:text='That scary AI headline?':fontcolor=$W:fontsize=52:x=(
 drawtext=fontfile=$F:text='It was probably a':fontcolor=$W:fontsize=52:x=(w-tw)/2:y=600:alpha='$a1',
 drawtext=fontfile=$F:text='demo.':fontcolor=$G:fontsize=64:x=(w-tw)/2:y=675:alpha='$a1',
 drawtext=fontfile=$F:text='Demos show peak':fontcolor=$W:fontsize=52:x=(w-tw)/2:y=540:alpha='$a2',
-drawtext=fontfile=$F:text='capability — once.':fontcolor=$W:fontsize=52:x=(w-tw)/2:y=620:alpha='$a2',
+drawtext=fontfile=$F:text='capability. Once.':fontcolor=$W:fontsize=52:x=(w-tw)/2:y=620:alpha='$a2',
 drawtext=fontfile=$F:text='What matters is':fontcolor=$W:fontsize=52:x=(w-tw)/2:y=560:alpha='$a3',
 drawtext=fontfile=$F:text='reliability.':fontcolor=$G:fontsize=68:x=(w-tw)/2:y=650:alpha='$a3'
 " -c:v libx264 -pix_fmt yuv420p -crf 18 -preset medium -an "$OUT"

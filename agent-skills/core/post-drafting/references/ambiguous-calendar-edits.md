@@ -20,4 +20,4 @@ User phrasing often uses the concept name they remember, while the stored post m
 - campaign names
 - post IDs if any are hinted
 - title fragments
-- nearby nouns like venue, coach, calendar, workshop, launch
+- nearby nouns like venue, speaker, calendar, workshop, launch
