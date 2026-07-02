@@ -16,7 +16,7 @@ RUN npm install -g postiz@latest && postiz --version
 # Dockerfile (/opt/agents/staging-demo) needs the same line — see the GF-19
 # onboarding runbook.
 RUN /opt/hermes/.venv/bin/pip install --no-cache-dir \
-      google-api-python-client google-auth
+      google-api-python-client google-auth google-auth-httplib2
 
 # Marketing/sales focus — strip skills the bot doesn't need.
 # Each company can override this layer by editing its own Dockerfile.

@@ -38,6 +38,19 @@ Anything else → Google `403/404`.
 in-repo prod Dockerfile installs them; the staging box Dockerfile
 (`/opt/agents/staging-demo`) needs the same `pip install` line added.
 
+## Limitations (Phase 1)
+- **Personal Drive folders only.** Targets a folder in the client's My Drive
+  shared with the SA. Google **Shared Drives** are not a supported target (the
+  parent-walk assumes My Drive parenting).
+- **Large folders are capped.** Listings return at most 200 items per folder
+  (1000 in a recursive walk) and set `"truncated": true` when the cap is hit.
+- **Image cache is not evicted.** `drive_read_file` caches images under the OS
+  temp dir keyed by file id; a long-lived container accumulates them and a
+  re-read overwrites the same path. Fine for Phase 1 volumes.
+- **Key rotation needs a restart.** The SA key + Drive client are cached for the
+  process lifetime; rotating `GDRIVE_SA_KEY_FILE` requires a container restart
+  (which every deploy already does).
+
 ## Verify
 - `hermes tools | grep drive_` lists both tools.
 - `drive_list_files` returns the shared folder's contents; `drive_read_file`
