@@ -16,6 +16,7 @@ plugins:
   enabled:
     - image_gen_openrouter
     - postiz
+    - drive
 
 image_gen:
   # Select our custom plugin (image_gen_openrouter) as the active backend.
