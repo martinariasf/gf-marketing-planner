@@ -1,6 +1,8 @@
 // Runtime configuration. Read once at boot; fail fast on missing required vars
 // so a misconfigured container never silently serves bad responses.
 
+import { normalizeLang, type Lang } from './agentMessages.js'
+
 const required = (name: string): string => {
   const v = process.env[name]
   if (!v || v.length === 0) {
@@ -32,6 +34,29 @@ function parseHermesAgents(raw: string | undefined): Record<string, HermesAgent>
     return out
   } catch (err) {
     console.warn('[env] HERMES_AGENTS_JSON is not valid JSON — ignored', err)
+    return {}
+  }
+}
+
+// Parse the optional CLIENT_LANGS_JSON per-client language map. This is the
+// fixed locale used for the agent's NON-LLM messages (quota/credit notices,
+// run failures, "no final reply" fallbacks) — text the language model never
+// produces, so it can't translate itself, and that the dashboard persists to
+// chat history (so it must be a stable per-client language, not the viewer's UI
+// toggle). Shape: { "<slug>": "es" | "de" | "en" }. Each value is normalized
+// (an unrecognized value resolves to 'en'); a slug absent from the map falls
+// back to DEFAULT_LANG.
+function parseClientLangs(raw: string | undefined): Record<string, Lang> {
+  if (!raw || raw.trim() === '') return {}
+  try {
+    const obj = JSON.parse(raw) as Record<string, string>
+    const out: Record<string, Lang> = {}
+    for (const [slug, v] of Object.entries(obj)) {
+      out[slug] = normalizeLang(v)
+    }
+    return out
+  } catch (err) {
+    console.warn('[env] CLIENT_LANGS_JSON is not valid JSON — ignored', err)
     return {}
   }
 }
@@ -68,6 +93,14 @@ export const env = {
   // client hitting one shared agent hard-wired to a single CLIENT_SLUG.
   hermesAgents: parseHermesAgents(process.env.HERMES_AGENTS_JSON),
 
+  // Per-client fixed language for NON-LLM agent messages (GF-61). Optional JSON
+  // map { "<slug>": "es" }. A slug absent from the map uses DEFAULT_LANG. GF and
+  // biomas are Spanish; the demo tenants stay English. Example deploy value:
+  //   CLIENT_LANGS_JSON={"gf-internal":"es","biomas":"es"}
+  clientLangs: parseClientLangs(process.env.CLIENT_LANGS_JSON),
+  // Locale used when a client has no explicit CLIENT_LANGS_JSON entry.
+  defaultLang: normalizeLang(process.env.DEFAULT_LANG),
+
   // Integration secrets (GF-11). Used to AES-256-GCM encrypt credentials like
   // the Postiz API key before they hit PocketBase. If unset the value is stored
   // un-encrypted (with a loud warning) — set this on every real deploy.
@@ -90,4 +123,10 @@ export function resolveHermesAgent(slug: string): HermesAgent {
     return { baseUrl: override.baseUrl, apiKey: override.apiKey || env.hermesApiKey }
   }
   return { baseUrl: env.hermesBaseUrl, apiKey: env.hermesApiKey }
+}
+
+// Resolve the fixed language for a client's NON-LLM agent messages. A
+// CLIENT_LANGS_JSON entry wins; otherwise DEFAULT_LANG (itself 'en' unless set).
+export function resolveClientLang(slug: string): Lang {
+  return env.clientLangs[slug] ?? env.defaultLang
 }

@@ -43,6 +43,14 @@ services:
       # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
       # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.
       INTEGRATION_SECRET_KEY: "${INTEGRATION_SECRET_KEY:-}"
+      # Fixed per-client language for the agent's NON-LLM messages (GF-61): quota
+      # notices, run failures, timeouts — text the model never phrases, so the
+      # relay localizes it (see api/src/agentMessages.ts). Non-secret policy, so
+      # set directly here (compose ${:-} interpolation can't carry JSON braces).
+      # NOTE: the DASHBOARD client slug for GF is "gf-internal", not "gf-innov".
+      # A slug absent from this map falls back to DEFAULT_LANG.
+      CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es"}'
+      DEFAULT_LANG: "en"
       RELEASE: "${RELEASE:-prod}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:

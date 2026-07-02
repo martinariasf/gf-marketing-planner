@@ -134,6 +134,12 @@ When the image carries on-canvas text:
 Send the generated image **once** (no preview + URL duplication). Confirm the
 change in the user's language, citing the public url.
 
+**Tell the user to refresh (GF-29).** The dashboard does not live-update after an
+image PATCH. Whenever you generate or change a post image, end your confirmation
+by telling the user — in their language — to **update the page to see the post**
+(e.g. click the green reload button on the Content Calendar). Otherwise they
+think nothing happened.
+
 ## See also
 
 - `video-generation` - create Seedance 2.0 MP4 assets with `video_generate`.

@@ -218,6 +218,8 @@ const en: Dict = {
   'chat.tool.patch_plan':       'Update plan',
   'chat.tool.patch_goals':      'Update goals',
   'chat.tool.patch_learnings':  'Update learnings',
+  'chat.tool.image_generate':   'Generate image',
+  'chat.tool.generic':          'Working…',
 
   // Context page
   'context.eyebrow':              'Company context',
@@ -511,6 +513,8 @@ const en: Dict = {
   'calendar.statusLabel':       'Status',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'Could not update status',
+  'calendar.pastDateNoSchedule': 'You can’t schedule a post for a date in the past. Change the date first.',
+  'calendar.publishedReadOnly':  'This post is already published — it’s read-only.',
   'calendar.deletePost':        'Delete',
   'calendar.deleteTitle':       'Delete this post?',
   'calendar.deleteBody':        '{id} “{title}” will be removed from the calendar. Viktor can restore it if needed.',
@@ -1092,6 +1096,8 @@ const de: Dict = {
   'chat.tool.patch_plan':       'Plan aktualisieren',
   'chat.tool.patch_goals':      'Ziele aktualisieren',
   'chat.tool.patch_learnings':  'Erkenntnisse aktualisieren',
+  'chat.tool.image_generate':   'Bild generieren',
+  'chat.tool.generic':          'Arbeitet…',
 
   'context.eyebrow':              'Unternehmenskontext',
   'context.industry':             'Branche',
@@ -1375,6 +1381,8 @@ const de: Dict = {
   'calendar.statusLabel':       'Status',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'Status konnte nicht geändert werden',
+  'calendar.pastDateNoSchedule': 'Ein Post kann nicht für ein Datum in der Vergangenheit eingeplant werden. Bitte zuerst das Datum ändern.',
+  'calendar.publishedReadOnly':  'Dieser Post ist bereits veröffentlicht — schreibgeschützt.',
   'calendar.deletePost':        'Löschen',
   'calendar.deleteTitle':       'Diesen Post löschen?',
   'calendar.deleteBody':        '{id} „{title}“ wird aus dem Kalender entfernt. Viktor kann ihn bei Bedarf wiederherstellen.',
@@ -1950,6 +1958,8 @@ const es: Dict = {
   'chat.tool.patch_plan':       'Actualizar plan',
   'chat.tool.patch_goals':      'Actualizar metas',
   'chat.tool.patch_learnings':  'Actualizar aprendizajes',
+  'chat.tool.image_generate':   'Generar imagen',
+  'chat.tool.generic':          'Trabajando…',
 
   'context.eyebrow':              'Contexto de la empresa',
   'context.industry':             'Sector',
@@ -2233,6 +2243,8 @@ const es: Dict = {
   'calendar.statusLabel':       'Estado',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'No se pudo actualizar el estado',
+  'calendar.pastDateNoSchedule': 'No puedes programar una publicación para una fecha pasada. Cambia primero la fecha.',
+  'calendar.publishedReadOnly':  'Esta publicación ya está publicada — es de solo lectura.',
   'calendar.deletePost':        'Eliminar',
   'calendar.deleteTitle':       '¿Eliminar esta publicación?',
   'calendar.deleteBody':        '{id} «{title}» se quitará del calendario. Víktor puede restaurarla si es necesario.',

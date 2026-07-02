@@ -1,0 +1,6 @@
+# Service-account JSON keys are secrets — never commit them.
+keys/
+*-drive-sa.json
+*.sa.json
+__pycache__/
+*.pyc
