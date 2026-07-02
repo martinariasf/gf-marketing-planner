@@ -106,7 +106,7 @@ If no entries changed (`git diff --quiet`), skip the commit.
 - **Reactive (after analytics sync / weekly summary)**: do NOT post to Telegram. The human sees them on the dashboard next visit, and the weekly-summary digest already has their attention.
 - **Scheduled (Wednesday 10:00)**: post a one-message digest of the top 3 highest-confidence open suggestions:
   ```
-  💡 3 suggestions for FitVibe this week:
+  💡 3 suggestions for <Client> this week:
 
   1. [HIGH] Run a second empathy-framed Reel before the August dip
      → paste: draft hydration-2 ...
@@ -117,7 +117,7 @@ If no entries changed (`git diff --quiet`), skip the commit.
   3. [MED] Community pillar is under-used relative to its 25% weight
      → paste: draft p012 ...
 
-  Full list: http://100.92.24.75/fitvibe-demo/suggestions
+  Full list: <dashboard base>/clients/$CLIENT_SLUG/suggestions
   ```
 - **On-demand**: same digest format, in-chat.
 

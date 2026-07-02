@@ -8,11 +8,10 @@ trigger: "^(approve|reject|revise|block|unblock)\\s+(p\\d+)(\\s+p\\d+)*\\s*$"
 
 This is the **agent-side** counterpart to the dashboard's Approvals view. The client's approvers write literal commands on Telegram; Viktor applies them to the JSON files on disk; the dashboard reads those files and reflects the new state.
 
-**Not yet deployed.** This spec lives in the dashboard repo for review. Install it on the `viktor-fitvibe` (and any future client) Hermes agent when you're ready by copying it into the agent's skills folder and reloading.
 
 ## Where this runs
 
-- Host: `100.92.24.75` (Tailscale) / `46.224.224.113` (public). Docker container `hermes-marketing-demo` for the demo agent. Real per-client agents will live at `/opt/agents/viktor-<slug>/`.
+- Runs on the per-client Hermes agent box (`/opt/agents/<slug>/`).
 - Working directory: `/opt/marketing-planner/clients/<slug>/` — the shared filesystem the Caddy container also reads from.
 - Git: the repo is checked out so commits push to `martinariasf/gf-marketing-planner` automatically.
 

@@ -61,7 +61,7 @@ Synced 5 posts from Postiz (week 8).
 Reach this quarter: 487K / 1.2M (on track, -1%).
 DMs this week: 12, biggest spike from p003.
 Sign-ups: behind by 15%. Hard-sell window underperformed.
-Full view: http://100.92.24.75/fitvibe-demo/performance
+Full view: <dashboard base>/clients/$CLIENT_SLUG/performance
 ```
 
 When scheduled (daily), silent unless something is `behind` by more than -20% on any quarterly goal — in that case, send a one-line alert to the configured Telegram channel.

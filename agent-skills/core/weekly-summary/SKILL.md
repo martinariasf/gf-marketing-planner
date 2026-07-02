@@ -63,7 +63,7 @@ LOSSES
 NEXT TEST
 Week 9: shift to founder-narrated transformation Reels (member POV). Measure save + share lift vs coach-led baseline.
 
-Full: http://100.92.24.75/fitvibe-demo/performance
+Full: <dashboard base>/clients/$CLIENT_SLUG/performance
 ```
 
 Use Telegram-flavored Markdown if available, otherwise plain text. Always include the dashboard URL.
@@ -103,7 +103,7 @@ Single commit per client. If multiple clients run the same morning, one commit p
 
 Each client has a configured Telegram chat in `brief.json`:
 ```jsonc
-"contact": { "name": "Coach Lena", "telegram": "@lena_fitvibe" }
+"contact": { "name": "<Client contact>", "telegram": "@<client_contact>" }
 ```
 Post the digest to that contact. Additionally, post a one-line aggregated digest to the agency-internal channel:
 ```
