@@ -11,6 +11,13 @@ FROM hermes-agent:base
 USER root
 RUN npm install -g postiz@latest && postiz --version
 
+# Google Drive client libs for the read-only `drive` plugin (GF-19). Installed
+# into the hermes venv so the plugin imports cleanly at startup. The staging box
+# Dockerfile (/opt/agents/staging-demo) needs the same line — see the GF-19
+# onboarding runbook.
+RUN /opt/hermes/.venv/bin/pip install --no-cache-dir \
+      google-api-python-client google-auth
+
 # Marketing/sales focus — strip skills the bot doesn't need.
 # Each company can override this layer by editing its own Dockerfile.
 RUN cd /opt/hermes/skills && \
