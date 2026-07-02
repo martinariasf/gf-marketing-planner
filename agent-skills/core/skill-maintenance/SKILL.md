@@ -26,7 +26,7 @@ Only when the user asks for a lasting behavior change ("from now on…",
    so keep it accurate and short.
 3. Tell the user EXACTLY what you changed (file + a summary of the diff).
 4. Say this sentence, always: "This change is live-only until it is synced
-   back to the marketing-planner repo (`agent-skills/`) — ask Martin to run
+   back to the marketing-planner repo (`agent-skills/`) — ask the platform operator to run
    `sync-agent-skills.sh --pull` to review and commit it."
 5. Remind the user that skills reload on container restart, so the edit takes
    effect after the next restart.

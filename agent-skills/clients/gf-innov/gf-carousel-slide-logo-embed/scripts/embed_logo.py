@@ -33,7 +33,7 @@ def embed_logo(slide_path, out_path, logo_src=DEFAULT_LOGO,
 
     target_w = int(W * width_frac)
     scale = target_w / lw
-    logo2 = logo.resize((target_w, int(lh * scale)), Image.LANCZOS)
+    logo2 = logo.resize((target_w, int(lh * scale)), getattr(Image, 'Resampling', Image).LANCZOS)
     lw2, lh2 = logo2.size
 
     # wipe any stray fake mark first, then paste the real logo

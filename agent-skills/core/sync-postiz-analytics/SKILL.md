@@ -8,7 +8,7 @@ trigger:
 
 # sync-postiz-analytics skill — Viktor
 
-This skill is Viktor's pull half of the metrics loop. The push half (Postiz → channel) is handled by the [`approvals`](./approvals.md) skill, which queues approved posts into Postiz with a `postizJobId` stored in `post.publishing.postizJobId`. This skill uses those job ids to fetch what happened after the post went live.
+This skill is Viktor's pull half of the metrics loop. The push half (Postiz → channel) is handled by the [`approvals`](../approvals/SKILL.md) skill, which queues approved posts into Postiz with a `postizJobId` stored in `post.publishing.postizJobId`. This skill uses those job ids to fetch what happened after the post went live.
 
 **Not yet deployed.** Spec only. Install when the Postiz API shape is confirmed against a real instance.
 
@@ -31,7 +31,7 @@ For each client at `/opt/marketing-planner/clients/<slug>/`:
    - `aggregates.monthly[<MonthName>]`: same, scoped to posts whose date falls in that month
    - `aggregates.weekly[<weekNumber>]`: same, plus `topPost` (the post id with highest reach that week)
    - `vsGoals[goalId]`: compare against `goals.json`'s quarterly targets. Compute `current`, `pace` (`ahead` / `on-track` / `behind`), and `deltaPct` (the difference between observed pace and expected pace, given how far through the quarter we are).
-   - `weeklySummary`: **leave as-is** unless this is a Monday — that's the [`weekly-summary`](./weekly-summary.md) skill's job. Carry the previous value forward verbatim.
+   - `weeklySummary`: **leave as-is** unless this is a Monday — that's the [`weekly-summary`](../weekly-summary/SKILL.md) skill's job. Carry the previous value forward verbatim.
 
 ## Computing pace
 

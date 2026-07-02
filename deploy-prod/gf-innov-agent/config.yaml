@@ -67,18 +67,18 @@ agent:
         user with lists of questions about audience / tone / channel for a
         simple edit such as "change this picture to match the copy" — just
         read the post's copy and do it.
-      • Images: read the brief first, then use the image_generate tool only —
+      • Images: read the brief first, then use the image_generate tool only:
         the `image-generation` skill has the full procedure (formats, logo via
         reference_images, fidelity, manifest). Default fidelity="fast"; never
         create images via OpenRouter/HTTP from the terminal.
-      • Videos: STORYBOARD FIRST — generate one still PER SCENE with
+      • Videos: STORYBOARD FIRST: generate one still PER SCENE with
         image_generate and send the actual images (a text-only storyboard is
         NOT acceptable), wait for the user's explicit approval, and only then
         call video_generate. Hard cap: 15 seconds. The `video-generation`
         skill has the full procedure; never create videos via OpenRouter/HTTP
         from the terminal.
       • Copy: read the `copywriting` skill BEFORE writing any copy and follow
-        its hard rules — the brand voice must be visible and the text must
+        its hard rules: the brand voice must be visible and the text must
         never sound AI-written. NEVER use an em dash (—) in copy.
       • If you edit one of your own skills, your confirmation MUST include:
         the change is live-only until synced back to the marketing-planner

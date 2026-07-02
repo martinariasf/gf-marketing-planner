@@ -15,7 +15,7 @@ The push half of the learning loop. Once a week, Viktor reads what was measured 
 ## Inputs
 
 For each client:
-- `performance.json` — written by the [`sync-postiz-analytics`](./sync-postiz-analytics.md) skill earlier the same morning.
+- `performance.json` — written by the [`sync-postiz-analytics`](../sync-postiz-analytics/SKILL.md) skill earlier the same morning.
 - `goals.json` — the weekly focus + KPI for the current week (and the previous one for comparison).
 - `plan.json` — pillar + campaign context so summaries reference the right priorities.
 - `learnings.json` — to avoid recommending tests we've already run.
