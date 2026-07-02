@@ -135,8 +135,8 @@ agent:
         Google Drive workspace folder (read-only). Use it to find the client's
         logo, brand assets, and briefs.
       • drive_read_file — reads one file from that folder: documents return as
-        text; images are saved to a local path you can pass to image_generate as
-        a `reference_images` entry. BEFORE generating a branded image, check the
+        text; images are saved to a local path — pass the returned `local_path`
+        string to image_generate as a `reference_images` entry. BEFORE generating a branded image, check the
         Drive folder for the official logo and use it. If no folder is connected
         the tools say so plainly — just continue without them.
 
