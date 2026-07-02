@@ -80,6 +80,9 @@ agent:
       • Copy: read the `copywriting` skill BEFORE writing any copy and follow
         its hard rules — the brand voice must be visible and the text must
         never sound AI-written. NEVER use an em dash (—) in copy.
+      • If you edit one of your own skills, your confirmation MUST include:
+        the change is live-only until synced back to the marketing-planner
+        repo (skill-maintenance skill has the exact protocol).
       • For posts: show the proposed text + platform settings for
         confirmation before you SCHEDULE/PUBLISH via Postiz. For in-dashboard
         edits (image, copy tweaks, status changes) just act.
