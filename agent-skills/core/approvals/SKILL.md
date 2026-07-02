@@ -12,7 +12,7 @@ This is the **agent-side** counterpart to the dashboard's Approvals view. The cl
 ## Where this runs
 
 - Runs on the per-client Hermes agent box (`/opt/agents/<slug>/`).
-- Working directory: `/opt/marketing-planner/clients/<slug>/` — the shared filesystem the Caddy container also reads from.
+- Working directory: `/opt/marketing-planner/clients/$CLIENT_SLUG/` — the shared filesystem the Caddy container also reads from.
 - Git: the platform repo is checked out so commits push to its remote automatically.
 
 ## Input grammar
@@ -87,12 +87,12 @@ If `git push` fails (rate-limited, conflict, etc.) — **do not retry destructiv
 
 ## Dashboard API quirk — approvals POST does not flip post status
 
-On the Marketing-Planner dashboard API, `POST /clients/<slug>/approvals` with
+On the Marketing-Planner dashboard API, `POST /clients/$CLIENT_SLUG/approvals` with
 `{"postId","decision","note"}` returns `{"ok":true,...}` and records the decision in the audit
 log, but it does **NOT** change the post's `status` field. The post stays in its previous status
 (e.g. `drafting`) even though the approval was logged. To actually move a post to `in_review`
 (or any status), follow the approvals POST with a direct
-`PATCH /clients/<slug>/posts/{id}` with `{"status":"in_review"}` and then re-read the post to
+`PATCH /clients/$CLIENT_SLUG/posts/{id}` with `{"status":"in_review"}` and then re-read the post to
 confirm it persisted. If a status change "doesn't stick," this is the cause — the audit POST and
 the status PATCH are two separate writes.
 
