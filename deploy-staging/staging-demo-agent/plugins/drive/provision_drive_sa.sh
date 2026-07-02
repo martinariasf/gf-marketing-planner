@@ -70,7 +70,15 @@ NEXT STEPS for client "${SLUG}"
 
 3. In /opt/agents/${SLUG}/.env set:
         GDRIVE_FOLDER_ID=<the folder id>
-        GDRIVE_SA_KEY_FILE=/run/secrets/drive-sa.json   # mount ${KEY_FILE} here
+        GDRIVE_SA_KEY_FILE=/run/secrets/drive-sa.json
+
+4. Mount the key into the container. Copy it next to docker-compose.yml as
+   ./secrets/drive-sa.json and add this volume line (or set GDRIVE_SA_KEY as
+   base64 in .env instead and skip the mount):
+        cp "${KEY_FILE}" /opt/agents/${SLUG}/secrets/drive-sa.json
+        # docker-compose.yml volumes:
+        - ./secrets/drive-sa.json:/run/secrets/drive-sa.json:ro
+
    Then: docker compose up -d --force-recreate
 
 NOTE: this SA can only READ. Write-back is GF-19 Phase 2.
