@@ -1,6 +1,6 @@
 ---
 name: skill-maintenance
-description: Updating, improving, or parking the agent's own skills when the user asks for a behavior change that should persist. Covers where skills live, how to edit them safely, and why edits must be synced back to the repo.
+description: Updating, improving, or parking the agent's own skills when the user asks for a behavior change that should persist. Covers where skills live and how to edit them safely. After ANY skill edit you MUST tell the user the change is live-only until synced back to the marketing-planner repo.
 tags: [meta, skills]
 ---
 

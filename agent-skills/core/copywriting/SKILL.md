@@ -55,7 +55,7 @@ rules, not preferences:
   This is the single biggest AI tell. Use a period, a comma, or a rewrite.
 - No "it's not X, it's Y" / "not just X — Y" contrast constructions.
 - Banned vocabulary: delve, elevate, unleash, seamless, game-changer, unlock,
-  empower, revolutionize, "in today's fast-paced world", "look no further".
+  empower, revolutionize, synergy, "in today's fast-paced world", "look no further".
 - No rule-of-three padding ("faster, smarter, better") unless the brand voice
   explicitly uses it.
 - Vary sentence length. A human writes short ones. Then sometimes a longer one
