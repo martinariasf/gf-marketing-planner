@@ -1,3 +1,5 @@
+import { getFormatLocale } from './format'
+
 export interface CalendarRangeConfig {
   startMonth: string
   endMonth: string
@@ -67,13 +69,14 @@ export function monthsInRange(range: CalendarRangeConfig, now = new Date()): Pla
   const start = parseMonthKey(normalized.startMonth)!
   const diff = monthDiff(normalized.startMonth, normalized.endMonth)
   const currentKey = monthKeyFromDate(now)
+  const locale = getFormatLocale()
   return Array.from({ length: diff + 1 }, (_, index) => {
     const date = addMonths(start, index)
     const key = monthKeyFromDate(date)
     return {
       key,
-      name: date.toLocaleString('en-US', { month: 'long' }),
-      label: date.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+      name: date.toLocaleString(locale, { month: 'long' }),
+      label: date.toLocaleString(locale, { month: 'short', year: 'numeric' }),
       date,
       isCurrent: key === currentKey,
       isPast: key < currentKey,

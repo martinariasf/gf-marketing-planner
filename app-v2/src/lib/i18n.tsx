@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { translations } from './i18n-dict'
+import { setFormatLocale } from './format'
 
 export type Lang = 'en' | 'de' | 'es'
 
@@ -18,6 +19,12 @@ function readInitial(): Lang {
   if (saved === 'en' || saved === 'de' || saved === 'es') return saved
   return DEFAULT_LANG
 }
+
+// Initialise the date/number format locale (format.ts) from the persisted language
+// at module load — before any component renders — so the very first paint already
+// formats dates in the right language. Subsequent changes are handled in the effect
+// below; this avoids a render-time side effect while still covering first paint.
+setFormatLocale(readInitial())
 
 interface I18nCtx {
   lang: Lang
@@ -47,7 +54,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       const raw = dict[key] ?? enDict[key] ?? key
       return interpolate(raw, vars)
     }
-    return { lang, setLang: setLangState, t }
+    // Sync the format locale in the setter (an event handler, not render) so that
+    // when the user switches language the date/number formatters are already on the
+    // new locale before consumers re-render — no render-phase side effect, no lag.
+    const setLang = (l: Lang) => {
+      setFormatLocale(l)
+      setLangState(l)
+    }
+    return { lang, setLang, t }
   }, [lang])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
@@ -61,4 +75,16 @@ export function useI18n() {
 
 export function useT() {
   return useI18n().t
+}
+
+/**
+ * Non-hook translation lookup for code that runs outside the React tree or in a
+ * class component (e.g. the top-level error boundary). Reads the persisted
+ * language directly instead of from context. Falls back to English, then the key.
+ */
+export function tStatic(key: string, vars?: Record<string, string | number>): string {
+  const lang = readInitial()
+  const dict = translations[lang]
+  const raw = dict[key] ?? translations.en[key] ?? key
+  return interpolate(raw, vars)
 }
