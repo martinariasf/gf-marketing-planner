@@ -94,30 +94,38 @@ scp clients/index.json \
 
 ## Step 6 — Spin up the per-client Viktor agent
 
-(Not yet automated — manual until we templatize.)
+Follow the **`deploy-hermes-company-agent` skill** — it is the authoritative
+playbook. The real shape of a standard Viktor:
 
-On the Hetzner box:
+- Each company = one isolated stack under `/opt/agents/<slug>/` on the Hetzner box.
+- Copy [`deploy-prod/gf-innov-agent/`](../deploy-prod/gf-innov-agent/) as the
+  template: `config.yaml` (persona + platforms), `Dockerfile` (layers the
+  `image_gen_openrouter` + `postiz` plugins onto `hermes-agent:base` and patches
+  `api_server.py`), and `plugins/`.
+- **Skills** come from the repo-canonical [`agent-skills/`](../agent-skills/)
+  tree (`core/` for every agent + `clients/<slug>/` for bespoke behavior), not
+  from hand-copied files:
 
-```bash
-# 1. Copy the Hermes container for the demo and rename for this client
-docker run -d \
-  --name viktor-$SLUG \
-  -v /opt/marketing-planner/clients/$SLUG:/data \
-  -e TELEGRAM_BOT_TOKEN=<per-client-token> \
-  -e POSTIZ_BASE=<postiz-url> \
-  -e POSTIZ_TOKEN=<postiz-token> \
-  hermes-marketing-demo:latest
+  ```bash
+  cd marketing-planner/agent-skills
+  mkdir -p clients/$SLUG            # add a README if no bespoke skills yet
+  ./sync-agent-skills.sh $SLUG      # rsync core/ + clients/<slug>/, chown 10000, restart
+  ```
 
-# 2. Install Viktor's skills into the new container
-docker cp deploy/viktor-skills/approvals.md             viktor-$SLUG:/opt/skills/
-docker cp deploy/viktor-skills/sync-postiz-analytics.md viktor-$SLUG:/opt/skills/
-docker cp deploy/viktor-skills/weekly-summary.md        viktor-$SLUG:/opt/skills/
-docker exec viktor-$SLUG reload-skills
+  On the box this fills the bind-mounted `data/skills/{core,client}/`; skills
+  reload on container restart. Never edit box skills without syncing back
+  (`--pull`) — that caused GF-32 drift.
+- Per-client secrets live in `/opt/agents/<slug>/.env` (chmod 600, not
+  committed): Telegram token, `API_BASE` / `API_TOKEN` / `CLIENT_SLUG`,
+  OpenRouter + Postiz keys, `PUBLIC_ASSETS_BASE`. See the gf-innov-agent
+  [`README.md`](../deploy-prod/gf-innov-agent/README.md) for the exact list.
 
-# 3. Smoke test on Telegram
+Smoke test on Telegram:
+
+```
 # Send: "hi viktor"   - expect a greeting using the brand voice.
-# Send: "draft 1 post about <topic>" - expect a post file + Telegram preview.
-# Send: "approve p001" - expect status flip + commit + (optional) Postiz queue.
+# Send: "draft 1 post about <topic>" - expect a post draft via the API + preview.
+# Send: "approve p001" - expect status flip + (optional) Postiz queue.
 ```
 
 ## Step 7 — Hand off
