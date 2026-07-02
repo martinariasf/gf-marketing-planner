@@ -1,6 +1,6 @@
 ---
 name: copywriting
-description: Writing or editing post copy, captions, CTAs, and headlines. ALWAYS read the brand voice (toneKeywords, words to use / avoid, boundaries) and the post's pillar BEFORE writing, so the copy is on-voice. Covers where the voice lives and how to write the change back via the API.
+description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés). Covers where the voice lives and how to write changes back via the API.
 tags: [marketing, copy, voice]
 ---
 
@@ -28,6 +28,12 @@ From the brief take:
 From the plan take the post's **pillar** and **campaign** so the copy serves the
 strategy, not a generic message.
 
+**The voice must be VISIBLE, not just consulted.** After writing, re-read your
+draft and point (to yourself) at where the toneKeywords show up. If a neutral
+reader could not guess the brand's tone from the text alone, it is off-voice —
+rewrite it. Generic marketing prose that "could be anyone" is a failure even if
+it is grammatically perfect.
+
 Copy that ignores the voice is wrong even if it reads well — rewrite it to match
 without asking permission.
 
@@ -39,6 +45,26 @@ without asking permission.
 - Show the proposed text + platform settings for confirmation BEFORE you
   schedule/publish via Postiz. For in-dashboard edits (copy tweak, title) just
   act.
+
+## STEP 1.5 — Don't sound like an AI (hard rules)
+
+The reader must never suspect the text was machine-written. These are hard
+rules, not preferences:
+
+- **NEVER use an em dash (—) or spaced hyphen ( - ) as a rhetorical pause.**
+  This is the single biggest AI tell. Use a period, a comma, or a rewrite.
+- No "it's not X, it's Y" / "not just X — Y" contrast constructions.
+- Banned vocabulary: delve, elevate, unleash, seamless, game-changer, unlock,
+  empower, revolutionize, "in today's fast-paced world", "look no further".
+- No rule-of-three padding ("faster, smarter, better") unless the brand voice
+  explicitly uses it.
+- Vary sentence length. A human writes short ones. Then sometimes a longer one
+  that carries the actual point. Uniform medium-length sentences read as AI.
+- No summary sentence that restates what the copy just said.
+- Emojis, hashtags, exclamation marks: only as the brand voice dictates.
+
+Before output, scan the draft for every rule above. One violation = rewrite
+that line.
 
 ## STEP 2 — Write the change back via the API (not the JSON file)
 
