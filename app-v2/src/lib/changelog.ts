@@ -21,6 +21,13 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-07-03',
+    title: 'Connect a Google Drive folder to Viktor',
+    items: [
+      'The Integration tab now shows the email address to share your Google Drive folders with, so Viktor can read your logos, briefs and reference files. Share a folder with that address as a Viewer and copy the email with one click.',
+    ],
+  },
+  {
     date: '2026-07-02',
     title: 'Months, dates and more now follow your chosen language',
     items: [
