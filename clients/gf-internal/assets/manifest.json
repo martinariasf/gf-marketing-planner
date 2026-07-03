@@ -7,7 +7,9 @@
       "kind": "image",
       "source": "unsplash",
       "designBrief": "Tool-logo collage feel. Used as cover image for p001 'named tools' post.",
-      "usedInPosts": ["p001"],
+      "usedInPosts": [
+        "p001"
+      ],
       "owner": "Martin",
       "finalApproved": true,
       "createdAt": "2026-04-01T15:00:00Z"
@@ -19,10 +21,526 @@
       "kind": "image",
       "source": "unsplash",
       "designBrief": "Pre-workshop agenda cover. Clean, conference-like.",
-      "usedInPosts": ["p003"],
+      "usedInPosts": [
+        "p003"
+      ],
       "owner": "Martin",
       "finalApproved": true,
       "createdAt": "2026-04-11T18:00:00Z"
+    },
+    {
+      "id": "a003",
+      "filename": "c-mquw9ref-hj99_slide1_1782476139287.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mquw9ref-hj99_slide1_1782476139287.png",
+      "kind": "image",
+      "source": "openrouter:image_generate(auto-link)",
+      "usedInPosts": [
+        "c-mquw9ref-hj99"
+      ],
+      "owner": "Viktor (staging)",
+      "finalApproved": false,
+      "createdAt": "2026-06-26T12:15:39.289167+00:00"
+    },
+    {
+      "id": "a004",
+      "filename": "c-mquw9ref-hj99_slide2_1782476139374.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mquw9ref-hj99_slide2_1782476139374.png",
+      "kind": "image",
+      "source": "openrouter:image_generate(auto-link)",
+      "usedInPosts": [
+        "c-mquw9ref-hj99"
+      ],
+      "owner": "Viktor (staging)",
+      "finalApproved": false,
+      "createdAt": "2026-06-26T12:15:39.374416+00:00"
+    },
+    {
+      "id": "a005",
+      "filename": "c-mquw9ref-hj99_slide9_1782476139449.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mquw9ref-hj99_slide9_1782476139449.png",
+      "kind": "image",
+      "source": "openrouter:image_generate(auto-link)",
+      "usedInPosts": [
+        "c-mquw9ref-hj99"
+      ],
+      "owner": "Viktor (staging)",
+      "finalApproved": false,
+      "createdAt": "2026-06-26T12:15:39.449250+00:00"
+    },
+    {
+      "id": "a006",
+      "filename": "c-mquw9ref-hj99_slide2_1782476139512.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mquw9ref-hj99_slide2_1782476139512.png",
+      "kind": "image",
+      "source": "openrouter:image_generate(auto-link)",
+      "usedInPosts": [
+        "c-mquw9ref-hj99"
+      ],
+      "owner": "Viktor (staging)",
+      "finalApproved": false,
+      "createdAt": "2026-06-26T12:15:39.512961+00:00"
+    },
+    {
+      "id": "a007",
+      "filename": "p009_1780678006858.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/p009_1780678006858.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "p009"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a008",
+      "filename": "c-mq0rgitm-vulm_1781578670398.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mq0rgitm-vulm_1781578670398.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mq0rgitm-vulm"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a009",
+      "filename": "c-mq16ahg5-5lr4_1781578685871.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mq16ahg5-5lr4_1781578685871.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mq16ahg5-5lr4"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a010",
+      "filename": "c-mq16qirw-b5gw_1781578699906.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mq16qirw-b5gw_1781578699906.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mq16qirw-b5gw"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a011",
+      "filename": "c-mq18cxre-h34b_1781578712209.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mq18cxre-h34b_1781578712209.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mq18cxre-h34b"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a012",
+      "filename": "c-mqa7c6ca-2e2p_1781578724028.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7c6ca-2e2p_1781578724028.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7c6ca-2e2p"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a013",
+      "filename": "c-mqa7caw9-mkr2_1781579163541.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7caw9-mkr2_1781579163541.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7caw9-mkr2"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a014",
+      "filename": "c-mqa7ceck-56wk_1781579176922.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7ceck-56wk_1781579176922.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7ceck-56wk"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a015",
+      "filename": "c-mqa7chpy-hvlu_1781578509571.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7chpy-hvlu_1781578509571.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7chpy-hvlu"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a016",
+      "filename": "c-mqa7cld6-a745_1781577048448.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7cld6-a745_1781577048448.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7cld6-a745"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a017",
+      "filename": "c-mqa7cou4-rslg_1781580007924.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqa7cou4-rslg_1781580007924.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqa7cou4-rslg"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a018",
+      "filename": "c-mqtry33p-387c_1782408979092.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry33p-387c_1782408979092.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry33p-387c"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a019",
+      "filename": "c-mqtry33p-387c_slide2_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry33p-387c_slide2_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry33p-387c"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a020",
+      "filename": "c-mqtry33p-387c_slide3_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry33p-387c_slide3_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry33p-387c"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a021",
+      "filename": "c-mqtry33p-387c_slide4_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry33p-387c_slide4_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry33p-387c"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a022",
+      "filename": "c-mqtry33p-387c_slide5_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry33p-387c_slide5_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry33p-387c"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a023",
+      "filename": "c-mqtry35h-qcn5_1782408993219.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry35h-qcn5_1782408993219.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry35h-qcn5"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a024",
+      "filename": "c-mqtry36v-rhjm_1782852423520.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry36v-rhjm_1782852423520.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry36v-rhjm"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a025",
+      "filename": "c-mqtry38h-dj0x_1782409032173.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_1782409032173.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a026",
+      "filename": "c-mqtry38h-dj0x_slide2_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_slide2_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a027",
+      "filename": "c-mqtry38h-dj0x_slide3_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_slide3_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a028",
+      "filename": "c-mqtry38h-dj0x_slide4_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_slide4_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a029",
+      "filename": "c-mqtry38h-dj0x_slide5_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_slide5_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a030",
+      "filename": "c-mqtry38h-dj0x_slide6_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry38h-dj0x_slide6_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry38h-dj0x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a031",
+      "filename": "c-mqtry39x-ux1x_1782409054446.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry39x-ux1x_1782409054446.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry39x-ux1x"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a032",
+      "filename": "c-mqtry3br-klnx_1782409068756.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3br-klnx_1782409068756.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3br-klnx"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a033",
+      "filename": "c-mqtry3br-klnx_slide2_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3br-klnx_slide2_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3br-klnx"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a034",
+      "filename": "c-mqtry3br-klnx_slide3_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3br-klnx_slide3_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3br-klnx"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a035",
+      "filename": "c-mqtry3br-klnx_slide4_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3br-klnx_slide4_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3br-klnx"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a036",
+      "filename": "c-mqtry3br-klnx_slide5_real_logo.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3br-klnx_slide5_real_logo.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3br-klnx"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a037",
+      "filename": "c-mqtry3d8-rj93_1782409436601.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3d8-rj93_1782409436601.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3d8-rj93"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a038",
+      "filename": "c-mqtry3ga-ift2_cover_10s.png",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3ga-ift2_cover_10s.png",
+      "kind": "image",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3ga-ift2"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
+    },
+    {
+      "id": "a039",
+      "filename": "c-mqtry3ga-ift2_final_10s.mp4",
+      "url": "https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/c-mqtry3ga-ift2_final_10s.mp4",
+      "kind": "video",
+      "source": "viktor-generated",
+      "designBrief": "Backfilled from post reference (manifest reset by clients/** deploy rsync).",
+      "usedInPosts": [
+        "c-mqtry3ga-ift2"
+      ],
+      "owner": "Viktor",
+      "finalApproved": true,
+      "createdAt": "2026-07-03T16:32:21Z"
     }
   ]
 }
