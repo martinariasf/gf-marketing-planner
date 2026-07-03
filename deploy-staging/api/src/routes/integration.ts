@@ -100,7 +100,9 @@ integration.get(
 
     const postiz = await loadPostizStatus(slug)
     // GF-80: the Drive share email is plaintext (meant to be shown to the client).
-    const driveShareEmail = (await loadSecretRecord(slug))?.driveShareEmail ?? null
+    // `|| null` (not `??`) so a blanked field ('' after DELETE / a PB text default)
+    // reports as null, matching the SPA's `string | null` contract.
+    const driveShareEmail = (await loadSecretRecord(slug))?.driveShareEmail || null
 
     const docsUrl = `${apiBase}/docs`
     const openapiUrl = `${apiBase}/openapi.json`
