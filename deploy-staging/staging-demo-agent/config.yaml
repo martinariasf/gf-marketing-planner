@@ -16,6 +16,7 @@ plugins:
   enabled:
     - image_gen_openrouter
     - postiz
+    - drive
 
 image_gen:
   # Select our custom plugin (image_gen_openrouter) as the active backend.
@@ -131,6 +132,14 @@ agent:
       • postiz_list_posts — shows scheduled and past posts
       • postiz_schedule_post — schedules ONLY an approved dashboard post. Never
         schedule free-form copy, a draft, or a chat-only idea directly to Postiz.
+      • drive_list_files — lists the files/subfolders in the client's connected
+        Google Drive workspace folder (read-only). Use it to find the client's
+        logo, brand assets, and briefs.
+      • drive_read_file — reads one file from that folder: documents return as
+        text; images are saved to a local path — pass the returned `local_path`
+        string to image_generate as a `reference_images` entry. BEFORE generating a branded image, check the
+        Drive folder for the official logo and use it. If no folder is connected
+        the tools say so plainly — just continue without them.
 
     When the user asks about marketing strategy, answer as a senior marketing
     consultant with concrete suggestions.
@@ -279,8 +288,9 @@ agent:
 
     ── RESERVE / STAND-ALONE IMAGES (no target post yet) ──
     For an image NOT tied to an existing post (the user wants a fresh asset to
-    keep "in reserve", or you are building carousel slides), OMIT post_id and
-    then do the manual asset wiring so it shows on the Assets page:
+    keep "in reserve"), OMIT post_id and then do the manual asset wiring so it
+    shows on the Assets page. (Carousel slides are NOT reserve images — use the
+    CAROUSEL WORKFLOW with post_id + slide_index, which wires them for you.)
 
       Target folder:  /opt/marketing-planner/client/assets/
       Manifest file:  /opt/marketing-planner/client/assets/manifest.json
@@ -311,33 +321,42 @@ agent:
     `https://staging.marketing.gfinnov.com/api/v1/clients/staging-demo/assets/files/a015.png`.
 
     An asset with empty `usedInPosts` lives "in reserve" — the user will decide
-    in the dashboard Assets tab which post to use it on. (For the carousel
-    workflow below, each slide is a manual asset like this, then linked via a
-    single PATCH /posts/:id with the slides[] array.)
+    in the dashboard Assets tab which post to use it on. (Carousel slides do NOT
+    use this manual flow — see the CAROUSEL WORKFLOW below, where
+    image_generate(post_id, slide_index) wires each slide for you.)
 
     ── CAROUSEL WORKFLOW (multi-slide posts, 2–10 images) ──
 
     A carousel is a normal post that also carries a `slides` array. The cover
-    `image` stays slides[0].image so thumbnails/calendar keep working. There is
-    NO new endpoint — slides are set via the normal PATCH /posts/:id.
+    `image` stays slides[0].image so thumbnails/calendar keep working.
+
+    ★ ONE CALL PER SLIDE — image_generate(post_id, slide_index) does the wiring ★
+    Build each slide with a SINGLE image_generate call that carries the post_id
+    AND the 1-based slide_index. The plugin then deterministically generates the
+    image, copies it into the client assets folder, appends the manifest, and
+    appends it to the post's slides[] (setting format:"carousel" and keeping the
+    cover = slide 1) — all in-process. You MUST NOT copy files, append the
+    manifest, or PATCH slides[] yourself; the tool already did it. Each call
+    commits a valid carousel, so a half-built deck is still a real (shorter)
+    carousel, never an empty one.
 
     ALWAYS in this order — never guess:
-      1. ASK FIRST: how many slides (2–10)? channel (Instagram / LinkedIn)?
-         aspect ratio (1:1 square or 4:5 portrait — default 4:5)? one consistent
-         visual style? topic/goal of the carousel?
+      1. ASK FIRST: how many slides (2–10)? channel (Instagram / LinkedIn)? one
+         consistent visual style? topic/goal of the carousel? (Aspect ratio
+         follows the channel — Instagram ⇒ 4:5 — so you don't set it per slide.)
       2. PROPOSE a slide-by-slide outline BEFORE generating: slide 1 = hook,
          middle slides = content beats, last slide = CTA. Get confirmation.
       3. WARN on cost/time: it is N image-gen calls (premium ≈ 3 min each — offer
          fidelity="fast"). Offer to generate slide 1 first as a preview before
          committing to all N.
-      4. GENERATE → ASSETS → PATCH. For EACH slide: image_generate → copy into
-         /opt/marketing-planner/client/assets/ as <postId>_slideN.png → append a
-         manifest entry (same flow as a single image). Then build slides[] in
-         order and:
-           PATCH /posts/<id> { "format":"carousel",
-                               "slides":[ {"image":"<url1>","caption":"hook"}, ... ],
-                               "image":"<url1>" }     # cover = first slide
-         Then GET /posts/<id> to confirm `slides` is set.
+      4. GENERATE EACH SLIDE IN ORDER (1, 2, 3, …). For slide N:
+           image_generate(prompt="<slide N visual>", post_id="<id>",
+                          slide_index=N, channel="instagram",
+                          caption="<short design note>")
+         The result's `post_link` shows {linked, slide_index, slide_count}.
+         To redo a slide, call again with the SAME slide_index (it replaces it).
+         Do NOT set format:"carousel" by hand at post-creation — the tool sets it
+         once the first slide lands.
       5. TELEGRAM: send the slides as an album so the user sees the whole set.
          The post shares ONE caption (`copy`); per-slide `caption` is a design
          note, not a second body.
@@ -404,6 +423,14 @@ platform_toolsets:
 # Modes: off | new | all | verbose. Live override: /verbose in the chat.
 # =============================================================================
 display:
+  # GF-61: localize Hermes' OWN static messages (slash-command replies, approval
+  # prompts, /usage token reports, restart/compression notices) to Spanish via
+  # locales/es.yaml. Does NOT touch agent-generated text (the LLM already mirrors
+  # language) — it fixes the automatic/non-LLM replies that were stuck in English.
+  language: es
+  # GF-39: suppress the hardcoded English "File-mutation verifier: N file(s) were
+  # NOT modified" footer — internal jargon, not localized, not for the end user.
+  file_mutation_verifier: false
   # Allow users to cycle the tool-progress mode live with /verbose
   # (off | new | all | verbose). Gated off by default; enabled here.
   tool_progress_command: true

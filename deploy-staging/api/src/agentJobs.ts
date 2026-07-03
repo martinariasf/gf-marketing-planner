@@ -1,5 +1,6 @@
 import { withPb } from './pb.js'
-import { env, resolveHermesAgent, type HermesAgent } from './env.js'
+import { env, resolveHermesAgent, resolveClientLang, type HermesAgent } from './env.js'
+import { friendlyError, message, type Lang } from './agentMessages.js'
 
 export type AgentJobStatus =
   | 'queued'
@@ -42,17 +43,26 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-function fallbackFor(status: AgentJobStatus, hadPlatformWrites: boolean, detail?: string): string {
+// Friendly, localized fallback text persisted as the assistant message when a
+// run settles without final text from the model. The model never produced this
+// copy, so it can't be in the user's language unless we localize it here; it is
+// also written to chat history, so it uses the client's FIXED language (`lang`).
+// Exported for unit testing the status→copy mapping.
+export function fallbackFor(
+  status: AgentJobStatus,
+  hadPlatformWrites: boolean,
+  detail: string | undefined,
+  lang: Lang,
+): string {
   if (status === 'completed' || status === 'recovered') {
-    if (hadPlatformWrites) {
-      return 'I completed the work and updated the dashboard, but did not receive final text from the agent.'
-    }
-    return 'I finished the run, but the agent did not send a final text reply.'
+    return message(hadPlatformWrites ? 'completed_with_writes' : 'no_final_text', lang)
   }
   if (status === 'timed_out') {
-    return 'This request timed out before the agent sent a final reply. Check the dashboard for any partial updates.'
+    return message('timed_out', lang)
   }
-  return `The agent run did not complete cleanly${detail ? `: ${detail}` : '.'}`
+  // A genuine failure: classify the raw detail so a quota/credit failure shows
+  // the clear daily-limit message instead of generic "something went wrong".
+  return friendlyError(detail ?? '', lang)
 }
 
 export async function createDashboardChatJob(args: {
@@ -136,9 +146,10 @@ export async function finalizeAgentJob(args: {
     }
 
     const platformWrites = await hadPlatformWrites(args.slug, job.created ?? job.updated ?? completedAt)
+    const lang = resolveClientLang(args.slug)
     const content =
       args.output?.trim() ||
-      fallbackFor(args.status, platformWrites || !!args.sawToolActivity, String(args.error ?? ''))
+      fallbackFor(args.status, platformWrites || !!args.sawToolActivity, String(args.error ?? ''), lang)
     const assistant = await pb.collection('chat_messages').create<{ id: string }>({
       slug: args.slug,
       thread: args.thread,

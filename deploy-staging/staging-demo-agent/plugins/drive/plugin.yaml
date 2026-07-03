@@ -1,0 +1,12 @@
+name: drive
+version: 0.1.0
+description: "Read-only Google Drive access (GF-19 Phase 1). Reads ONE client-shared folder via a per-stack service account so Viktor can pull logos, briefs, and reference images (e.g. into image_generate). Folder-scoped at both the credential and code layers; never lists 'shared with me'. Write-back is Phase 2 (paid Workspace identity)."
+author: gf-innovative-solutions
+kind: backend
+# GDRIVE_FOLDER_ID + a service-account key (GDRIVE_SA_KEY_FILE or GDRIVE_SA_KEY)
+# are required at runtime, but gating is done by the plugin's check_fn so the
+# tools degrade gracefully when no folder is connected. No hard env gate here.
+requires_env: []
+provides_tools:
+  - drive_list_files
+  - drive_read_file

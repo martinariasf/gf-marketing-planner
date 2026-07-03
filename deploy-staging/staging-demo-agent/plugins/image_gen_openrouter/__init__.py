@@ -1018,6 +1018,126 @@ def _link_image_to_post(image_ref: str, post_id: str) -> Dict[str, Any]:
     return {"linked": served == url, "url": url, "post_image": served, "post_id": post_id}
 
 
+def _link_slide_to_post(
+    image_ref: str, post_id: str, slide_index: int, caption: str = ""
+) -> Dict[str, Any]:
+    """Copy a generated image into assets and set it as carousel slide
+    `slide_index` (1-based) of the post, deterministically.
+
+    Mirrors `_link_image_to_post` (copy + manifest + confirm) but builds a
+    carousel instead of just the cover: the post becomes `format:"carousel"`,
+    the slide is appended at the requested 1-based index (re-using an index
+    REPLACES that slide on re-generation), and the cover `image` is kept in
+    sync with slides[0].image so thumbnails/calendar keep working. `linked` is
+    True only when a follow-up GET confirms our slide URL is in the deck.
+
+    This is the carousel analogue of the single-image path: each call commits a
+    valid carousel in-process, so an interruption after slide k leaves a real
+    k-slide carousel rather than a `format:carousel` post with empty slides[].
+    """
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    token = os.environ.get("API_TOKEN", "")
+    if not (slug and api_base and token):
+        return {
+            "linked": False,
+            "error": "CLIENT_SLUG/API_BASE/API_TOKEN not set; cannot auto-link",
+        }
+    if slide_index < 1:
+        return {"linked": False, "error": "slide_index must be >= 1"}
+
+    # Unique filename so the immutable/cached asset URL changes on re-generation.
+    filename = f"{post_id}_slide{slide_index}_{int(time.time() * 1000)}.png"
+    dest_dir = _assets_dir()
+    dest_path = os.path.join(dest_dir, filename)
+    try:
+        data = _resolve_image_bytes(image_ref)
+        os.makedirs(dest_dir, exist_ok=True)
+        with open(dest_path, "wb") as f:
+            f.write(data)
+    except Exception as exc:
+        return {"linked": False, "error": f"copy into assets failed: {exc}"}
+
+    url = f"{_public_assets_base()}/clients/{slug}/assets/files/{filename}"
+    try:
+        _append_manifest(dest_dir, filename, url, post_id)
+    except Exception:
+        logger.debug("manifest append failed", exc_info=True)
+
+    # Read the existing deck so we APPEND/REPLACE instead of clobbering it.
+    post = _fetch_post(post_id)
+    raw_slides = post.get("slides")
+    slides: List[Dict[str, Any]] = []
+    if isinstance(raw_slides, list):
+        for item in raw_slides:
+            if isinstance(item, dict) and isinstance(item.get("image"), str) and item["image"]:
+                clean: Dict[str, Any] = {"image": item["image"]}
+                if isinstance(item.get("caption"), str) and item["caption"]:
+                    clean["caption"] = item["caption"]
+                slides.append(clean)
+
+    entry: Dict[str, Any] = {"image": url}
+    if caption:
+        entry["caption"] = caption[:500]
+    idx = slide_index - 1
+    if idx < len(slides):
+        slides[idx] = entry          # re-generation of an existing slide
+        actual_index = idx
+    else:
+        # Normal next-slide append. If the caller skips ahead, append at the end
+        # rather than create empty gaps — the API's strict slide shape rejects
+        # placeholder slides, and the agent is told to go in order. We report the
+        # ACTUAL landing position (not the requested index) so the caller isn't
+        # misled about where the slide ended up.
+        slides.append(entry)
+        actual_index = len(slides) - 1
+
+    cover = slides[0]["image"]
+    # Let the post's type follow its real shape: a 2+ slide deck is a carousel;
+    # a transient 1-slide post stays a normal single image (it renders as the
+    # cover and isn't mislabeled mid-build). `format` is an accepted PATCH field.
+    fmt = "carousel" if len(slides) >= 2 else "single image"
+    body = {"slides": slides, "image": cover, "format": fmt}
+    headers = {**_api_headers(), "Content-Type": "application/json"}
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            patch = client.patch(
+                f"{api_base}/clients/{slug}/posts/{post_id}",
+                json=body,
+                headers=headers,
+            )
+            patch.raise_for_status()
+            confirm = client.get(
+                f"{api_base}/clients/{slug}/posts/{post_id}", headers=headers
+            )
+            confirm.raise_for_status()
+            served_slides = (confirm.json() or {}).get("slides", [])
+    except httpx.HTTPStatusError as exc:
+        return {
+            "linked": False,
+            "url": url,
+            "error": f"PATCH /posts/{post_id} slides -> {exc.response.status_code}: {exc.response.text[:200]}",
+        }
+    except Exception as exc:
+        return {"linked": False, "url": url, "error": f"PATCH /posts/{post_id} slides failed: {exc}"}
+
+    # `linked` is True only when the slide landed at the position we report — a
+    # GET that finds our URL merely "somewhere" would mask a misplacement.
+    linked = (
+        isinstance(served_slides, list)
+        and actual_index < len(served_slides)
+        and isinstance(served_slides[actual_index], dict)
+        and served_slides[actual_index].get("image") == url
+    )
+    return {
+        "linked": linked,
+        "url": url,
+        "slide_index": actual_index + 1,
+        "slide_count": len(served_slides) if isinstance(served_slides, list) else 0,
+        "post_id": post_id,
+    }
+
+
 def _link_video_to_post(video_url: str, post_id: str, prompt: str) -> Dict[str, Any]:
     """Append a generated MP4 to the post's mixed media array."""
     slug = os.environ.get("CLIENT_SLUG", "")
@@ -1147,7 +1267,30 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                     "(e.g. 'p003'). The tool then copies the image into the client "
                     "assets folder, links it to the post (PATCH image) and confirms — "
                     "you do NOT need to copy the file or PATCH the post yourself. "
-                    "Omit for stand-alone / reserve images."
+                    "Omit for stand-alone / reserve images. For a CAROUSEL slide, "
+                    "pass post_id together with `slide_index`."
+                ),
+            },
+            "slide_index": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "CAROUSEL slides ONLY. The 1-based position of THIS image in "
+                    "the post's carousel (slide 1 = cover). Pass it together with "
+                    "`post_id` and the tool generates the slide AND appends it to "
+                    "the post's slides[] in ONE call — it sets format:\"carousel\" "
+                    "and keeps the cover = slide 1. Call once per slide, in order "
+                    "(1, 2, 3, …); re-using an index REGENERATES that slide. Do NOT "
+                    "copy files or PATCH slides[] yourself. Omit for a normal "
+                    "single-image cover."
+                ),
+            },
+            "caption": {
+                "type": "string",
+                "description": (
+                    "Optional per-slide design note for a carousel slide (used only "
+                    "with `slide_index`). NOT a second body — the post's single "
+                    "caption stays in the post `copy`."
                 ),
             },
             "reference_images": {
@@ -1259,6 +1402,14 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         })
     model = _model_for_fidelity(args.get("fidelity"))
     post_id = (args.get("post_id") or "").strip()
+    # GF-62: a carousel slide is generated AND linked into the post's slides[]
+    # in one call when both post_id and slide_index (1-based) are given.
+    try:
+        slide_index = int(args.get("slide_index") or 0)
+    except (TypeError, ValueError):
+        slide_index = 0
+    slide_caption = (args.get("caption") or "").strip()
+    is_slide = bool(post_id) and slide_index >= 1
     # GF-33: format follows the TARGET CHANNEL, not a global default. Instagram
     # ⇒ vertical 4:5 (1080x1350); LinkedIn/X/Facebook ⇒ horizontal. Prefer an
     # explicit `channel` arg, fall back to the linked post's channel, then to
@@ -1274,7 +1425,10 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     if isinstance(refs, str):
         refs = [refs]
     refs = [str(ref) for ref in refs if str(ref).strip()]
-    current_image = _current_post_image(post_id) if post_id else ""
+    # Condition a cover re-generation on the post's current image, but NOT a
+    # carousel slide — each slide is its own visual, so seeding slide 2+ with the
+    # cover would make every slide look the same.
+    current_image = _current_post_image(post_id) if (post_id and not is_slide) else ""
     if current_image:
         _append_unique_ref(refs, current_image)
     # GF-28: NEVER invent a logo/isotipo. If the prompt asks for a brand mark,
@@ -1326,7 +1480,12 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         and result.get("image")
         and not result.get("error")
     ):
-        link = _link_image_to_post(str(result["image"]), post_id)
+        if is_slide:
+            link = _link_slide_to_post(
+                str(result["image"]), post_id, slide_index, slide_caption
+            )
+        else:
+            link = _link_image_to_post(str(result["image"]), post_id)
         result["post_link"] = link
         # Show the public asset URL (not the local cache path) as the image ref
         # so the agent references the same URL the dashboard now serves.

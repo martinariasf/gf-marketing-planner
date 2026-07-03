@@ -21,6 +21,47 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-07-03',
+    title: 'Months, dates and more now follow your chosen language',
+    items: [
+      'Months and dates across the dashboard (calendar, goals, post dates) now appear in the language you pick — German and Spanish no longer showed English months.',
+      'Completed the translations: the error screen, upload messages, the Videos page and the Information Sources panel are now fully available in English, German and Spanish.',
+    ],
+  },
+  {
+    date: '2026-07-01',
+    title: 'Clearer "out of credits" and error messages in the chat',
+    items: [
+      'When the daily usage limit is reached, the chat now says so in plain language ("You\'ve reached today\'s usage limit — credits renew at midnight") in your client\'s language, instead of showing a raw English error code.',
+      'Other automatic notices — a run that could not finish, timed out, or ended without a written reply — now appear as friendly, localized messages, and they read the same when you reload the conversation.',
+      'The activity chips that show Viktor working no longer display internal tool names for actions without a friendly label — they show a neutral "Working…" instead.',
+    ],
+  },
+  {
+    date: '2026-06-26',
+    title: 'Viktor speaks Spanish even in his automatic messages',
+    items: [
+      "Viktor's built-in system replies (command responses, confirmations, session notices) now appear in Spanish instead of English — previously only his written answers followed your language.",
+      'Removed an internal technical note ("file-mutation verifier") that occasionally leaked into the chat and was never meant for you.',
+    ],
+  },
+  {
+    date: '2026-06-26',
+    title: 'Carousels now keep all their slides',
+    items: [
+      'When Viktor builds an Instagram carousel, every slide is now saved to the post and shown in the calendar — previously only the cover image appeared.',
+      'Each slide is attached the moment it is created, so a carousel is never left half-built if a generation is interrupted.',
+    ],
+  },
+  {
+    date: '2026-06-26',
+    title: 'Sign in with your own account',
+    items: [
+      'You now sign in to the dashboard with your own email and password instead of a shared site password.',
+      'You only see the clients your account is allowed to access, can switch between them, and can sign out cleanly — no more browser login pop-ups.',
+    ],
+  },
+  {
     date: '2026-06-24',
     title: 'Friendlier post names & one-click jump to the calendar',
     items: [

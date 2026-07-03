@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ExternalLink, Loader2, Sparkles, Users } from 'lucide-react'
+import { ArrowRight, ExternalLink, Loader2, LogOut, Sparkles, Users } from 'lucide-react'
 import { GFLogo } from '@/components/gf-logo'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { useT } from '@/lib/i18n'
 import { hasUnseenChangelog } from '@/lib/changelog'
 import { loadClientIndex } from '@/lib/client-data'
+import { getSession, logout } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import type { ClientIndex, ClientIndexEntry, ClientStatus } from '@/types'
 
@@ -63,6 +64,7 @@ export default function ClientPicker() {
               v2
             </Badge>
             <LanguageSwitcher />
+            <SessionControl />
           </div>
         </div>
       </header>
@@ -121,6 +123,34 @@ export default function ClientPicker() {
 function OpenCockpitLabel() {
   const t = useT()
   return <>{t('home.openCockpit')}</>
+}
+
+/** GF-58 — shows the signed-in account + a logout button (hidden if no session). */
+function SessionControl() {
+  const navigate = useNavigate()
+  const session = getSession()
+  if (!session) return null
+  const label = session.user.email || session.user.name || 'Account'
+  async function onLogout() {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden md:inline text-xs text-ink-muted max-w-[160px] truncate" title={label}>
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={onLogout}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-brand-blue hover:border-brand-blue transition-colors"
+        title="Sign out"
+      >
+        <LogOut className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Sign out</span>
+      </button>
+    </div>
+  )
 }
 
 /** "What's new" header link with an unseen-entry dot. */
