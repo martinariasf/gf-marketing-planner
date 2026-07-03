@@ -21,9 +21,12 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { stream } from 'hono/streaming'
 import { withPb } from '../pb.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
-import { env, resolveHermesAgent, type HermesAgent } from '../env.js'
+import { env, resolveHermesAgent, resolveClientLang, type HermesAgent } from '../env.js'
 import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
+// `message` is aliased: this route already has a local `message` (the user's
+// chat text), so the catalog helper comes in as `localized`.
+import { friendlyError, message as localized } from '../agentMessages.js'
 import {
   createDashboardChatJob,
   finalizeAgentJob,
@@ -132,6 +135,9 @@ chat.post(
     // Route this client's chat to its own Hermes agent if one is configured
     // (HERMES_AGENTS_JSON), else the shared default agent.
     const agent = resolveHermesAgent(slug)
+    // Fixed language for this client's NON-LLM messages (quota/failure/fallback
+    // notices the model never phrases). GF/biomas = Spanish; default English.
+    const lang = resolveClientLang(slug)
     let body: {
       thread?: string
       message?: string
@@ -195,6 +201,10 @@ chat.post(
       let runId: string | null = null
       let jobStatus: 'running' | 'completed' | 'failed' | 'timed_out' | 'recovered' = 'running'
       let assistantFinalText = ''
+      // Raw failure text (e.g. a 402 body), kept so the PERSISTED assistant
+      // bubble classifies the same way as the live error toast — otherwise a
+      // quota failure would degrade to generic copy on reload.
+      let failureDetail: string | null = null
       let sawRunCompleted = false
       let sawToolActivity = false
       const toolIds = new Map<string, string>() // tool name -> synthetic id for matching started→completed
@@ -298,8 +308,7 @@ chat.post(
             jobStatus = 'completed'
             assistantFinalText = ev.output ?? ''
             if (!assistantFinalText.trim() && sawToolActivity) {
-              assistantFinalText =
-                'I finished the tool work, but Hermes did not send a final text reply. Refresh the dashboard if you do not see the update yet.'
+              assistantFinalText = localized('completed_with_writes', lang)
             }
             // Emit the whole final text as one token chunk. The chat-sheet UI
             // already concatenates token events into the assistant bubble.
@@ -309,24 +318,34 @@ chat.post(
             break
           } else if (ev.event === 'run.failed') {
             jobStatus = 'failed'
-            await safeWrite(sse('error', { detail: String(ev.error ?? 'run failed') }))
+            // Classify the raw provider/Hermes error (often raw English, e.g. a
+            // 402 "daily limit exceeded") into a friendly, localized message —
+            // the model never sees this text, so only the relay can translate it.
+            const raw = typeof ev.error === 'string' ? ev.error : null
+            failureDetail = raw
+            await safeWrite(sse('error', { detail: friendlyError(raw, lang) }))
             break
           } else if (ev.event === 'run.cancelled') {
             jobStatus = 'failed'
-            await safeWrite(sse('error', { detail: 'run cancelled' }))
+            await safeWrite(sse('error', { detail: localized('run_failed', lang) }))
             break
           }
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : 'unknown'
+        failureDetail = detail
         jobStatus = ac.signal.aborted ? 'timed_out' : 'failed'
         await updateAgentJob(job.id, {
           status: jobStatus,
           provider: 'hermes',
           providerRunId: runId ?? '',
-          error: { detail },
+          error: { detail }, // keep the raw error for debugging/audit
         })
-        await safeWrite(sse('error', { detail }))
+        // The user sees a friendly, localized message. A hard-timeout abort gets
+        // the timeout copy; everything else is classified (a thrown 402 from the
+        // initial /v1/runs POST surfaces here as the Spanish quota notice).
+        const userDetail = ac.signal.aborted ? localized('timed_out', lang) : friendlyError(detail, lang)
+        await safeWrite(sse('error', { detail: userDetail }))
       } finally {
         clearTimeout(hardTimeout)
         clearInterval(heartbeat)
@@ -334,8 +353,7 @@ chat.post(
 
       if (!assistantFinalText.trim() && runId && sawToolActivity && !sawRunCompleted) {
         jobStatus = 'recovered'
-        assistantFinalText =
-          'I saw tool activity for this request, but the Hermes event stream ended before a final reply arrived. Refresh the dashboard if you do not see the update yet.'
+        assistantFinalText = localized('stream_ended', lang)
         await safeWrite(sse('token', { text: assistantFinalText }))
       }
 
@@ -350,7 +368,12 @@ chat.post(
           thread,
           status: jobStatus,
           output: assistantFinalText,
-          error: jobStatus === 'failed' || jobStatus === 'timed_out' ? 'Hermes stream ended without a completed run.' : null,
+          // Pass the RAW failure text so fallbackFor classifies it (a 402 →
+          // clear quota copy) instead of degrading to generic on reload.
+          error:
+            jobStatus === 'failed' || jobStatus === 'timed_out'
+              ? failureDetail ?? 'Hermes stream ended without a completed run.'
+              : null,
           providerRunId: runId,
           actor: principal.label ?? principal.token.slice(0, 12),
           sawToolActivity,

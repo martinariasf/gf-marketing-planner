@@ -26,6 +26,7 @@ plugins:
   enabled:
     - image_gen_openrouter
     - postiz
+    - drive
 
 image_gen:
   # Select our custom plugin (image_gen_openrouter) as the active backend.
@@ -67,18 +68,22 @@ agent:
         user with lists of questions about audience / tone / channel for a
         simple edit such as "change this picture to match the copy" — just
         read the post's copy and do it.
-      • For image generation: default to FAST and just generate. Do NOT ask
-        fast-vs-high and do NOT make the user wait on a question — call
-        image_generate with fidelity="fast" (the default, ~10s). Use
-        fidelity="high" ONLY if the user explicitly asks for maximum / print
-        quality and accepts a ~2-3 min wait. For a straightforward
-        change/replace-image request you do NOT need to propose concept
-        directions first: generate directly from the post copy and brand.
-        Say in ONE short line what you are generating, then do it. NEVER create
-        images by calling OpenRouter or any HTTP/image API from the
-        terminal/curl yourself -- image creation goes ONLY through the
-        image_generate tool. The terminal is only for copying the file, editing
-        the manifest, and the PATCH write-contract.
+      • Images: read the brief first, then use the image_generate tool only:
+        the `image-generation` skill has the full procedure (formats, logo via
+        reference_images, fidelity, manifest). Default fidelity="fast"; never
+        create images via OpenRouter/HTTP from the terminal.
+      • Videos: STORYBOARD FIRST: generate one still PER SCENE with
+        image_generate and send the actual images (a text-only storyboard is
+        NOT acceptable), wait for the user's explicit approval, and only then
+        call video_generate. Hard cap: 15 seconds. The `video-generation`
+        skill has the full procedure; never create videos via OpenRouter/HTTP
+        from the terminal.
+      • Copy: read the `copywriting` skill BEFORE writing any copy and follow
+        its hard rules: the brand voice must be visible and the text must
+        never sound AI-written. NEVER use an em dash (—) in copy.
+      • If you edit one of your own skills, your confirmation MUST include:
+        the change is live-only until synced back to the marketing-planner
+        repo (skill-maintenance skill has the exact protocol).
       • For posts: show the proposed text + platform settings for
         confirmation before you SCHEDULE/PUBLISH via Postiz. For in-dashboard
         edits (image, copy tweaks, status changes) just act.
@@ -97,6 +102,14 @@ agent:
       • postiz_list_posts — shows scheduled and past posts
       • postiz_schedule_post — schedules ONLY an approved dashboard post. Never
         schedule free-form copy, a draft, or a chat-only idea directly to Postiz.
+      • drive_list_files — lists the files/subfolders in the client's connected
+        Google Drive workspace folder (read-only). Use it to find the client's
+        logo, brand assets, and briefs.
+      • drive_read_file — reads one file from that folder: documents return as
+        text; images are saved to a local path — pass the returned `local_path`
+        string to image_generate as a `reference_images` entry. BEFORE generating a branded image, check the
+        Drive folder for the official logo and use it. If no folder is connected
+        the tools say so plainly — just continue without them.
 
     When the user asks about marketing strategy, answer as a senior marketing
     consultant with concrete suggestions.
@@ -348,6 +361,14 @@ platform_toolsets:
 # Modes: off | new | all | verbose. Live override: /verbose in the chat.
 # =============================================================================
 display:
+  # GF-61: localize Hermes' OWN static messages (slash-command replies, approval
+  # prompts, /usage token reports, restart/compression notices) to Spanish via
+  # locales/es.yaml. Does NOT touch agent-generated text (the LLM already mirrors
+  # language) — it fixes the automatic/non-LLM replies that were stuck in English.
+  language: es
+  # GF-39: suppress the hardcoded English "File-mutation verifier: N file(s) were
+  # NOT modified" footer — internal jargon, not localized, not for the end user.
+  file_mutation_verifier: false
   # Allow users to cycle the tool-progress mode live with /verbose
   # (off | new | all | verbose). Gated off by default; enabled here.
   tool_progress_command: false

@@ -11,6 +11,11 @@ services:
       - ./data:/opt/data
       - ./plugins:/opt/data/plugins:ro
       - ./config.yaml:/opt/data/config.yaml:ro
+      # GF-19 Drive plugin: to use a mounted SA key (GDRIVE_SA_KEY_FILE), place
+      # the per-client key at ./secrets/drive-sa.json (chmod 600, gitignored) and
+      # uncomment the next line. Alternatively set GDRIVE_SA_KEY (base64) in .env
+      # and no mount is needed.
+      # - ./secrets/drive-sa.json:/run/secrets/drive-sa.json:ro
       # API-mode cutover: mount ONLY the per-client ASSETS dir at the path the
       # image plugin expects, so generated assets land where mp-prod-api serves
       # them. Locked down 2026-06-05: the agent must NOT have filesystem write

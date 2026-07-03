@@ -21,6 +21,7 @@ import { Loader2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fmtDateShort } from '@/lib/format'
+import { dateTiming } from '@/lib/planning-range'
 import { apiSetApproval, type ApprovalDecision } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 import {
@@ -83,6 +84,11 @@ export function ApprovalKanban({
 
   async function move(post: Post, decision: ApprovalDecision) {
     if (pending.has(post.id)) return
+    // GF-37 — cannot schedule (Programmed) a post dated in the past.
+    if (decision === 'scheduled' && dateTiming(post.date) === 'past') {
+      toast.error(t('calendar.pastDateNoSchedule'))
+      return
+    }
     const prev = overrides[post.id]
     setOverrides((o) => ({ ...o, [post.id]: decision }))
     setPending((p) => new Set(p).add(post.id))
