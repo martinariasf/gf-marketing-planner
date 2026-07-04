@@ -1,0 +1,4 @@
+# local agent workspaces and session config — never commit
+.claude/
+.worktrees/
+__pycache__/
