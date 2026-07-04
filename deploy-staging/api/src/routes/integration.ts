@@ -18,7 +18,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
-import { env } from '../env.js'
+import { env, resolveDriveShareEmail } from '../env.js'
 import { withPb } from '../pb.js'
 import { audit } from '../audit.js'
 import { problem } from '../problem.js'
@@ -33,11 +33,6 @@ type IntegrationSecretRec = {
   postizApiKeyEnc?: string
   postizLast4?: string
   updatedAt?: string
-  // GF-80: the Google Drive service-account email the client shares their Drive
-  // folder with. NOT a secret — it is meant to be shown, so it is stored and
-  // returned in plaintext (unlike the Postiz key above).
-  driveShareEmail?: string
-  driveEmailUpdatedAt?: string
 }
 
 /** Masked, SPA-safe status for the Postiz key — never includes the secret. */
@@ -99,10 +94,10 @@ integration.get(
     }
 
     const postiz = await loadPostizStatus(slug)
-    // GF-80: the Drive share email is plaintext (meant to be shown to the client).
-    // `|| null` (not `??`) so a blanked field ('' after DELETE / a PB text default)
-    // reports as null, matching the SPA's `string | null` contract.
-    const driveShareEmail = (await loadSecretRecord(slug))?.driveShareEmail || null
+    // GF-80: the Drive service-account email this client's agent is wired to. It
+    // is a property of the agent's deployment (the mounted GDRIVE_SA_KEY), read
+    // from deploy config — not dashboard-entered — and surfaced read-only.
+    const driveShareEmail = resolveDriveShareEmail(slug)
 
     const docsUrl = `${apiBase}/docs`
     const openapiUrl = `${apiBase}/openapi.json`
@@ -234,14 +229,9 @@ integration.delete(
     const slug = c.req.param('slug')
     const existing = await loadSecretRecord(slug)
     if (existing) {
-      // Clear only the Postiz fields — the row is shared with the GF-80 Drive
-      // email, so wiping the whole record would lose an unrelated setting.
-      await withPb((pb) =>
-        pb.collection('integration_secrets').update(existing.id, {
-          postizApiKeyEnc: '',
-          postizLast4: '',
-        }),
-      )
+      // The row only holds the Postiz key now (the GF-80 Drive email is deploy
+      // config, not stored here), so removing the whole record is correct.
+      await withPb((pb) => pb.collection('integration_secrets').delete(existing.id))
       await audit(c.get('principal'), {
         action: 'integration.postiz.delete',
         slug,
@@ -253,82 +243,10 @@ integration.delete(
   },
 )
 
-// ── Google Drive share email (GF-80) ────────────────────────────────────────
-//
-// Each client's Viktor agent has a Google service-account email; the client
-// shares their Drive folder with it so Viktor can read the files. Unlike the
-// Postiz key this is NOT a secret — the whole point is to show it — so it is
-// stored and returned in plaintext. dash/admin can set/clear it.
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// Save / replace the Drive share email. dash/admin only.
-integration.put(
-  '/clients/:slug/integration/drive-email',
-  requireScope(),
-  requireRole('dash', 'admin'),
-  async (c) => {
-    const slug = c.req.param('slug')
-    let body: { email?: unknown }
-    try {
-      body = await c.req.json()
-    } catch {
-      return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
-    }
-    const email = typeof body.email === 'string' ? body.email.trim() : ''
-    if (!email || !EMAIL_RE.test(email)) {
-      return problem(c, {
-        title: 'Unprocessable Entity',
-        status: 422,
-        detail: 'email is required and must be a valid email address.',
-      })
-    }
-
-    const updatedAt = new Date().toISOString()
-    const actor = principalLabel(c)
-    const existing = await loadSecretRecord(slug)
-    const fields = { slug, driveShareEmail: email, driveEmailUpdatedAt: updatedAt, actor }
-    await withPb(async (pb) => {
-      const coll = pb.collection('integration_secrets')
-      if (existing) await coll.update(existing.id, fields)
-      else await coll.create(fields)
-    })
-    // Not a secret — the value may be recorded in the audit log.
-    await audit(c.get('principal'), {
-      action: 'integration.driveEmail.update',
-      slug,
-      before: { driveShareEmail: existing?.driveShareEmail ?? null },
-      after: { driveShareEmail: email },
-    })
-    return c.json({ driveShareEmail: email, updatedAt })
-  },
-)
-
-// Clear the Drive share email. dash/admin only.
-integration.delete(
-  '/clients/:slug/integration/drive-email',
-  requireScope(),
-  requireRole('dash', 'admin'),
-  async (c) => {
-    const slug = c.req.param('slug')
-    const existing = await loadSecretRecord(slug)
-    if (existing && existing.driveShareEmail) {
-      await withPb((pb) =>
-        pb.collection('integration_secrets').update(existing.id, {
-          driveShareEmail: '',
-          driveEmailUpdatedAt: '',
-        }),
-      )
-      await audit(c.get('principal'), {
-        action: 'integration.driveEmail.delete',
-        slug,
-        before: { driveShareEmail: existing.driveShareEmail },
-        after: { driveShareEmail: null },
-      })
-    }
-    return c.json({ driveShareEmail: null, updatedAt: null })
-  },
-)
+// NOTE (GF-80): the Google Drive service-account email is exposed READ-ONLY on
+// the GET /integration payload above (driveShareEmail). It is the agent's own
+// identity, wired at deploy time via DRIVE_SHARE_EMAILS_JSON — not something the
+// dashboard sets — so there is deliberately no PUT/DELETE for it here.
 
 // Plaintext fetch — agent/admin ONLY. This is the "Viktor gets it" path; the
 // dashboard never calls this. The agent runtime injects the returned key into

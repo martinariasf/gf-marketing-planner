@@ -41,8 +41,6 @@ import {
   apiLoadIntegration,
   apiSavePostizKey,
   apiDeletePostizKey,
-  apiSaveDriveEmail,
-  apiDeleteDriveEmail,
   type IntegrationInfo,
   type PostizStatus,
 } from '@/lib/api-client'
@@ -257,7 +255,7 @@ export default function IntegrationView() {
           <HardDrive className="h-4 w-4 text-brand-blue" />
           {t('integration.driveTitle')}
         </h2>
-        <DriveEmailCard slug={info.slug} initial={info.driveShareEmail} />
+        <DriveEmailCard email={info.driveShareEmail} />
       </section>
 
       <p className="text-[11px] text-ink-muted">
@@ -358,46 +356,14 @@ function PostizCard({ slug, initial }: { slug: string; initial: PostizStatus }) 
   )
 }
 
-// GF-80: the Google Drive service-account email the client shares their Drive
-// folder with. Unlike the Postiz key this is NOT a secret — it is shown in full
-// with a copy button so the client can paste it into Drive's "Share" dialog.
-function DriveEmailCard({ slug, initial }: { slug: string; initial: string | null }) {
+// GF-80: the Google Drive service-account email this client's Viktor agent is
+// wired to (its GDRIVE_SA_KEY identity). READ-ONLY — the client shares their
+// Drive folder with this address as a Viewer; it is never entered here. Shown in
+// full with a copy button, or a "not connected yet" note when the agent has no
+// Drive identity wired.
+function DriveEmailCard({ email }: { email: string | null }) {
   const t = useT()
-  const [email, setEmail] = useState<string | null>(initial)
-  const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [removing, setRemoving] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  const save = async () => {
-    const next = value.trim()
-    if (!next || saving) return
-    setSaving(true)
-    try {
-      const res = await apiSaveDriveEmail(slug, next)
-      setEmail(res.driveShareEmail)
-      setValue('')
-      toast.success(t('integration.driveSaved'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async () => {
-    if (removing) return
-    setRemoving(true)
-    try {
-      await apiDeleteDriveEmail(slug)
-      setEmail(null)
-      toast.success(t('integration.driveRemoved'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
-    } finally {
-      setRemoving(false)
-    }
-  }
 
   const copy = () => {
     if (!email) return
@@ -412,7 +378,7 @@ function DriveEmailCard({ slug, initial }: { slug: string; initial: string | nul
       <CardContent className="p-5 space-y-3 text-sm">
         <p className="text-ink-muted text-xs max-w-2xl">{t('integration.driveIntro')}</p>
 
-        {email && (
+        {email ? (
           <div className="flex items-center gap-2">
             <code className="flex-1 min-w-0 text-xs bg-brand-green-50/40 border border-brand-green-200/60 rounded px-2 py-1.5 font-mono break-all">
               {email}
@@ -420,39 +386,13 @@ function DriveEmailCard({ slug, initial }: { slug: string; initial: string | nul
             <Button variant="outline" size="sm" onClick={copy} className="h-9 shrink-0">
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
-            <Button
-              onClick={remove}
-              disabled={removing}
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0 text-rose-600 hover:text-rose-700"
-              title={t('integration.driveRemove')}
-              aria-label={t('integration.driveRemove')}
-            >
-              {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            </Button>
           </div>
+        ) : (
+          <p className="flex items-start gap-1.5 text-xs text-ink-muted bg-paper-muted rounded px-2 py-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
+            {t('integration.driveNotConnected')}
+          </p>
         )}
-
-        <div className="flex items-center gap-2">
-          <input
-            type="email"
-            autoComplete="off"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={t('integration.drivePlaceholder')}
-            className="flex-1 min-w-0 px-3 py-1.5 text-xs font-mono rounded-lg border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') save()
-            }}
-          />
-          <Button onClick={save} disabled={!value.trim() || saving} size="sm" className="h-9 shrink-0">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline ml-1.5">
-              {email ? t('integration.driveReplace') : t('integration.driveSave')}
-            </span>
-          </Button>
-        </div>
       </CardContent>
     </Card>
   )
