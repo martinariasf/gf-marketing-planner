@@ -696,24 +696,9 @@ export async function apiDeletePostizKey(slug: string): Promise<PostizStatus> {
   return (await res.json()) as PostizStatus
 }
 
-/** GF-80: masked-safe result for the Drive share email (plaintext — not a secret). */
-export interface DriveEmailStatus {
-  driveShareEmail: string | null
-  updatedAt: string | null
-}
-
-/** Save / replace the Google Drive share email. dash/admin only. */
-export async function apiSaveDriveEmail(slug: string, email: string): Promise<DriveEmailStatus> {
-  return apiSend<DriveEmailStatus>('PUT', `/clients/${slug}/integration/drive-email`, { email })
-}
-
-/** Clear the stored Google Drive share email. */
-export async function apiDeleteDriveEmail(slug: string): Promise<DriveEmailStatus> {
-  if (!API_BASE) throw new Error('VITE_API_BASE not set')
-  const res = await authedFetch(`/clients/${slug}/integration/drive-email`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(`DELETE /clients/${slug}/integration/drive-email failed: ${res.status}`)
-  return (await res.json()) as DriveEmailStatus
-}
+// GF-80: the Drive service-account email is READ-ONLY — it rides on the GET
+// /integration payload as `driveShareEmail` (see IntegrationInfo above). It is
+// the agent's wired identity, not dashboard-settable, so there is no save/delete.
 
 // ── Sync / notify-viktor ─────────────────────────────────────────────────────
 

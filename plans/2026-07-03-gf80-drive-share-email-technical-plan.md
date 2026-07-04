@@ -10,6 +10,34 @@ items:
   - gf-80: Show Email to be used with the drive | priority: medium
 ---
 
+# Addendum 2026-07-04 — design correction: read-only, wired from deploy config
+
+Martin's feedback after the first staging cut: the Integration card must **show**
+the email Viktor is wired to — not offer an input to paste one into. The email is
+the agent's own identity (the `client_email` inside the mounted `GDRIVE_SA_KEY`),
+so it belongs to the deployment, not to dashboard data entry. This supersedes the
+editable/PocketBase design below. Branch: `claude/gf-80-drive-email-readonly`.
+
+What changed vs. the original plan:
+
+- **Source of truth:** a per-client deploy map `DRIVE_SHARE_EMAILS_JSON`
+  (`{ "<slug>": "viktor-<slug>@<project>.iam.gserviceaccount.com" }`), parsed in
+  `env.ts` (`resolveDriveShareEmail`) exactly like `CLIENT_LANGS_JSON` /
+  `HERMES_AGENTS_JSON`. Set inline in the compose files (a public identifier, not
+  a secret). Staging wires `gf-internal` → `viktor-staging-demo@gf-agents-drive.iam.gserviceaccount.com`.
+- **API:** GET `/integration` now sources `driveShareEmail` from that map. The
+  `PUT`/`DELETE /integration/drive-email` routes are **removed**; the Postiz
+  DELETE reverts to a whole-row delete (the row is no longer shared). No
+  `integration_secrets` fields for the email (removed from `ensureCollections`).
+- **Frontend:** `DriveEmailCard` is read-only — code box + copy button when an
+  email is wired, else a "not connected yet" note. `apiSaveDriveEmail` /
+  `apiDeleteDriveEmail` removed; `IntegrationInfo.driveShareEmail` kept.
+- **i18n:** dropped the editable strings (placeholder/save/replace/remove/saved),
+  added `driveNotConnected`, reworded `driveIntro`.
+
+The TASK-00x sections below describe the earlier editable design and are kept for
+history only.
+
 # Plan
 
 ## Simple Words

@@ -54,6 +54,14 @@ services:
       # A slug absent from this map falls back to DEFAULT_LANG.
       CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es"}'
       DEFAULT_LANG: "en"
+      # Per-client Google Drive service-account email (GF-80). The address each
+      # client shares their Drive folder with — it is the agent's own identity
+      # (provision_drive_sa.sh names it viktor-<slug>@<project>.iam.gserviceaccount.com),
+      # surfaced READ-ONLY on the Integration tab. A public identifier, not a
+      # secret, so set inline here like CLIENT_LANGS_JSON. Slugs absent from the
+      # map show "not connected yet". Add a client's entry once its Drive SA is
+      # provisioned + the folder shared (GF-19).
+      DRIVE_SHARE_EMAILS_JSON: '{"gf-internal":"viktor-staging-demo@gf-agents-drive.iam.gserviceaccount.com"}'
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:
