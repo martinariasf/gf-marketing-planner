@@ -107,7 +107,9 @@ export function mergePostReferencedAssets(
 
 /** The merged manifest both the dedicated manifest route and the client
  *  hydrate route serve: disk rows + derived post-referenced rows. Existence
- *  checks read the ro-mounted assets dir; any fs error just drops the row. */
+ *  checks read the ro-mounted assets dir; any fs error just drops the row.
+ *  Cost: one listPosts pass per manifest read — fine at current post counts
+ *  (tens per client); add a short-lived cache here if that ever grows. */
 export async function buildMergedManifest(slug: string): Promise<AssetManifest> {
   const manifest = ((await disk.assetsManifest(slug)) ?? { items: [] }) as AssetManifest
   const items = Array.isArray(manifest.items) ? manifest.items : []
