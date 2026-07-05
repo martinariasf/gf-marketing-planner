@@ -61,6 +61,30 @@ function parseClientLangs(raw: string | undefined): Record<string, Lang> {
   }
 }
 
+// Parse the optional DRIVE_SHARE_EMAILS_JSON per-client map. GF-80: each client's
+// Viktor agent has a Google service-account email (its `client_email`) that the
+// client shares their Drive folder with. That email is a property of the agent's
+// deployment (the mounted GDRIVE_SA_KEY), NOT dashboard-entered data — so the API
+// reads it from this deploy-time map and the Integration tab shows it read-only.
+// Shape: { "<slug>": "viktor-<slug>@<project>.iam.gserviceaccount.com" }. It is a
+// public identity (an email address), not a secret, so it is set inline in the
+// compose file next to CLIENT_LANGS_JSON. Non-string values are dropped.
+function parseDriveEmails(raw: string | undefined): Record<string, string> {
+  if (!raw || raw.trim() === '') return {}
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>
+    const out: Record<string, string> = {}
+    for (const [slug, v] of Object.entries(obj)) {
+      if (typeof v === 'string' && v.trim() !== '') out[slug] = v.trim()
+      else console.warn(`[env] DRIVE_SHARE_EMAILS_JSON entry "${slug}" is not a non-empty string — ignored`)
+    }
+    return out
+  } catch (err) {
+    console.warn('[env] DRIVE_SHARE_EMAILS_JSON is not valid JSON — ignored', err)
+    return {}
+  }
+}
+
 export const env = {
   // Bind address
   port: Number(process.env.PORT ?? 8080),
@@ -101,6 +125,11 @@ export const env = {
   // Locale used when a client has no explicit CLIENT_LANGS_JSON entry.
   defaultLang: normalizeLang(process.env.DEFAULT_LANG),
 
+  // Per-client Google Drive service-account email (GF-80). Read-only; surfaced
+  // on the Integration tab so the client knows which address to share their
+  // Drive folder with. See parseDriveEmails above.
+  driveShareEmails: parseDriveEmails(process.env.DRIVE_SHARE_EMAILS_JSON),
+
   // Integration secrets (GF-11). Used to AES-256-GCM encrypt credentials like
   // the Postiz API key before they hit PocketBase. If unset the value is stored
   // un-encrypted (with a loud warning) — set this on every real deploy.
@@ -129,4 +158,10 @@ export function resolveHermesAgent(slug: string): HermesAgent {
 // CLIENT_LANGS_JSON entry wins; otherwise DEFAULT_LANG (itself 'en' unless set).
 export function resolveClientLang(slug: string): Lang {
   return env.clientLangs[slug] ?? env.defaultLang
+}
+
+// Resolve the Drive service-account email a client shares folders with (GF-80).
+// Returns null when the client's agent has no Drive identity wired yet.
+export function resolveDriveShareEmail(slug: string): string | null {
+  return env.driveShareEmails[slug] ?? null
 }

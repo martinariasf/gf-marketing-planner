@@ -227,6 +227,8 @@ const collections: CollectionSpec[] = [
       { name: 'postizLast4', type: 'text', max: 8 },
       { name: 'updatedAt', type: 'text', max: 40 },
       { name: 'actor', type: 'text', max: 100 },
+      // GF-80's Drive service-account email is NOT stored here — it is deploy
+      // config (DRIVE_SHARE_EMAILS_JSON) shown read-only, not dashboard-entered.
     ],
     indexes: ['CREATE UNIQUE INDEX `idx_integration_secrets_slug` ON `integration_secrets` (`slug`)'],
   },

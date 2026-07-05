@@ -538,26 +538,41 @@ def _append_manifest(
     items = manifest.get("items")
     if not isinstance(items, list):
         items = []
-    used = {str(it.get("id", "")) for it in items if isinstance(it, dict)}
-    n = 1
-    while f"a{n:03d}" in used:
-        n += 1
-    entry: Dict[str, Any] = {
-        "id": f"a{n:03d}",
-        "filename": filename,
-        "url": url,
-        "kind": kind,
-        "source": source,
-        "usedInPosts": [post_id] if post_id else [],
-        "owner": "Viktor (staging)",
-        "finalApproved": False,
-        "createdAt": datetime.now(timezone.utc).isoformat(),
-    }
-    if design_brief:
-        entry["designBrief"] = design_brief
-    if tags:
-        entry["tags"] = tags
-    items.append(entry)
+    # GF-64 idempotency: a retried/re-run tool call must not duplicate a row.
+    # If the filename is already tracked, only merge the post link (if new).
+    existing = next(
+        (it for it in items if isinstance(it, dict) and it.get("filename") == filename),
+        None,
+    )
+    if existing is not None:
+        linked = existing.get("usedInPosts")
+        if not isinstance(linked, list):
+            linked = []
+        if not post_id or post_id in linked:
+            return  # already tracked — nothing to change
+        linked.append(post_id)
+        existing["usedInPosts"] = linked
+    else:
+        used = {str(it.get("id", "")) for it in items if isinstance(it, dict)}
+        n = 1
+        while f"a{n:03d}" in used:
+            n += 1
+        entry: Dict[str, Any] = {
+            "id": f"a{n:03d}",
+            "filename": filename,
+            "url": url,
+            "kind": kind,
+            "source": source,
+            "usedInPosts": [post_id] if post_id else [],
+            "owner": "Viktor (staging)",
+            "finalApproved": False,
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+        }
+        if design_brief:
+            entry["designBrief"] = design_brief
+        if tags:
+            entry["tags"] = tags
+        items.append(entry)
     manifest["items"] = items
     tmp = manifest_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:

@@ -34,6 +34,7 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  HardDrive,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import {
@@ -248,6 +249,15 @@ export default function IntegrationView() {
         <PostizCard slug={info.slug} initial={info.postiz} />
       </section>
 
+      {/* ── Google Drive share email (GF-80) ────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <HardDrive className="h-4 w-4 text-brand-blue" />
+          {t('integration.driveTitle')}
+        </h2>
+        <DriveEmailCard email={info.driveShareEmail} />
+      </section>
+
       <p className="text-[11px] text-ink-muted">
         {t('integration.everyWrite')}
       </p>
@@ -341,6 +351,48 @@ function PostizCard({ slug, initial }: { slug: string; initial: PostizStatus }) 
           <Eye className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
           {t('integration.postizNeverShown')}
         </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// GF-80: the Google Drive service-account email this client's Viktor agent is
+// wired to (its GDRIVE_SA_KEY identity). READ-ONLY — the client shares their
+// Drive folder with this address as a Viewer; it is never entered here. Shown in
+// full with a copy button, or a "not connected yet" note when the agent has no
+// Drive identity wired.
+function DriveEmailCard({ email }: { email: string | null }) {
+  const t = useT()
+  const [copied, setCopied] = useState(false)
+
+  const copy = () => {
+    if (!email) return
+    navigator.clipboard.writeText(email).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
+    toast(t('integration.driveCopied'), { duration: 1000 })
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-3 text-sm">
+        <p className="text-ink-muted text-xs max-w-2xl">{t('integration.driveIntro')}</p>
+
+        {email ? (
+          <div className="flex items-center gap-2">
+            <code className="flex-1 min-w-0 text-xs bg-brand-green-50/40 border border-brand-green-200/60 rounded px-2 py-1.5 font-mono break-all">
+              {email}
+            </code>
+            <Button variant="outline" size="sm" onClick={copy} className="h-9 shrink-0">
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+        ) : (
+          <p className="flex items-start gap-1.5 text-xs text-ink-muted bg-paper-muted rounded px-2 py-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
+            {t('integration.driveNotConnected')}
+          </p>
+        )}
       </CardContent>
     </Card>
   )

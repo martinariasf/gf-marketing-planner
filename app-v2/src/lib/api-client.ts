@@ -671,6 +671,12 @@ export interface IntegrationInfo {
   assetsDir: string
   assetsManifestPath: string
   postiz: PostizStatus
+  /**
+   * GF-80: the Google Drive service-account email the client shares their Drive
+   * folder with. Plaintext (not a secret — it is meant to be shown). null when
+   * not yet configured for this client.
+   */
+  driveShareEmail: string | null
 }
 
 export async function apiLoadIntegration(slug: string): Promise<IntegrationInfo> {
@@ -689,6 +695,10 @@ export async function apiDeletePostizKey(slug: string): Promise<PostizStatus> {
   if (!res.ok) throw new Error(`DELETE /clients/${slug}/integration/postiz failed: ${res.status}`)
   return (await res.json()) as PostizStatus
 }
+
+// GF-80: the Drive service-account email is READ-ONLY — it rides on the GET
+// /integration payload as `driveShareEmail` (see IntegrationInfo above). It is
+// the agent's wired identity, not dashboard-settable, so there is no save/delete.
 
 // ── Sync / notify-viktor ─────────────────────────────────────────────────────
 
