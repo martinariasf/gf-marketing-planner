@@ -53,10 +53,12 @@ services:
       DEFAULT_LANG: "en"
       # Per-client Google Drive service-account email (GF-80), shown READ-ONLY on
       # the Integration tab — the address a client shares their Drive folder with.
-      # Public identifier, not a secret; set inline like CLIENT_LANGS_JSON. Empty
-      # until a prod client's Drive SA is provisioned + folder shared (GF-19);
-      # then add {"<slug>":"viktor-<slug>@<project>.iam.gserviceaccount.com"}.
-      DRIVE_SHARE_EMAILS_JSON: '{}'
+      # Public identifier, not a secret; set inline like CLIENT_LANGS_JSON. This is
+      # the prod gf-internal agent's own Drive SA (viktor-v2-gf-innov's mounted
+      # GDRIVE_SA_KEY client_email, project ki-sync) — distinct from staging's
+      # viktor-staging-demo@gf-agents-drive. A slug absent from the map shows no
+      # email (read-time fallback returns null, no crash).
+      DRIVE_SHARE_EMAILS_JSON: '{"gf-internal":"viktor-gf@ki-sync.iam.gserviceaccount.com"}'
       RELEASE: "${RELEASE:-prod}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:
