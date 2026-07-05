@@ -22,6 +22,13 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-07-04',
+    title: 'Every generated image and video now shows up in Assets',
+    items: [
+      'The Assets tab now also lists images and videos that are attached to your posts but were missing from the asset catalogue — nothing Viktor creates can silently disappear from the gallery anymore. This is what previously made some generated videos invisible.',
+    ],
+  },
+  {
+    date: '2026-07-04',
     title: 'Connect a Google Drive folder to Viktor',
     items: [
       'The Integration tab now shows Viktor’s own Google Drive address — the one you share your folders with so he can read your logos, briefs and reference files. Copy it with one click and share your folder with it as a Viewer in Google Drive.',

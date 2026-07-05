@@ -11,6 +11,7 @@ import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { audit } from '../audit.js'
 import { disk } from '../diskData.js'
 import { loadSuggestionStates, loadDeletedAssetIds, loadApprovalsV2 } from '../overlays.js'
+import { buildMergedManifest } from '../assetsManifest.js'
 import { buildPost, listPostIds, type PostBase } from '../posts.js'
 import { problem } from '../problem.js'
 import {
@@ -375,7 +376,8 @@ viktorOwned.get('/clients/:slug/performance', requireScope(), async (c) => {
 
 viktorOwned.get('/clients/:slug/assets/manifest', requireScope(), async (c) => {
   const slug = c.req.param('slug')
-  const manifest = ((await disk.assetsManifest(slug)) ?? { items: [] }) as AssetManifest
+  // GF-64: disk rows + derived rows for post-referenced files with no row.
+  const manifest = (await buildMergedManifest(slug)) as AssetManifest
   const deleted = await loadDeletedAssetIds(slug)
   const items = (manifest.items ?? []).filter((item) => {
     const id = typeof item.id === 'string' ? item.id : ''
@@ -391,7 +393,8 @@ viktorOwned.delete(
   async (c) => {
     const slug = c.req.param('slug')
     const assetId = c.req.param('id')
-    const manifest = ((await disk.assetsManifest(slug)) ?? { items: [] }) as AssetManifest
+    // GF-64: merged view, so derived (ref-<filename>) rows can be hidden too.
+    const manifest = (await buildMergedManifest(slug)) as AssetManifest
     const asset = (manifest.items ?? []).find((item) => item.id === assetId)
     if (!asset) {
       return problem(c, { title: 'Not Found', status: 404, detail: 'No such asset' })
