@@ -18,7 +18,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
-import { env } from '../env.js'
+import { env, resolveDriveShareEmail } from '../env.js'
 import { withPb } from '../pb.js'
 import { audit } from '../audit.js'
 import { problem } from '../problem.js'
@@ -94,6 +94,10 @@ integration.get(
     }
 
     const postiz = await loadPostizStatus(slug)
+    // GF-80: the Drive service-account email this client's agent is wired to. It
+    // is a property of the agent's deployment (the mounted GDRIVE_SA_KEY), read
+    // from deploy config — not dashboard-entered — and surfaced read-only.
+    const driveShareEmail = resolveDriveShareEmail(slug)
 
     const docsUrl = `${apiBase}/docs`
     const openapiUrl = `${apiBase}/openapi.json`
@@ -152,6 +156,8 @@ integration.get(
       assetsManifestPath: `clients/${slug}/assets/manifest.json`,
       // GF-11: masked-only — the raw key is never serialised here.
       postiz,
+      // GF-80: the Drive service-account email to share folders with (plaintext).
+      driveShareEmail,
     })
   },
 )
@@ -223,6 +229,8 @@ integration.delete(
     const slug = c.req.param('slug')
     const existing = await loadSecretRecord(slug)
     if (existing) {
+      // The row only holds the Postiz key now (the GF-80 Drive email is deploy
+      // config, not stored here), so removing the whole record is correct.
       await withPb((pb) => pb.collection('integration_secrets').delete(existing.id))
       await audit(c.get('principal'), {
         action: 'integration.postiz.delete',
@@ -234,6 +242,11 @@ integration.delete(
     return c.json({ configured: false, last4: null, updatedAt: null } satisfies PostizStatus)
   },
 )
+
+// NOTE (GF-80): the Google Drive service-account email is exposed READ-ONLY on
+// the GET /integration payload above (driveShareEmail). It is the agent's own
+// identity, wired at deploy time via DRIVE_SHARE_EMAILS_JSON — not something the
+// dashboard sets — so there is deliberately no PUT/DELETE for it here.
 
 // Plaintext fetch — agent/admin ONLY. This is the "Viktor gets it" path; the
 // dashboard never calls this. The agent runtime injects the returned key into

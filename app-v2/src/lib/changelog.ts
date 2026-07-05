@@ -21,7 +21,21 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2026-07-03',
+    date: '2026-07-05',
+    title: 'Every generated image and video now shows up in Assets',
+    items: [
+      'The Assets tab now also lists images and videos that are attached to your posts but were missing from the asset catalogue — nothing Viktor creates can silently disappear from the gallery anymore. This is what previously made some generated videos invisible.',
+    ],
+  },
+  {
+    date: '2026-07-05',
+    title: 'Connect a Google Drive folder to Viktor',
+    items: [
+      'The Integration tab now shows Viktor’s own Google Drive address — the one you share your folders with so he can read your logos, briefs and reference files. Copy it with one click and share your folder with it as a Viewer in Google Drive.',
+    ],
+  },
+  {
+    date: '2026-07-02',
     title: 'Months, dates and more now follow your chosen language',
     items: [
       'Months and dates across the dashboard (calendar, goals, post dates) now appear in the language you pick — German and Spanish no longer showed English months.',
@@ -62,7 +76,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-06-24',
+    date: '2026-06-23',
     title: 'Friendlier post names & one-click jump to the calendar',
     items: [
       'Posts now show a simple running name like "Post 12" instead of a cryptic internal code, in Approvals and across the calendar.',

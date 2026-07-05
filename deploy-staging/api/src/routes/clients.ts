@@ -4,6 +4,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { withPb } from '../pb.js'
 import { requireAuth, requireScope, type AppEnv } from '../auth.js'
 import { disk } from '../diskData.js'
+import { buildMergedManifest } from '../assetsManifest.js'
 
 const ClientSummarySchema = z
   .object({
@@ -109,7 +110,8 @@ clients.get('/clients/:slug', requireScope(), async (c) => {
     disk.learnings(slug),
     disk.suggestions(slug),
     disk.performance(slug),
-    disk.assetsManifest(slug),
+    // GF-64: same merged manifest as /assets/manifest (derived rows included).
+    buildMergedManifest(slug),
   ])
   return c.json({ summary, brief, plan, goals, learnings, suggestions, performance, manifest })
 })
