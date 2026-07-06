@@ -49,16 +49,18 @@ export function LinkedinMockup({
       </div>
 
       {video ? (
+        /* GF-72 — playable video with a native play control, plays the real
+           .mp4. LinkedIn keeps its landscape frame (vertical reels are IG). */
         <div className="relative aspect-[1.91/1] bg-black overflow-hidden">
           <video
             src={video.url}
             poster={video.thumbnail}
-            muted
+            controls
             playsInline
             preload="metadata"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
-          <span className="absolute top-2 right-2 flex items-center gap-1 rounded bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+          <span className="absolute top-2 right-2 flex items-center gap-1 rounded bg-black/55 text-white text-[11px] font-medium px-2 py-0.5 pointer-events-none">
             <Film className="h-3 w-3" />
             Video
           </span>

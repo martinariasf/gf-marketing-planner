@@ -29,20 +29,27 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
           <MoreHorizontal className="h-4 w-4 text-neutral-500" />
         </div>
 
-        <div className="relative aspect-square bg-neutral-100 overflow-hidden">
+        {/* GF-72 — a video post renders as a playable 9:16 reel (real .mp4 with
+            a native play control), not a static square thumbnail. */}
+        <div
+          className={
+            'relative overflow-hidden ' +
+            (video ? 'aspect-[9/16] bg-black' : 'aspect-square bg-neutral-100')
+          }
+        >
           {video ? (
             <>
               <video
                 src={video.url}
                 poster={video.thumbnail}
-                muted
+                controls
                 playsInline
                 preload="metadata"
                 className="h-full w-full object-cover bg-black"
               />
-              <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+              <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5 pointer-events-none">
                 <Film className="h-3 w-3" />
-                Video
+                Reel
               </span>
             </>
           ) : post.image && (
