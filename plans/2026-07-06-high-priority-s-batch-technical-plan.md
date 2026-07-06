@@ -5,7 +5,7 @@ owner: martin
 repo: C:/Users/Admin/Desktop/GF Innovative Solutions/GF/marketing-planner
 source_branch: experimental
 code_reviewed: true
-focus_tasks: [TASK-004, TASK-005, TASK-009]
+focus_tasks: [TASK-002, TASK-003, TASK-004, TASK-005, TASK-006, TASK-007, TASK-009]
 items:
   - gf-65: AI Generated msg in the Collaboration Link and in the Content Calendar | priority: high
   - gf-66: Give Viktor access to the external feedback comments with the API (read and reply) | priority: high
@@ -45,22 +45,28 @@ independent review + staging verification, TASK-010):
 - **GF-72** — branch `claude/gf-72-video-reel-preview`. Video posts now render
   with a native play control (real .mp4 plays); Instagram mockup uses a 9:16
   reel frame. TASK-009. app-v2 type-checks clean.
+- **GF-74** — branch `claude/gf-74-general-comment`. General comments now render
+  in full (no clamp, "Applies to all posts" label EN/DE/ES) beneath every post
+  card in both deck and list views + the deck summary. TASK-006 (body already
+  stored untruncated server-side) + TASK-007. app-v2 type-checks clean.
+- **GF-65** — branch `claude/gf-65-ai-generated-label`. Localized "AI generated"
+  badge on post media in both the content calendar and external review link
+  (Martin's decision: treat all Viktor media as AI). `common.aiGenerated`
+  EN/DE/ES. TASK-002 done as an SPA-only badge (no contract change); TASK-003.
+  app-v2 type-checks clean.
 
-Held — not implemented, need Martin's input or live reproduction (moved to
-`In discussion` in Notion):
+Held — need Martin's input or live reproduction (moved to `In discussion` in
+Notion):
 
-- **GF-65** — no provenance field exists in the post/media contract, so
-  "AI-generated vs manually uploaded" can't be distinguished in the SPA alone;
-  needs an agent-side flag decision. Not a clean SPA-only S change.
 - **GF-73** — the reload path is correct on inspection (no client cache, correct
   `refetch`/memo wiring); the regression needs live browser reproduction to
   locate. Not blind-fixable.
-- **GF-74** — the general-comment body is already stored and rendered
-  untruncated on the external page (only the activity-feed event preview caps at
-  300 chars); the reported truncation can't be reproduced from code. Need Martin
-  to point at the exact surface.
 - **GF-68** — TASK-001 open decision (what Viktor does with uploaded files)
   unresolved; build tasks depend on it.
+
+Note: GF-65 and GF-72 both touch the two channel-mockup files on separate
+branches; they add different hunks (top-left AI badge vs. video element/reel
+frame) so they should merge cleanly, but reconcile in whichever merges second.
 
 ## Decisions and API Contracts
 
