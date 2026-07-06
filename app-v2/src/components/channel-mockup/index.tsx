@@ -23,6 +23,8 @@ interface Props {
   subtitle?: string
   /** Real engagement totals from analytics. If absent or zero, no fake numbers are rendered. */
   metrics?: { likes?: number; comments?: number; shares?: number }
+  /** GF-65 — localized "AI generated" disclosure shown on the post media. Omit to hide. */
+  aiLabel?: string
 }
 
 export function ChannelMockup({
@@ -32,6 +34,7 @@ export function ChannelMockup({
   logoInitials,
   subtitle,
   metrics,
+  aiLabel,
 }: Props) {
   if (post.channel === 'linkedin') {
     return (
@@ -41,8 +44,9 @@ export function ChannelMockup({
         logoInitials={logoInitials}
         subtitle={subtitle}
         metrics={metrics}
+        aiLabel={aiLabel}
       />
     )
   }
-  return <InstagramMockup post={post} handle={handle} logoInitials={logoInitials} />
+  return <InstagramMockup post={post} handle={handle} logoInitials={logoInitials} aiLabel={aiLabel} />
 }

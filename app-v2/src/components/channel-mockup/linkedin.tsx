@@ -1,4 +1,4 @@
-import { ThumbsUp, MessageSquare, Repeat2, Send, Files, Film } from 'lucide-react'
+import { ThumbsUp, MessageSquare, Repeat2, Send, Files, Film, Sparkles } from 'lucide-react'
 import type { MockupPost } from './index'
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
     comments?: number
     shares?: number
   }
+  /** GF-65 — localized "AI generated" disclosure shown on the post media. */
+  aiLabel?: string
 }
 
 export function LinkedinMockup({
@@ -21,6 +23,7 @@ export function LinkedinMockup({
   logoInitials,
   subtitle,
   metrics,
+  aiLabel,
 }: Props) {
   const total = (metrics?.likes ?? 0) + (metrics?.comments ?? 0) + (metrics?.shares ?? 0)
   const hasMetrics = total > 0
@@ -62,6 +65,12 @@ export function LinkedinMockup({
             <Film className="h-3 w-3" />
             Video
           </span>
+          {aiLabel && (
+            <span className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/55 text-white text-[10px] font-medium px-2 py-0.5 pointer-events-none">
+              <Sparkles className="h-3 w-3" />
+              {aiLabel}
+            </span>
+          )}
         </div>
       ) : post.image && (
         <div className="relative aspect-[1.91/1] bg-neutral-100 overflow-hidden">
@@ -75,6 +84,13 @@ export function LinkedinMockup({
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
               <Files className="h-3 w-3" />
               1/{slideCount}
+            </span>
+          )}
+          {/* GF-65 — AI-generated disclosure (all Viktor media is AI-made). */}
+          {aiLabel && (
+            <span className="absolute top-2 left-2 flex items-center gap-1 rounded bg-black/55 text-white text-[10px] font-medium px-2 py-0.5 pointer-events-none">
+              <Sparkles className="h-3 w-3" />
+              {aiLabel}
             </span>
           )}
         </div>

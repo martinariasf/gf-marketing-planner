@@ -22,6 +22,7 @@ const en: Dict = {
   'errorBoundary.justReload':    'Just reload',
   // Common
   'common.cancel':           'Cancel',
+  'common.aiGenerated':      'AI generated',
   'common.save':             'Save',
   'common.saveChanges':      'Save changes',
   'common.saving':           'Saving…',
@@ -914,6 +915,7 @@ const de: Dict = {
   'errorBoundary.discardReload': 'Lokale Änderungen verwerfen & neu laden',
   'errorBoundary.justReload':    'Nur neu laden',
   'common.cancel':        'Abbrechen',
+  'common.aiGenerated':   'KI-generiert',
   'common.save':          'Speichern',
   'common.saveChanges':   'Änderungen speichern',
   'common.saving':        'Speichern…',
@@ -1780,6 +1782,7 @@ const es: Dict = {
   'errorBoundary.discardReload': 'Descartar ediciones locales y recargar',
   'errorBoundary.justReload':    'Solo recargar',
   'common.cancel':        'Cancelar',
+  'common.aiGenerated':   'Generado con IA',
   'common.save':          'Guardar',
   'common.saveChanges':   'Guardar cambios',
   'common.saving':        'Guardando…',

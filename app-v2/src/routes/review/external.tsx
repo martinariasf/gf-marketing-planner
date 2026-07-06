@@ -336,6 +336,7 @@ function PostContent({
           clientName={brand?.name ?? ''}
           handle={brand?.handle ?? ''}
           logoInitials={brand?.logoInitials ?? ''}
+          aiLabel={t('common.aiGenerated')}
         />
         {cover && (
           <button
