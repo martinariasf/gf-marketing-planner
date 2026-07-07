@@ -331,6 +331,9 @@ function PostContent({
             hashtags: post.hashtags ?? [],
             image: post.image,
             slides: post.slides,
+            // GF-65 — pass media so video posts render (and carry the AI badge)
+            // in the external review, not just images.
+            media: post.media,
             channel: post.channel ?? '',
           }}
           clientName={brand?.name ?? ''}
