@@ -304,6 +304,25 @@ function CommentRow({ c, t }: { c: ReviewComment; t: T }) {
   )
 }
 
+// GF-74 — the general comment(s) that apply to every shared post, shown in full
+// (no clamp) beneath each post and in the overall section so the reviewer can
+// always read them in context.
+function GeneralCommentsNote({ t, comments }: { t: T; comments: ReviewComment[] }) {
+  if (comments.length === 0) return null
+  return (
+    <div className="rounded-md border border-brand-blue/20 bg-brand-blue/5 px-2.5 py-1.5 space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-blue">
+        {t('review.ext.appliesToAll')}
+      </p>
+      {comments.map((c) => (
+        <p key={c.id} className="text-xs text-ink whitespace-pre-line">
+          {c.body}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 /** The post content (mockup or details) shared by deck cards and list cards. */
 function PostContent({
   t,
@@ -551,6 +570,7 @@ function DeckView({
   onSwitchToList: () => void
 }) {
   const posts = payload.posts
+  const generalComments = payload.comments.filter((c) => !c.postId)
   const [index, setIndex] = useState(0)
   const [exitDir, setExitDir] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -669,6 +689,7 @@ function DeckView({
             brand={payload.brand}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
+            generalComments={generalComments}
             exitDir={exitDir}
             busy={busy}
             onAccept={() => void accept()}
@@ -721,6 +742,7 @@ function DeckCard({
   brand,
   decision,
   comments,
+  generalComments,
   exitDir,
   busy,
   onAccept,
@@ -732,6 +754,7 @@ function DeckCard({
   brand?: PublicReviewBrand
   decision?: PublicPostDecision
   comments: ReviewComment[]
+  generalComments: ReviewComment[]
   exitDir: number
   busy: boolean
   onAccept: () => void
@@ -833,12 +856,13 @@ function DeckCard({
 
       <div className="flex-1 overflow-y-auto">
         <PostContent t={t} post={post} brand={brand} tab={tab} onZoom={onZoom} />
-        {(decision || comments.length > 0) && (
+        {(decision || comments.length > 0 || generalComments.length > 0) && (
           <div className="px-4 py-3 space-y-2 border-t border-border-subtle">
             <DecisionBadge t={t} decision={decision} />
             {comments.map((c) => (
               <CommentRow key={c.id} c={c} t={t} />
             ))}
+            <GeneralCommentsNote t={t} comments={generalComments} />
           </div>
         )}
       </div>
@@ -1074,6 +1098,7 @@ function SummaryScreen({
           <MessageSquare className="h-4 w-4 text-brand-blue" />
           {t('review.ext.overallTitle')}
         </h3>
+        <GeneralCommentsNote t={t} comments={payload.comments.filter((c) => !c.postId)} />
         {decisionDone ? (
           <div className="flex items-center gap-2 rounded-md bg-emerald-50 text-emerald-700 px-3 py-2 text-sm">
             <CheckCircle2 className="h-4 w-4" />
@@ -1182,6 +1207,7 @@ function ListView({
             brand={payload.brand}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
+            generalComments={generalComments}
             publicId={publicId}
             token={token}
             reviewerName={reviewerName}
@@ -1254,6 +1280,7 @@ function ListPostCard({
   brand,
   decision,
   comments,
+  generalComments,
   publicId,
   token,
   reviewerName,
@@ -1266,6 +1293,7 @@ function ListPostCard({
   brand?: PublicReviewBrand
   decision?: PublicPostDecision
   comments: ReviewComment[]
+  generalComments: ReviewComment[]
   publicId: string
   token: string
   reviewerName: string
@@ -1377,6 +1405,8 @@ function ListPostCard({
             ))}
           </div>
         )}
+
+        <GeneralCommentsNote t={t} comments={generalComments} />
 
         {showBox && (
           <div className="pt-1 space-y-2">
