@@ -153,7 +153,9 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
 })
 
 // ── List ───────────────────────────────────────────────────────────────────
-reviewLinks.get('/clients/:slug/review-links', requireScope(), requireRole('dash', 'admin'), async (c) => {
+// GF-66: 'agent' may list links so Viktor can find the linkId to reply on.
+// requireScope() confines an agent token to its own client (cross-client → 403).
+reviewLinks.get('/clients/:slug/review-links', requireScope(), requireRole('dash', 'admin', 'agent'), async (c) => {
   const slug = c.req.param('slug')
   let rows: ReviewLinkRecord[] = []
   try {
@@ -228,10 +230,11 @@ reviewLinks.post(
 )
 
 // ── Comments (moderation view) ────────────────────────────────────────────────
+// GF-66: 'agent' may read the comment thread so Viktor can process feedback.
 reviewLinks.get(
   '/clients/:slug/review-links/:id/comments',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     const rec = await getOwnedLink(slug, c.req.param('id'))
@@ -249,10 +252,13 @@ reviewLinks.get(
 )
 
 // Dashboard reply to a review thread (source: dashboard).
+// GF-66: 'agent' may reply so Viktor can answer feedback when asked in chat.
+// The reply is stored with source 'dashboard' and reviewerName = the agent's
+// actor label, so it surfaces in the external thread attributed to the team.
 reviewLinks.post(
   '/clients/:slug/review-links/:id/comments',
   requireScope(),
-  requireRole('dash', 'admin'),
+  requireRole('dash', 'admin', 'agent'),
   async (c) => {
     const slug = c.req.param('slug')
     const rec = await getOwnedLink(slug, c.req.param('id'))
@@ -402,7 +408,9 @@ interface ReviewCommentRow {
   createdAt?: string
 }
 
-reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('dash', 'admin'), async (c) => {
+// GF-66: 'agent' may read aggregated feedback (decisions + comments per post)
+// so Viktor can summarize what reviewers said when asked in the dashboard chat.
+reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('dash', 'admin', 'agent'), async (c) => {
   const slug = c.req.param('slug')
 
   let events: ReviewEventRow[] = []
