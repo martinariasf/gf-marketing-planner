@@ -114,6 +114,14 @@ staging.marketing.gfinnov.com {
         reverse_proxy mp-staging-caddy:80
     }
 
+    # GF-46: WhatsApp Business Cloud API webhook for the staging agent.
+    # Meta calls this URL: GET = verify-token handshake, POST = inbound
+    # messages. The gateway's whatsapp_cloud adapter listens on :8090 on the
+    # shared docker network; no host port is published.
+    handle /whatsapp/webhook {
+        reverse_proxy hermes-marketing-staging:8090
+    }
+
     # GF-4: external reviewers open /review/<publicId> without staging
     # credentials — the per-link access code on /api/v1/review/* is the gate.
     # The SPA's static files must come along (hashed JS/CSS + icons; no data).
