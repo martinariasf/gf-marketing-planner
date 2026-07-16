@@ -5,7 +5,7 @@ owner: martin
 repo: C:/Users/Admin/Desktop/GF Innovative Solutions/GF/marketing-planner
 source_branch: experimental
 branch: claude/gf-73-agent-status-approvals
-code_reviewed: false
+code_reviewed: true  # Layer-5 GLM 5.2 (z-ai/glm-5.2, high) — PASS 2026-07-16, round 2 (round-1 test-coverage finding fixed)
 focus_tasks: [TASK-001, TASK-002, TASK-003]
 items:
   - gf-73: Reload button not working (regression) — real bug is approval-overlay precedence | priority: high
