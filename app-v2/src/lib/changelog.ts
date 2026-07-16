@@ -21,6 +21,13 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-07-08',
+    title: 'Status changes made by Viktor now show up on reload',
+    items: [
+      'When Viktor moves a post to another status (for example into Review), the calendar and kanban now reflect it as soon as you press the reload button — previously his change could stay invisible on posts that had already been approved or reviewed in the dashboard.',
+    ],
+  },
+  {
     date: '2026-07-04',
     title: 'Every generated image and video now shows up in Assets',
     items: [
