@@ -13,8 +13,10 @@ test('workflow status differing from the approval lane → decision', () => {
 })
 
 test('every workflow key is accepted when it changes the lane', () => {
-  const current = { status: 'idea', approval: { status: 'approved' } }
-  for (const d of ['drafting', 'in_review', 'scheduled', 'needs_revision', 'rejected']) {
+  // Lane sits on a non-workflow status ('idea') so all SIX decisions — including
+  // `approved`, the canonical revert target (TASK-003) — differ from it and map.
+  const current = { status: 'idea', approval: { status: 'idea' } }
+  for (const d of ['drafting', 'in_review', 'approved', 'scheduled', 'needs_revision', 'rejected']) {
     assert.equal(approvalDecisionForPatch(current, d), d)
   }
 })
