@@ -21,6 +21,7 @@ import {
   approvalCreateSchema,
   zodDetail,
 } from '../schemas/post.js'
+import { approvalDecisionForPatch } from '../approvalFromPatch.js'
 import { applyStatusToSchedule, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
 import { SchedulingError } from '../scheduling/provider.js'
 
@@ -288,6 +289,31 @@ viktorOwned.patch(
     const finalPatch = schedulingPatch ? { ...patch, publishing: { ...((patch.publishing as object) ?? {}), ...schedulingPatch } } : patch
     await persistSchedulingPatch(slug, postId, finalPatch, actor)
     await audit(principal, { action: 'post.patch', slug, resourceId: postId, after: finalPatch })
+    // GF-73 — the displayed lane prefers approval.status (stamped from the
+    // latest approvals_v2 row), so a status-only patch on a post with approval
+    // history would stay invisible in the calendar/kanban forever. Record the
+    // same decision row the dashboard's own status selector writes. This runs
+    // after scheduling, so `scheduled` is only recorded once the provider job
+    // really exists (patch.status carries the post-scheduling value).
+    const decision = approvalDecisionForPatch(current, finalPatch.status)
+    if (decision) {
+      await withPb((pb) =>
+        pb.collection('approvals_v2').create({
+          slug,
+          postId,
+          decision,
+          note: '',
+          actor,
+          ts: new Date().toISOString(),
+        }),
+      )
+      await audit(principal, {
+        action: 'approval.decide',
+        slug,
+        resourceId: postId,
+        after: { decision, via: 'post.patch' },
+      })
+    }
     const next = await buildPost(slug, postId)
     return c.json(next)
   },
