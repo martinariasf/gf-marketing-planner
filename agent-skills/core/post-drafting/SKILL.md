@@ -57,6 +57,8 @@ When the user specifies a platform, adapt both the *copy* and the *visual* to th
 - When a user asks to *review the image in chat* or says they *don't always have access to the folder*, always send the candidate as a MEDIA attachment directly in the conversation in addition to saving it on disk.
 - If a composition feels too empty or text-heavy, iterate on structure first (bands, cards, dividers, visual anchors) before adding more copy; maintain legibility over density.
 
+- **User-provided image:** When the user sends an image to post (lands in `/opt/data/cache/images/img_*.jpg`), copy it to the client assets folder, register in `manifest.json` (increment the highest existing `id` suffix), and create the post with the staging asset URL in the `image` field. **Do NOT try to "see", OCR, browser-navigate, color-analyze, or otherwise inspect the image before posting.** The user has already seen it and decided to post it — attempting to analyze it wastes 5-10 tool calls and adds no value. Just proceed with the copy/register/post flow and draft the copy from the user's spoken context. If you genuinely need to know what's in the image (e.g. the user asks you to describe it back), use `vision_analyze` with the image path — one call, not a multi-tool investigation chain.
+
 Client-specific channel strategy (positioning vs selling, tools allowlists, editorial themes, narrative voice) lives in the client skills folder — read `skills/client/post-drafting-refs/` when present and treat its rules as hard constraints.
 
 ## Boundary-safe reframing

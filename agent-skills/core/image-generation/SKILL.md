@@ -209,6 +209,39 @@ regeneration. Then deliver. Do not iterate open-endedly on an image that already
 clears the bar; every regeneration costs credits and drifts off the Visual
 Guidelines.
 
+## PIL-based image editing (fallback when image_generate can't transform an existing image)
+
+The active `image_generate` backend is **text-to-image only** — it cannot edit or
+transform an existing image (no image-to-image). When the user asks to modify a
+photo they already have (change colours, make an illustration, apply a filter),
+use **PIL + numpy** directly. The venv at `/opt/hermes/.venv/bin/python3` has
+Pillow; install numpy if missing (`/opt/hermes/.venv/bin/pip install numpy -q`).
+
+### Common transforms
+
+- **Boost colour/saturation:** `ImageEnhance.Color(img).enhance(2.5)` then convert
+  to HSV, multiply the S channel by 1.4 (clamped to 255), convert back.
+- **Illustration / cartoon effect:** Smooth → posterize (reduce to 6 colour
+  levels) → edge-detect (FIND_EDGES, threshold >40) → composite edges as dark
+  outlines over posterized fill → `ModeFilter(size=5)` for oil-painting look.
+  See `references/pil-image-transforms.md` for the full recipe and tunable parameters.
+- **Always save to the client assets path** (e.g.
+  `/opt/marketing-planner/client/assets/<filename>.jpg`) so the post's `image`
+  URL stays valid. The file overwrites in place — no manifest update needed if
+  the entry already exists.
+
+### Verifying an edit was applied
+
+When the user asks "did you actually change it?" (skepticism signal), verify with
+**measurable data**, not just words:
+
+1. Compare original vs. edited: saturation mean, brightness mean, file size.
+2. Compute pixel diff: `np.abs(orig - edited).mean()` and percentage of changed
+   pixels.
+3. Report the numbers — e.g. "Saturation 61→128, 99% pixels changed, file size
+   445KB→1.1MB." This is far more convincing than "yes I did it."
+
+
 ## Delivery
 
 Send the generated image **once** (no preview + URL duplication). Confirm the
