@@ -1,6 +1,6 @@
 ---
 name: image-generation
-description: Generating or changing images for posts and assets. ALWAYS read the brand identity (colors, typography, logos, tone) AND the Visual Guidelines from the brief BEFORE generating, so the image is on-brand and cohesive across posts. Covers per-channel format (Instagram vertical 4:5, LinkedIn horizontal), fidelity, post_id auto-link, never inventing logos, and using the real logo as a reference image.
+description: Generating or changing images for posts and assets. ALWAYS read the brand identity (colors, typography, logos, tone) AND the Visual Guidelines from the brief BEFORE generating, so the image is on-brand and cohesive across posts. Covers per-channel format (Instagram vertical 4:5, LinkedIn horizontal), fidelity, post_id auto-link, never inventing logos, using the real logo as a reference image, and the visual craft bar that keeps the result from looking AI-made.
 tags: [marketing, images, branding]
 ---
 
@@ -129,6 +129,86 @@ When the image carries on-canvas text:
 - State this in the prompt, e.g. "minimal on-image text: one short headline only,
   large legible sans-serif, no small print, no paragraphs."
 
+## STEP 4 — The visual craft bar (don't produce AI slop)
+
+STEP 0–3 make the image on-brand, correctly sized, and legible. An image can pass
+all of that and still look machine-made, which is the failure that gets work
+rejected. This step is the bar it has to clear.
+
+**Stance.** You are art-directing, not requesting a picture. Safe, generic and
+decorative is a failure even when the palette is right. Make one deliberate
+visual decision the image is built around, and let everything else stay quiet.
+Reaching for more effects is the opposite of bold: an image where the background,
+the lighting, the overlay and the type are all fighting reads as noise, not
+craft.
+
+### The refuse list (AI-image defaults)
+
+These are the generator's reflexes. The brief or the Visual Guidelines can earn
+any of them explicitly — but reaching for one because it is what the model
+offers first means you were not deciding. Put the refusal in the prompt as a
+negative instruction when it matters.
+
+Scene clichés:
+- The diverse team smiling at a laptop in a bright open-plan office.
+- Glowing blue holographic circuitry, neural-network meshes, or floating data
+  streams to mean "AI" or "technology".
+- Translucent glass UI panels or fake dashboards hovering in mid-air, and a hand
+  reaching into a glowing interface.
+- The metaphor bin: brain made of circuits, lightbulb, handshake, gears, rocket
+  launch, chess piece, glowing padlock.
+- Hyper-glossy 3D-render plastic surfacing applied to everything regardless of
+  subject.
+
+Surface habits (these are the tells that got the v1 pitch slides rejected as
+"too AI / too sales-y" — treat them as known-bad for GF):
+- **Pill eyebrows / kicker labels above a headline.** This is a ban, not a
+  default. The headline carries its own weight.
+- Radial glows and lens flares as the depth system. Real depth has an offset and
+  a soft blur, not a zero-offset colored halo.
+- Ghost numbers and giant faded background digits.
+- Heavy drop shadows, over-rounded corners, chip/tag rows.
+- Abstract skeleton bars standing in for content that does not exist.
+- Purple-to-blue gradient mesh as the default background.
+- A perfectly centered, symmetrical hero object floating on a gradient.
+- Emoji or unicode glyphs standing in for a real icon system.
+- Uncanny over-smooth skin and identical three-point studio lighting on every
+  subject.
+
+Hard mechanical checks:
+- **Garbled text is the single biggest AI tell.** The generator cannot spell
+  reliably. Keep on-canvas text to the minimum STEP 3 allows, and when the exact
+  wording matters, generate a **text-free** plate and composite the type
+  afterwards (see `video-generation` and the reel-overlay skill for the ffmpeg
+  route). Never ship an image with a misspelled or melted word.
+- **Hands.** Prefer compositions without visible hands, or crop them. If hands
+  are unavoidable, inspect the finger count before delivering.
+- **Contrast.** Any text over imagery needs a real contrast floor — roughly
+  4.5:1. If it is not there, add a scrim or move the text, do not tint the type
+  gray.
+
+### The skeleton test (run this before delivering)
+
+Ignore the styling and read the image as structure alone. Does it say what this
+post is about, and does it carry one thing a viewer could actually point at — a
+real product screen, a real object, a real number, a real place?
+
+- If yes, ship it.
+- If the image only works because of its surface treatment (glow, gradient,
+  texture), it is decoration. Do NOT add more effects. Change the subject to
+  something concrete, or ask the user what the real thing is.
+
+Fabricated product screens must be labelled as illustrative, not passed off as a
+real client. Prefer a real screenshot whenever one exists in the client assets.
+
+### One pass, then stop
+
+Generate, then inspect once against STEP 0–3 and this step together — one batched
+look, not a rule-by-rule loop. Fix everything that look surfaces in a single
+regeneration. Then deliver. Do not iterate open-endedly on an image that already
+clears the bar; every regeneration costs credits and drifts off the Visual
+Guidelines.
+
 ## Delivery
 
 Send the generated image **once** (no preview + URL duplication). Confirm the
@@ -144,5 +224,7 @@ think nothing happened.
 
 - `video-generation` - create Seedance 2.0 MP4 assets with `video_generate`.
 
-- `copywriting` — read the VOICE before writing the post text.
+- `copywriting` — read the VOICE before writing the post text. Its STEP 1.6 is
+  the verbal counterpart of STEP 4 above: same stance, same refuse-list logic,
+  same skeleton test, applied to the words.
 - The platform API write-contract skill (when present on this box) — full API write-contract, assets, carousels.

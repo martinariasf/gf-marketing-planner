@@ -39,6 +39,27 @@ approve the scenes as still images first:
    approved scene descriptions in the prompt (and the approved stills as
    `input_references` / `first_frame` where useful).
 
+## STEP 0.6 — The visual craft bar applies to every scene
+
+The storyboard stills are generated with `image_generate`, so **`image-generation`
+STEP 4 (the visual craft bar) governs them** — the refuse list, the skeleton test,
+and the one-pass rule. Read it before you generate the first still. A storyboard
+of glowing-circuitry stock scenes produces a video of glowing-circuitry stock
+scenes.
+
+Two rules are video-specific:
+
+- **Seedance warps text.** Never ask it to animate a plate with readable words on
+  it. Generate **text-free** brand plates, pin them with `first_frame`, and
+  composite every headline, caption, and the real logo afterwards in ffmpeg. If
+  a scene must show real UI text (a dashboard, a chat thread), skip Seedance for
+  that scene entirely and build the motion from still plates with ffmpeg
+  `zoompan` push-ins and crossfades.
+- **One authored motion moment per clip.** A single deliberate move — one push-in,
+  one reveal, one swipe — with everything else held still reads as directed. The
+  same drifting camera on every scene, or several effects at once, reads as a
+  generator running. Ease out of motion rather than stopping it abruptly.
+
 ## Duration cap
 
 **Maximum 15 seconds per video.** If the user asks for longer, say so and offer
