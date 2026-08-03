@@ -936,6 +936,7 @@ export default function CalendarView() {
                               handle={plan.client.handle}
                               logoInitials={plan.client.logoInitials}
                               subtitle={brief.company.industry}
+                              aiLabel={t('common.aiGenerated')}
                             />
                           ) : (
                             <PicturePane

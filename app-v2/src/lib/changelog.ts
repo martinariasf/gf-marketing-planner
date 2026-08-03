@@ -21,6 +21,34 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-03',
+    title: 'Status changes made by Viktor now show up on reload',
+    items: [
+      'When Viktor moves a post to another status (for example into Review), the calendar and kanban now reflect it as soon as you press the reload button — previously his change could stay invisible on posts that had already been approved or reviewed in the dashboard.',
+    ],
+  },
+  {
+    date: '2026-08-03',
+    title: 'Post media is now labelled as AI generated',
+    items: [
+      'Images and videos that Viktor generated now carry a small "AI generated" label in the Instagram and LinkedIn previews, so you can tell at a glance which media is AI-made before it goes out — and stay on the right side of the platforms\' disclosure rules.',
+    ],
+  },
+  {
+    date: '2026-08-03',
+    title: 'Video posts play right in the preview',
+    items: [
+      'A video post used to look like a still image with no way to play it. The preview now plays the real clip in place, and Instagram shows it in a vertical reel frame while LinkedIn keeps its landscape frame without cropping your vertical clips.',
+    ],
+  },
+  {
+    date: '2026-08-03',
+    title: 'General review comments are shown in full, next to every post',
+    items: [
+      'On the review link you share with clients and colleagues, a comment that applies to the whole set now appears in full underneath every post — not just once at the bottom, and no longer cut off mid-sentence. It is marked "Applies to all posts" so nobody mistakes it for feedback on a single item.',
+    ],
+  },
+  {
     date: '2026-07-05',
     title: 'Every generated image and video now shows up in Assets',
     items: [
