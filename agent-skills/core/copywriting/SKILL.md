@@ -1,6 +1,6 @@
 ---
 name: copywriting
-description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés). Covers where the voice lives and how to write changes back via the API.
+description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés) plus the craft bar the copy must clear to be worth posting. Covers where the voice lives and how to write changes back via the API.
 tags: [marketing, copy, voice]
 ---
 
@@ -67,6 +67,62 @@ rules, not preferences:
 Before output, scan the draft for every rule above. One violation = rewrite
 that line.
 
+These rules are the canonical anti-AI list for marketing copy — this skill owns
+them. Do not also run a separate humanizing pass on a post you drafted here; it
+costs tokens and drifts the text off the brief. The `humanizer` skill and its
+`references/ai-patterns.md` are the deep reference for long-form text or when a
+human explicitly asks you to humanize something.
+
+## STEP 1.6 — The craft bar (what GOOD looks like)
+
+STEP 1.5 only tells you what to avoid. Copy can pass every rule above and still
+be forgettable, and that is the more common failure. This step is the bar it has
+to clear.
+
+**Stance.** You are not producing acceptable copy. You are producing the one post
+in the feed someone stops scrolling for. Safe, timid and measured is a failure
+even when it is on-voice and clean. Take a position and commit to it; hedged copy
+reads as having nothing to say.
+
+### The refuse list (marketing defaults)
+
+These are the category's reflexes, not bans. The brief's own words can earn any
+of them. But reaching for one when nothing forced you there means you were not
+deciding — rewrite the line instead of softening it.
+
+- The listicle scaffold: "3 things we learned", "5 ways to…", "Here are the steps".
+- The rhetorical-question hook: "Ever wondered why…?", "What if I told you…?",
+  "Sound familiar?".
+- The milestone humble-brag: an achievement post whose only content is the
+  achievement plus gratitude.
+- The pivot line: "Here's the thing.", "But here's what nobody tells you.",
+  "Let that sink in."
+- A one-word opener on its own line for drama ("Wild.", "This.").
+- Borrowed authority with no source: "Studies show", "Everyone in the industry
+  knows", "The best teams all…".
+- A CTA that begs for engagement instead of asking for an action: "Thoughts?",
+  "Agree?", "Drop a comment below".
+- Opening with the company name or "We're excited to announce". The news is the
+  hook, not the announcement of the news.
+
+### The skeleton test (run this before output)
+
+Strip every adjective, every transition, and every line that only sets up another
+line. Read what is left.
+
+- If a specific, checkable claim survives — a number, a name, a workflow, a thing
+  that actually happened — the post has a spine. Ship it.
+- If nothing survives, the post was texture. Do NOT add the adjectives back. Go
+  get the concrete detail from the brief, the plan, or by asking the user one
+  question, and rebuild around it.
+
+### One pass, then stop
+
+Draft fully. Read it once against STEP 0, STEP 1.5 and this step together — one
+batched pass, not a rule-by-rule loop. Fix everything that pass surfaces in a
+single rewrite. Then stop and show the user. Do not re-polish copy that already
+clears the bar; open-ended self-editing burns tokens and drifts the voice.
+
 ## STEP 2 — Write the change back via the API (not the JSON file)
 
 - New post:   `POST  /clients/$CLIENT_SLUG/posts`  (date + title required)
@@ -80,4 +136,9 @@ file — otherwise they miss the audit log and kanban.
 ## See also
 
 - `image-generation` — read the BRAND IDENTITY before generating a cover image.
+  Its STEP 4 is the visual counterpart of STEP 1.6: the same stance, refuse list,
+  and skeleton test applied to the picture instead of the words. A sharp caption
+  on a stock-cliché image still reads as AI slop.
+- `humanizer` — deep anti-AI reference for long-form or non-post text. Do NOT run
+  it as a second pass over copy drafted here (see STEP 1.5).
 - The platform API write-contract skill (when present on this box) — full API write-contract and post lifecycle.

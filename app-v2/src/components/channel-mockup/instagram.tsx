@@ -1,13 +1,15 @@
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, Film } from 'lucide-react'
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, Film, Sparkles } from 'lucide-react'
 import type { MockupPost } from './index'
 
 interface Props {
   post: MockupPost
   handle: string
   logoInitials: string
+  /** GF-65 — localized "AI generated" disclosure shown on the post media. */
+  aiLabel?: string
 }
 
-export function InstagramMockup({ post, handle, logoInitials }: Props) {
+export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) {
   const slideCount = post.slides?.length ?? 0
   const isCarousel = slideCount > 1
   const video = post.media?.find((item) => item.type === 'video' && item.url)
@@ -29,20 +31,27 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
           <MoreHorizontal className="h-4 w-4 text-neutral-500" />
         </div>
 
-        <div className="relative aspect-square bg-neutral-100 overflow-hidden">
+        {/* GF-72 — a video post renders as a playable 9:16 reel (real .mp4 with
+            a native play control), not a static square thumbnail. */}
+        <div
+          className={
+            'relative overflow-hidden ' +
+            (video ? 'aspect-[9/16] bg-black' : 'aspect-square bg-neutral-100')
+          }
+        >
           {video ? (
             <>
               <video
                 src={video.url}
                 poster={video.thumbnail}
-                muted
+                controls
                 playsInline
                 preload="metadata"
                 className="h-full w-full object-cover bg-black"
               />
-              <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
+              <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5 pointer-events-none">
                 <Film className="h-3 w-3" />
-                Video
+                Reel
               </span>
             </>
           ) : post.image && (
@@ -57,6 +66,13 @@ export function InstagramMockup({ post, handle, logoInitials }: Props) {
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
               <Copy className="h-3 w-3" />
               1/{slideCount}
+            </span>
+          )}
+          {/* GF-65 — AI-generated disclosure (all Viktor media is AI-made). */}
+          {aiLabel && (video || post.image) && (
+            <span className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[10px] font-medium px-2 py-0.5 pointer-events-none">
+              <Sparkles className="h-3 w-3" />
+              {aiLabel}
             </span>
           )}
         </div>
