@@ -82,8 +82,10 @@ async function postizFetch(
   return res
 }
 
-/** Build the Postiz post payload from our canonical post + a publish time. */
-function toPostizPayload(post: SchedulablePost, when: string): Record<string, unknown> {
+/** Build the Postiz post payload from our canonical post + a publish time.
+ *  Exported for the GF-89 encoding round-trip regression test — no other
+ *  caller outside this module should need it. */
+export function toPostizPayload(post: SchedulablePost, when: string): Record<string, unknown> {
   const content = [post.title, post.copy].filter(Boolean).join('\n\n').trim()
   const media = (post.mediaUrls ?? (post.image ? [post.image] : [])).filter(
     (u): u is string => typeof u === 'string' && u.length > 0,

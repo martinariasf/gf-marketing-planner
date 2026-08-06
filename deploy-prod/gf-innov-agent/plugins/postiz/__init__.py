@@ -109,12 +109,19 @@ def _run_cli(args: List[str], timeout: int = CLI_TIMEOUT) -> Dict[str, Any]:
     key = _resolve_postiz_api_key()
     if key:
         env["POSTIZ_API_KEY"] = key
+    # GF-89 — force UTF-8 for the subprocess's stdio/locale. Without this, the
+    # CLI's own text handling falls back to whatever locale the container has,
+    # which can mangle non-ASCII (accents, etc.) in captured stdout/stderr.
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("LANG", "C.UTF-8")
     try:
         proc = subprocess.run(
             [CLI_BIN, *args],
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )

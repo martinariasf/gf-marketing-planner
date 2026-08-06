@@ -21,6 +21,13 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-06',
+    title: 'Fixed garbled dashes and ellipses in the calendar export and placeholders',
+    items: [
+      'The export date-range label and the hashtag/CTA placeholder text in the calendar could show a garbled character sequence (mojibake) instead of a dash or ellipsis — those now render correctly.',
+    ],
+  },
+  {
     date: '2026-07-08',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

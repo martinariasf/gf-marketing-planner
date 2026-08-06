@@ -296,7 +296,7 @@ export default function CalendarView() {
     return { data, total }
   }, [posts, monthKeys, plan.pillars, t])
 
-  // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
+  // CAL1 — overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
   // GF-31 — default to the current month (if in range) so a manually created
   // post lands where the user is, not on the range's first month.
@@ -312,7 +312,7 @@ export default function CalendarView() {
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
-  // CAL2 â€” direct user image upload on a post.
+  // CAL2 — direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
   // GF-35 — collapsed by default; expands the recoverable rejected list.
   const [showRejected, setShowRejected] = useState(false)
@@ -428,7 +428,7 @@ export default function CalendarView() {
     }
   }, [pendingSelectId, postsByMonth, activeMonth])
 
-  // GF-17 â€” export the currently visible calendar range as PDF or Word.
+  // GF-17 — export the currently visible calendar range as PDF or Word.
   const runExport = useCallback(
     async (kind: 'pdf' | 'word') => {
       try {
@@ -438,7 +438,7 @@ export default function CalendarView() {
           posts,
           labels: {
             title: t('calendar.eyebrow'),
-            rangeLabel: `${rangeMonths[0]?.label ?? ''} â€“ ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
+            rangeLabel: `${rangeMonths[0]?.label ?? ''} – ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
             date: t('export.date'),
             channel: t('export.channel'),
             format: t('export.format'),
@@ -459,7 +459,7 @@ export default function CalendarView() {
     [plan.client.name, calendarRange, posts, rangeMonths, t],
   )
 
-  // CAL2 â€” upload an image straight onto the active post (no Viktor needed).
+  // CAL2 — upload an image straight onto the active post (no Viktor needed).
   // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
   // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
   const onUploadImage = useCallback(
@@ -500,7 +500,7 @@ export default function CalendarView() {
   const next = useCallback(() => goTo(slideIndex + 1), [goTo, slideIndex])
   const prev = useCallback(() => goTo(slideIndex - 1), [goTo, slideIndex])
 
-  // Keyboard arrows â€” but never while typing in a field.
+  // Keyboard arrows — but never while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -518,7 +518,7 @@ export default function CalendarView() {
     setDirection(0)
   }
 
-  // CAL1 â€” from a compact card (Week/Quarter) jump into the Month viewer
+  // CAL1 — from a compact card (Week/Quarter) jump into the Month viewer
   // focused on that exact post.
   const jumpToPost = useCallback(
     (post: Post) => {
@@ -676,7 +676,7 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* Month tabs â€” shown in Week + Month modes (Quarter shows all months). */}
+      {/* Month tabs — shown in Week + Month modes (Quarter shows all months). */}
       {viewMode !== 'quarter' && (
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
         {rangeMonths.map((m) => {
@@ -720,7 +720,7 @@ export default function CalendarView() {
       </div>
       )}
 
-      {/* CAL1 â€” Quarter overview: one column per month, compact cards. */}
+      {/* CAL1 — Quarter overview: one column per month, compact cards. */}
       {viewMode === 'quarter' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {rangeMonths.map((m) => {
@@ -776,7 +776,7 @@ export default function CalendarView() {
         </div>
       )}
 
-      {/* CAL1 â€” Week overview: active month's posts grouped by week-of-month. */}
+      {/* CAL1 — Week overview: active month's posts grouped by week-of-month. */}
       {viewMode === 'week' && (
         monthPosts.length === 0 ? (
           <Card>
@@ -841,8 +841,8 @@ export default function CalendarView() {
                 {t('calendar.postOf', { n: slideIndex + 1, total: monthPosts.length, month: activeMonthLabel })}
               </span>
               <span className="hidden sm:inline">
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†</kbd>{' '}
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†’</kbd> {t('calendar.useArrows').replace('â† â†’ ', '')}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">←</kbd>{' '}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">→</kbd> {t('calendar.useArrows').replace('← → ', '')}
               </span>
             </div>
 
@@ -961,7 +961,7 @@ export default function CalendarView() {
                           <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
                           {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
                         </Button>
-                        {/* CAL2 â€” direct upload (single-image posts only; carousels
+                        {/* CAL2 — direct upload (single-image posts only; carousels
                             are preview-only in V3 so the cover isn't replaced here). */}
                         {isApiEnabled && !isCarousel(activePost) && (
                           <>
@@ -1277,7 +1277,7 @@ export default function CalendarView() {
         </DialogContent>
       </Dialog>
 
-      {/* GF-4 â€” share-for-review + external-review activity. */}
+      {/* GF-4 — share-for-review + external-review activity. */}
       {isApiEnabled && (
         <ReviewShareDialog
           slug={slug}
@@ -1459,7 +1459,7 @@ function StatusSelect({
 }
 
 /**
- * CAL1 â€” compact post card reused by Week + Quarter overviews. Small thumbnail,
+ * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
  * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
 function CompactPostCard({
@@ -1794,7 +1794,7 @@ function CopyPane({
     if (title !== post.title) patch.title = title
     if (copy !== post.copy) patch.copy = copy
     if (hashtags !== initialHashtags) {
-      // Space- or newline-separated tokens â†’ string[]; drop empties, keep as typed.
+      // Space- or newline-separated tokens → string[]; drop empties, keep as typed.
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
@@ -1988,7 +1988,7 @@ function CopyPane({
             value={hashtags}
             onChange={(e) => setHashtags(e.target.value)}
             rows={2}
-            placeholder="#hashtag1 #hashtag2 â€¦"
+            placeholder="#hashtag1 #hashtag2 …"
             className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
           />
         </div>
@@ -2007,7 +2007,7 @@ function CopyPane({
           <input
             value={cta}
             onChange={(e) => setCta(e.target.value)}
-            placeholder="Call to actionâ€¦"
+            placeholder="Call to action…"
             className="w-full text-sm font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
         </div>
@@ -2203,7 +2203,7 @@ function PicturePane({
     )
   }
 
-  // Single-image (or no image) â€” unchanged behaviour.
+  // Single-image (or no image) — unchanged behaviour.
   if (!post.image) {
     return (
       <div className="w-full max-w-sm aspect-square rounded-xl border-2 border-dashed border-border-subtle flex flex-col items-center justify-center text-ink-muted gap-2">
