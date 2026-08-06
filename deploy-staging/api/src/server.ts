@@ -26,6 +26,7 @@ import { reviewLinks } from './routes/reviewLinks.js'
 import { integration } from './routes/integration.js'
 import { assetFiles } from './routes/assetFiles.js'
 import { inspiration } from './routes/inspiration.js'
+import { chatAttachments } from './routes/chatAttachments.js'
 import { planningConfig } from './routes/planningConfig.js'
 import { agentJobsRoute } from './routes/agentJobs.js'
 import { rateLimit } from './rateLimit.js'
@@ -123,6 +124,7 @@ app.route('/api/v1', reviewLinks)
 app.route('/api/v1', userOwned)
 app.route('/api/v1', viktorOwned)
 app.route('/api/v1', inspiration)
+app.route('/api/v1', chatAttachments)
 app.route('/api/v1', planningConfig)
 app.route('/api/v1', agentJobsRoute)
 app.route('/api/v1', auditRoute)

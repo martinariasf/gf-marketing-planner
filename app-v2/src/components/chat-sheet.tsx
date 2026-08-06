@@ -12,6 +12,7 @@
 
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -31,17 +32,25 @@ import {
   MessageSquarePlus,
   History,
   Check,
+  Paperclip,
 } from 'lucide-react'
 import {
   apiLoadAgentJobs,
   apiChatStream,
   apiLoadChatHistory,
   apiLoadChatThreads,
+  apiUploadChatAttachment,
   isApiEnabled,
   isWriteTool,
+  CHAT_ATTACHMENT_IMAGE_MIME_TYPES,
+  CHAT_ATTACHMENT_MAX_IMAGE_BYTES,
+  CHAT_ATTACHMENT_MAX_DOC_BYTES,
+  CHAT_ATTACHMENT_MAX_COUNT,
+  CHAT_ATTACHMENT_DOC_EXTENSIONS,
   type AgentJob,
   type ChatTurn,
   type ChatThread,
+  type ChatAttachment,
 } from '@/lib/api-client'
 import {
   DropdownMenu,
@@ -82,15 +91,21 @@ interface Message {
   tools?: ToolEvent[]      // synthetic UI labels from server (Reading brief.json…)
   toolCalls?: ToolCall[]   // real OpenAI-style tool calls (set_approval, etc.)
   streaming?: boolean
+  /** GF-68: structured attachment metadata carried on this message (persisted
+   * server-side as chat_messages.attachments). Rendered from this field, never
+   * regex-sniffed out of `content`. */
+  attachments?: ChatAttachment[]
 }
 
 function recordToMessage(record: ChatMessageRecord): Message | null {
   if (record.role !== 'user' && record.role !== 'assistant') return null
+  const withAttachments = record as ChatMessageRecord & { attachments?: ChatAttachment[] }
   return {
     id: record.id,
     created: record.created,
     role: record.role,
     content: record.content,
+    attachments: withAttachments.attachments ?? undefined,
   }
 }
 
@@ -189,6 +204,13 @@ export function ChatSheet({
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  // GF-68: attachments picked/dropped but not yet sent. Uploaded to PB
+  // immediately (so the composer holds only ids, never base64 bytes); cleared
+  // on successful send, kept on error so the user doesn't lose the upload.
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
+  const [uploadingAttachments, setUploadingAttachments] = useState(0)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   // The active session. `dash-${slug}` is the default/legacy session; "New chat"
   // mints a fresh `dash-${slug}-${ts}` thread, and the session switcher can jump
   // back to any past one. Everything downstream (history, persistence, Hermes
@@ -294,12 +316,13 @@ export function ChatSheet({
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => {
-          const record = m as typeof m & { created?: string }
+          const record = m as typeof m & { created?: string; attachments?: ChatAttachment[] }
           return {
             id: record.id,
             created: record.created,
             role: record.role as 'user' | 'assistant',
             content: record.content,
+            attachments: record.attachments ?? undefined,
           }
         })
       setMessages(orderMessages(hist))
@@ -389,9 +412,11 @@ export function ChatSheet({
   const send = useCallback(
     async (raw: string) => {
       const text = raw.trim()
-      if (!text || busy) return
+      // GF-68: a turn is valid with attachments alone (no typed text).
+      if ((!text && pendingAttachments.length === 0) || busy) return
       setBusy(true)
-      const userMsg: Message = { role: 'user', content: text }
+      const sentAttachments = pendingAttachments
+      const userMsg: Message = { role: 'user', content: text, attachments: sentAttachments.length ? sentAttachments : undefined }
       const assistantMsg: Message = { role: 'assistant', content: '', tools: [], streaming: true }
       setMessages((prev) => [...prev, userMsg, assistantMsg])
       setInput('')
@@ -444,6 +469,7 @@ export function ChatSheet({
           thread,
           message: text,
           history: historyTurns,
+          attachments: sentAttachments.map((a) => ({ id: a.id })),
           signal: ac.signal,
         })) {
           if (ev.type === 'token') {
@@ -564,6 +590,12 @@ export function ChatSheet({
           }
         }
       } finally {
+        // GF-68: clear pending attachments only once the turn actually
+        // succeeded — on error keep them staged so the user doesn't lose the
+        // upload and can just retry send.
+        if (sentAttachments.length > 0 && !sawError) {
+          setPendingAttachments((prev) => prev.filter((a) => !sentAttachments.some((s) => s.id === a.id)))
+        }
         setBusy(false)
         abortRef.current = null
         // GF-29 — a turn just ended: always resync the dashboard, not only when
@@ -575,13 +607,56 @@ export function ChatSheet({
         onWroteSomething?.()
       }
     },
-    [busy, messages, slug, thread, onWroteSomething, t],
+    [busy, messages, slug, thread, onWroteSomething, t, pendingAttachments],
   )
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     void send(input)
   }
+
+  // GF-68: upload one or more picked/dropped files as chat attachments.
+  // Pre-validates against the same limits the server enforces so the user
+  // gets an immediate, friendly error instead of a round-trip 413/415.
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files)
+      if (pendingAttachments.length + list.length > CHAT_ATTACHMENT_MAX_COUNT) {
+        toast.error(t('chat.attachTooLarge'))
+        return
+      }
+      for (const file of list) {
+        const isImage = CHAT_ATTACHMENT_IMAGE_MIME_TYPES.includes(file.type)
+        const isDoc = !isImage && CHAT_ATTACHMENT_DOC_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext))
+        if (!isImage && !isDoc) {
+          toast.error(t('chat.attachUnsupported'))
+          continue
+        }
+        if (isImage && file.size > CHAT_ATTACHMENT_MAX_IMAGE_BYTES) {
+          toast.error(t('chat.attachTooLarge'))
+          continue
+        }
+        if (isDoc && file.size > CHAT_ATTACHMENT_MAX_DOC_BYTES) {
+          toast.error(t('chat.attachTooLarge'))
+          continue
+        }
+        setUploadingAttachments((n) => n + 1)
+        try {
+          const item = await apiUploadChatAttachment(slug, file)
+          setPendingAttachments((prev) => [...prev, item])
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : t('chat.attachUnsupported'))
+        } finally {
+          setUploadingAttachments((n) => Math.max(0, n - 1))
+        }
+      }
+    },
+    [pendingAttachments.length, slug, t],
+  )
+
+  const removePendingAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id))
+  }, [])
 
   return (
     <>
@@ -732,7 +807,40 @@ export function ChatSheet({
           </div>
 
           {/* Composer */}
-          <div className="border-t border-border-subtle p-3 space-y-2 shrink-0">
+          <div
+            className={cn(
+              'border-t border-border-subtle p-3 space-y-2 shrink-0 relative',
+              dragOver && 'bg-brand-blue-50/40',
+            )}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOver(true)
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files)
+            }}
+          >
+            {dragOver && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-brand-blue rounded-md bg-paper/90 text-xs text-brand-blue font-medium pointer-events-none">
+                {t('chat.attachDropHint')}
+              </div>
+            )}
+            {(pendingAttachments.length > 0 || uploadingAttachments > 0) && (
+              <div className="flex gap-1.5 flex-wrap">
+                {pendingAttachments.map((a) => (
+                  <AttachmentChip key={a.id} attachment={a} onRemove={() => removePendingAttachment(a.id)} />
+                ))}
+                {uploadingAttachments > 0 && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-ink-muted border border-border-subtle rounded-md px-2 py-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {t('chat.attachUploading')}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex gap-1.5 flex-wrap">
               {SLASH_CHIPS.map((c) => (
                 <Button
@@ -748,6 +856,28 @@ export function ChatSheet({
               ))}
             </div>
             <form onSubmit={onSubmit} className="flex gap-2 items-end">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) void addFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0 h-10 w-10"
+                disabled={busy || pendingAttachments.length >= CHAT_ATTACHMENT_MAX_COUNT}
+                onClick={() => fileInputRef.current?.click()}
+                title={t('chat.attach')}
+                aria-label={t('chat.attach')}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -764,7 +894,11 @@ export function ChatSheet({
                 className="flex-1 resize-y min-h-[40px] max-h-[200px] border border-border-subtle rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 leading-snug"
                 disabled={busy}
               />
-              <Button type="submit" disabled={busy || !input.trim()} className="shrink-0">
+              <Button
+                type="submit"
+                disabled={busy || (!input.trim() && pendingAttachments.length === 0)}
+                className="shrink-0"
+              >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>
@@ -892,8 +1026,54 @@ function MessageBubble({ m }: { m: Message }) {
             ))}
           </div>
         )}
+        {m.attachments && m.attachments.length > 0 && (
+          <div className="mb-2 flex gap-1.5 flex-wrap">
+            {m.attachments.map((a) => (
+              <AttachmentChip key={a.id} attachment={a} />
+            ))}
+          </div>
+        )}
         {m.content ? <MessageContent text={m.content} /> : m.streaming ? <WorkingIndicator /> : null}
       </div>
+    </div>
+  )
+}
+
+// GF-68: a pending (composer) or historical (sent message) attachment chip.
+// Images show a thumbnail preview; documents show an icon + filename. Passing
+// `onRemove` renders the (x) control used in the composer; omitting it (for
+// already-sent messages) renders a read-only chip.
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: ChatAttachment
+  onRemove?: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="relative flex items-center gap-1.5 border border-border-subtle rounded-md pl-1 pr-2 py-1 text-[11px] bg-paper max-w-[180px]">
+      {attachment.kind === 'image' && attachment.url ? (
+        <img
+          src={attachment.url}
+          alt={attachment.filename}
+          className="h-6 w-6 rounded object-cover shrink-0"
+        />
+      ) : (
+        <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
+      )}
+      <span className="truncate">{attachment.filename}</span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 text-ink-muted hover:text-ink"
+          title={t('chat.attachRemove')}
+          aria-label={t('chat.attachRemove')}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </div>
   )
 }

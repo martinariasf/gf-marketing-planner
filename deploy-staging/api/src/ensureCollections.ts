@@ -69,6 +69,10 @@ const collections: CollectionSpec[] = [
       { name: 'role', type: 'select', required: true, values: ['user', 'assistant', 'tool'] },
       { name: 'content', type: 'text', maxSize: 5_000_000 },
       { name: 'toolEvent', type: 'json', maxSize: 1_000_000 },
+      // GF-68: structured attachment metadata (id/kind/filename/url/etc per
+      // attachment) carried on the message row. `content` stays the user's
+      // raw typed text only — attachments are never inlined into it.
+      { name: 'attachments', type: 'json', maxSize: 100_000 },
       { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
     ],
     indexes: [
@@ -152,6 +156,38 @@ const collections: CollectionSpec[] = [
       { name: 'createdAt', type: 'text', max: 40 },
     ],
     indexes: ['CREATE INDEX `idx_inspiration_slug` ON `inspiration_assets` (`slug`)'],
+  },
+  {
+    // GF-68: chat image/document uploads. Stored in PB for the same reason as
+    // inspiration_assets (clients/ is mounted read-only). Images keep a real
+    // `file` so they can be served back publicly (assetFiles.ts); documents
+    // store only their extracted `text` — they are never served as files
+    // (Martin's decision: doc text is inlined into the agent input directly,
+    // so it never needs a public URL). `messageId` is backfilled by
+    // routes/chat.ts once the chat_messages row it belongs to is created.
+    name: 'chat_attachments',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'kind', type: 'select', required: true, values: ['image', 'document'] },
+      {
+        name: 'file',
+        type: 'file',
+        maxSelect: 1,
+        maxSize: 10_000_000,
+        mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+      },
+      { name: 'filename', type: 'text', max: 300 },
+      { name: 'mimeType', type: 'text', max: 120 },
+      { name: 'size', type: 'number' },
+      { name: 'text', type: 'text', maxSize: 200_000 },
+      { name: 'messageId', type: 'text', max: 100 },
+      { name: 'actor', type: 'text', max: 100 },
+      { name: 'createdAt', type: 'text', max: 40 },
+    ],
+    indexes: [
+      'CREATE INDEX `idx_chat_attachments_slug` ON `chat_attachments` (`slug`)',
+      'CREATE INDEX `idx_chat_attachments_message` ON `chat_attachments` (`messageId`)',
+    ],
   },
   {
     // Soft-delete overlay for Viktor-owned manifest assets. The dashboard can

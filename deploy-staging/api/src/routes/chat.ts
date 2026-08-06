@@ -33,6 +33,52 @@ import {
   updateAgentJob,
 } from '../agentJobs.js'
 
+// GF-68: hard cap on attachments processed per chat turn (matches the
+// per-request cap enforced at upload time in routes/chatAttachments.ts).
+const MAX_CHAT_ATTACHMENTS = 4
+
+// Served by assetFiles.ts (public, no auth, images only).
+function chatAttachmentUrl(slug: string, id: string): string {
+  return `/api/v1/clients/${slug}/chat/attachments/${id}/file`
+}
+
+interface AttachmentForInput {
+  id: string
+  kind: 'image' | 'document'
+  filename: string
+  text?: string
+}
+
+// Build the transport `input` string sent to Hermes. When there are
+// attachments, appends a synthetic "--- ATTACHMENTS ---" block AFTER the
+// user's raw message. This block is ONLY added to the payload sent to the
+// agent — the chat_messages row persisted above keeps `content` as the raw
+// typed text, never this block (see the persist call just above).
+function buildAgentInput(message: string, slug: string, attachments: AttachmentForInput[]): string {
+  if (attachments.length === 0) return message
+  const lines: string[] = ['--- ATTACHMENTS ---']
+  attachments.forEach((att, i) => {
+    const n = i + 1
+    if (att.kind === 'image') {
+      const url = `${env.publicApiBase}${chatAttachmentUrl(slug, att.id)}`
+      lines.push(
+        `${n}. IMAGE: ${url}`,
+        `   (pass this URL directly as a reference_images entry if calling image_generate — do not describe it in words)`,
+      )
+    } else {
+      const text = att.text ?? ''
+      lines.push(
+        `${n}. DOCUMENT: ${att.filename} (${text.length} characters)`,
+        `<<<`,
+        text,
+        `>>>`,
+      )
+    }
+  })
+  const block = lines.join('\n')
+  return message ? `${message}\n\n${block}` : block
+}
+
 export const chat = new OpenAPIHono<AppEnv>()
 chat.use('/clients/:slug/chat/*', rateLimit({ windowMs: 60_000, max: 10 }, 'chat'))
 chat.use('*', requireAuth)
@@ -142,6 +188,7 @@ chat.post(
       thread?: string
       message?: string
       history?: Array<{ role: 'user' | 'assistant'; content: string }>
+      attachments?: Array<{ id: string }>
     }
     try {
       body = await c.req.json()
@@ -151,7 +198,56 @@ chat.post(
     const message = (body.message ?? '').trim()
     const thread = (body.thread ?? 'default').slice(0, 100)
     const history = (body.history ?? []).slice(-10)
-    if (!message) return problem(c, { title: 'Bad Request', status: 400, detail: 'message required' })
+    // GF-68: only accept text OR at least one attachment (image/document
+    // pre-uploaded via /chat/attachments) — an attachment-only turn is valid.
+    const requestedAttachmentIds = Array.isArray(body.attachments)
+      ? body.attachments.map((a) => a?.id).filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : []
+    if (!message && requestedAttachmentIds.length === 0) {
+      return problem(c, { title: 'Bad Request', status: 400, detail: 'message or attachments required' })
+    }
+    if (requestedAttachmentIds.length > MAX_CHAT_ATTACHMENTS) {
+      return problem(c, {
+        title: 'Bad Request',
+        status: 400,
+        detail: `Max ${MAX_CHAT_ATTACHMENTS} attachments per message`,
+      })
+    }
+
+    // Re-read each attachment record and cross-check its `slug` against THIS
+    // route's :slug param. Without this guard, a caller authorized for one
+    // client could pass another client's attachment id and have its bytes/
+    // text injected into a different tenant's agent conversation — a
+    // cross-tenant data leak. Reject the whole request rather than silently
+    // dropping the mismatched ids, so the caller sees the failure instead of
+    // a confusingly attachment-less turn.
+    interface ChatAttachmentRecord {
+      id: string
+      slug: string
+      kind: 'image' | 'document'
+      file?: string
+      filename: string
+      mimeType: string
+      size: number
+      text?: string
+    }
+    const attachmentRecords: ChatAttachmentRecord[] = []
+    for (const id of requestedAttachmentIds) {
+      let rec: ChatAttachmentRecord
+      try {
+        rec = await withPb((pb) => pb.collection('chat_attachments').getOne<ChatAttachmentRecord>(id))
+      } catch {
+        return problem(c, { title: 'Bad Request', status: 400, detail: `Attachment "${id}" not found` })
+      }
+      if (rec.slug !== slug) {
+        return problem(c, {
+          title: 'Forbidden',
+          status: 403,
+          detail: `Attachment "${id}" does not belong to client "${slug}"`,
+        })
+      }
+      attachmentRecords.push(rec)
+    }
     if (!agent.apiKey) {
       return problem(c, {
         title: 'Misconfigured',
@@ -168,6 +264,18 @@ chat.post(
     // create and read a snapshot missing the just-sent message — so it appeared
     // "deleted" from the conversation. Awaiting closes that window. A PB hiccup
     // is logged but non-fatal so the chat still proceeds.
+    // GF-68: structured attachment metadata for the historical chat bubble.
+    // `content` above stays the user's raw typed text ONLY — this is a
+    // separate field, never inlined into content.
+    const attachmentsMeta = attachmentRecords.map((rec) => ({
+      id: rec.id,
+      kind: rec.kind,
+      filename: rec.filename,
+      mimeType: rec.mimeType,
+      size: rec.size,
+      ...(rec.kind === 'image' ? { url: chatAttachmentUrl(slug, rec.id) } : {}),
+    }))
+
     let userMessageId: string | null = null
     try {
       const rec = await withPb((pb) =>
@@ -178,11 +286,25 @@ chat.post(
           role: 'user',
           content: message,
           toolEvent: null,
+          attachments: attachmentsMeta.length ? attachmentsMeta : null,
         }),
       )
       userMessageId = (rec as { id: string }).id
     } catch (err) {
       console.warn('[chat] persist user msg failed', err)
+    }
+
+    // Backfill each chat_attachments record's messageId to point at this
+    // message, for later lookup/cleanup. Best-effort — failures here must not
+    // block the chat turn.
+    if (userMessageId && attachmentRecords.length > 0) {
+      for (const rec of attachmentRecords) {
+        try {
+          await withPb((pb) => pb.collection('chat_attachments').update(rec.id, { messageId: userMessageId }))
+        } catch (err) {
+          console.warn('[chat] backfill attachment messageId failed', rec.id, err)
+        }
+      }
     }
 
     const job = await createDashboardChatJob({
@@ -248,7 +370,7 @@ chat.post(
             'X-Hermes-Session-Key': `mp-${slug}-${thread}`,
           },
           body: JSON.stringify({
-            input: message,
+            input: buildAgentInput(message, slug, attachmentRecords),
             conversation_history: history.map((h) => ({ role: h.role, content: h.content })),
           }),
           signal: ac.signal,
