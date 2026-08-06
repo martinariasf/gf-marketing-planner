@@ -24,6 +24,7 @@ import {
 import { approvalDecisionForPatch } from '../approvalFromPatch.js'
 import { applyStatusToSchedule, laneOf, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
 import { SchedulingError } from '../scheduling/provider.js'
+import { loadOrgSettings } from '../orgSettings.js'
 
 type AssetManifest = {
   items?: Array<{ id?: unknown } & Record<string, unknown>>
@@ -532,6 +533,13 @@ viktorOwned.post(
     // Programmed without a live job (TASK-014/016).
     let schedulingPatch: Record<string, unknown> | null = null
     let schedulingStatus: string | undefined
+    // GF-92 (B) — auto-schedule on approve. This route is the HUMAN dashboard
+    // approval path (POST /approvals with a decision, driven by the kanban /
+    // calendar status controls). It is deliberately NOT wired into the PATCH
+    // /posts/:id path Viktor's agent role uses to set status directly, so the
+    // agent is excluded from auto-scheduling even when the toggle is ON.
+    let finalDecision: string = body.decision
+    let scheduleWarning: string | undefined
     {
       const current = await buildPost(slug, body.postId)
       if (current) {
@@ -554,13 +562,42 @@ viktorOwned.post(
           if (resp) return resp
           throw err
         }
+
+        if (body.decision === 'approved') {
+          const settings = await loadOrgSettings(slug)
+          if (settings.autoScheduleOnApprove) {
+            const postForSchedule = schedulingPatch
+              ? ({
+                  ...current,
+                  publishing: { ...((current.publishing as object) ?? {}), ...schedulingPatch },
+                } as Record<string, unknown>)
+              : (current as Record<string, unknown>)
+            try {
+              const result = await applyStatusToSchedule(slug, postForSchedule, 'scheduled')
+              if (result) {
+                schedulingPatch = result.publishing
+                if (result.status) schedulingStatus = result.status
+                finalDecision = 'scheduled'
+              }
+            } catch (err) {
+              // Auto-schedule must NEVER fail the approval (past date, no
+              // provider key, provider down, etc). Record the approval as
+              // 'approved' and surface a non-fatal warning instead.
+              if (err instanceof ScheduleRejected || err instanceof SchedulingError) {
+                scheduleWarning = err.message
+              } else {
+                throw err
+              }
+            }
+          }
+        }
       }
     }
 
     const row = {
       slug,
       postId: body.postId,
-      decision: body.decision,
+      decision: finalDecision,
       note: body.note ?? '',
       actor,
       ts: new Date().toISOString(),
@@ -575,8 +612,8 @@ viktorOwned.post(
       action: 'approval.decide',
       slug,
       resourceId: body.postId,
-      after: { decision: body.decision, note: body.note },
+      after: { decision: finalDecision, note: body.note, scheduleWarning },
     })
-    return c.json({ ok: true, ...row }, 201)
+    return c.json({ ok: true, ...row, ...(scheduleWarning ? { scheduleWarning } : {}) }, 201)
   },
 )

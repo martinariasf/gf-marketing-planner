@@ -94,8 +94,12 @@ export function ApprovalKanban({
     setOverrides((o) => ({ ...o, [post.id]: decision }))
     setPending((p) => new Set(p).add(post.id))
     try {
-      await apiSetApproval(slug, post.id, decision)
-      toast(`${nameOf(post)} → ${t(`status.${decision}`)}`, { duration: 1800 })
+      const result = await apiSetApproval(slug, post.id, decision)
+      if (result.scheduleWarning) {
+        toast.warning(result.scheduleWarning, { duration: 4000 })
+      } else {
+        toast(`${nameOf(post)} → ${t(`status.${decision}`)}`, { duration: 1800 })
+      }
       onChanged()
     } catch (err) {
       setOverrides((o) => {

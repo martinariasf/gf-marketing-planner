@@ -328,12 +328,16 @@ function PostContent({
   t,
   post,
   brand,
+  showAiLabel,
   tab,
   onZoom,
 }: {
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  // GF-92 (E) — defaults to true so an older/un-upgraded API response (no
+  // `settings` block at all) never blanks the badge for external reviewers.
+  showAiLabel?: boolean
   tab: 'preview' | 'details'
   onZoom: () => void
 }) {
@@ -358,7 +362,7 @@ function PostContent({
           clientName={brand?.name ?? ''}
           handle={brand?.handle ?? ''}
           logoInitials={brand?.logoInitials ?? ''}
-          aiLabel={t('common.aiGenerated')}
+          aiLabel={(showAiLabel ?? true) ? t('common.aiGenerated') : undefined}
         />
         {cover && (
           <button
@@ -687,6 +691,7 @@ function DeckView({
             t={t}
             post={post}
             brand={payload.brand}
+            showAiLabel={payload.settings?.showAiGeneratedLabel ?? true}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
             generalComments={generalComments}
@@ -740,6 +745,7 @@ function DeckCard({
   t,
   post,
   brand,
+  showAiLabel,
   decision,
   comments,
   generalComments,
@@ -752,6 +758,7 @@ function DeckCard({
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  showAiLabel?: boolean
   decision?: PublicPostDecision
   comments: ReviewComment[]
   generalComments: ReviewComment[]
@@ -855,7 +862,7 @@ function DeckCard({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <PostContent t={t} post={post} brand={brand} tab={tab} onZoom={onZoom} />
+        <PostContent t={t} post={post} brand={brand} showAiLabel={showAiLabel} tab={tab} onZoom={onZoom} />
         {(decision || comments.length > 0 || generalComments.length > 0) && (
           <div className="px-4 py-3 space-y-2 border-t border-border-subtle">
             <DecisionBadge t={t} decision={decision} />
@@ -1205,6 +1212,7 @@ function ListView({
             t={t}
             post={post}
             brand={payload.brand}
+            showAiLabel={payload.settings?.showAiGeneratedLabel ?? true}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
             generalComments={generalComments}
@@ -1278,6 +1286,7 @@ function ListPostCard({
   t,
   post,
   brand,
+  showAiLabel,
   decision,
   comments,
   generalComments,
@@ -1291,6 +1300,7 @@ function ListPostCard({
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  showAiLabel?: boolean
   decision?: PublicPostDecision
   comments: ReviewComment[]
   generalComments: ReviewComment[]
@@ -1366,7 +1376,7 @@ function ListPostCard({
         )}
       </div>
 
-      <PostContent t={t} post={post} brand={brand} tab={tab} onZoom={onZoom} />
+      <PostContent t={t} post={post} brand={brand} showAiLabel={showAiLabel} tab={tab} onZoom={onZoom} />
 
       <div className="p-4 pt-3 space-y-2 border-t border-border-subtle">
         <DecisionBadge t={t} decision={decision} />

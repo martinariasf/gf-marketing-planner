@@ -19,6 +19,7 @@ import {
   Lightbulb,
   Sparkles,
   Plug,
+  Settings2,
   Loader2,
   Menu,
   ChevronLeft,
@@ -81,6 +82,7 @@ const NAV: NavItem[] = [
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
+  { to: 'configuration', labelKey: 'nav.configuration', icon: Settings2, phase: 'learn'   as WorkflowPhase },
 ]
 
 export default function ClientLayout() {

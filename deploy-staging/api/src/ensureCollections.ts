@@ -207,6 +207,11 @@ const collections: CollectionSpec[] = [
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },
       { name: 'calendarRange', type: 'json', maxSize: 100_000 },
+      // GF-92 (B) — per-client dashboard toggles (showAiGeneratedLabel,
+      // autoScheduleOnApprove). Additive: existing rows with no `settings`
+      // value simply read back as undefined, and callers fall back to
+      // DEFAULTS (see routes/planningConfig.ts / orgSettings.ts).
+      { name: 'settings', type: 'json', maxSize: 100_000 },
       { name: 'updatedAt', type: 'text', max: 40 },
       { name: 'actor', type: 'text', max: 100 },
     ],

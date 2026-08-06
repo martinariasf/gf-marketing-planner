@@ -20,6 +20,7 @@ import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
 import { disk } from '../diskData.js'
 import { listPostsInRange, monthKeyOf } from '../posts.js'
+import { loadOrgSettings } from '../orgSettings.js'
 import {
   verifyCode,
   linkState,
@@ -166,7 +167,11 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
   } catch {
     comments = []
   }
-  const [brand, postDecisions] = await Promise.all([buildBrand(link.slug), listPostDecisions(link.id)])
+  const [brand, postDecisions, orgSettings] = await Promise.all([
+    buildBrand(link.slug),
+    listPostDecisions(link.id),
+    loadOrgSettings(link.slug),
+  ])
   return {
     link: {
       title: link.title ?? '',
@@ -175,6 +180,9 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
       months: parseMonthSelection(link.months),
     },
     brand,
+    // GF-92 (B) — hand-pick ONLY the reviewer-safe field. autoScheduleOnApprove
+    // is an internal workflow toggle and must never leak into this public payload.
+    settings: { showAiGeneratedLabel: orgSettings.showAiGeneratedLabel },
     posts,
     postDecisions,
     comments,

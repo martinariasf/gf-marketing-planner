@@ -137,7 +137,7 @@ function requestPictureChange(message: string) {
 
 export default function CalendarView() {
   const { t, lang } = useI18n()
-  const { plan, posts, brief, refetch } = useOutletContext<
+  const { plan, posts, brief, settings, refetch } = useOutletContext<
     ClientBundle & { refetch: () => void }
   >()
   const { slug = '' } = useParams<{ slug: string }>()
@@ -366,8 +366,12 @@ export default function CalendarView() {
     }
     setApprovingId(post.id)
     try {
-      await apiSetApproval(slug, post.id, decision)
-      toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
+      const result = await apiSetApproval(slug, post.id, decision)
+      if (result.scheduleWarning) {
+        toast.warning(result.scheduleWarning, { duration: 4000 })
+      } else {
+        toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
+      }
       refetch()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
@@ -937,7 +941,7 @@ export default function CalendarView() {
                               handle={plan.client.handle}
                               logoInitials={plan.client.logoInitials}
                               subtitle={brief.company.industry}
-                              aiLabel={t('common.aiGenerated')}
+                              aiLabel={settings.showAiGeneratedLabel ? t('common.aiGenerated') : undefined}
                             />
                           ) : (
                             <PicturePane

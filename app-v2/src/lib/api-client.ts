@@ -322,13 +322,21 @@ export type ApprovalDecision =
   | 'needs_revision'
   | 'rejected'
 
+export interface SetApprovalResult {
+  // GF-92 (D) — set when auto-schedule-on-approve was ON but scheduling
+  // failed (past date, no provider key, provider down). The approval still
+  // succeeds as 'approved'; this is a non-fatal, human-readable heads-up.
+  scheduleWarning?: string
+}
+
 export async function apiSetApproval(
   slug: string,
   postId: string,
   decision: ApprovalDecision,
   note?: string,
-): Promise<void> {
-  await apiSend('POST', `/clients/${slug}/approvals`, { postId, decision, note })
+): Promise<SetApprovalResult> {
+  const r = await apiSend<SetApprovalResult>('POST', `/clients/${slug}/approvals`, { postId, decision, note })
+  return { scheduleWarning: r.scheduleWarning }
 }
 
 export type SuggestionPatch = {
@@ -408,6 +416,36 @@ export async function apiSaveCalendarRange(
   const r = await apiSend<{ data: CalendarRangeConfig }>('PUT', `/clients/${slug}/config/calendar-range`, {
     data: range,
   })
+  return r.data
+}
+
+// GF-92 (B/C) — per-client Configuration page toggles. Mirrors the server's
+// OrgSettings shape (deploy-staging/api/src/orgSettings.ts) 1:1, including the
+// defaults, so file-mode / API-disabled builds never regress the GF-65 "AI
+// generated" badge (showAiGeneratedLabel defaults to true).
+export type OrgSettings = {
+  showAiGeneratedLabel: boolean
+  autoScheduleOnApprove: boolean
+}
+
+export const ORG_SETTINGS_DEFAULTS: OrgSettings = {
+  showAiGeneratedLabel: true,
+  autoScheduleOnApprove: false,
+}
+
+export async function apiLoadOrgSettings(slug: string): Promise<OrgSettings> {
+  if (!isApiEnabled) return { ...ORG_SETTINGS_DEFAULTS }
+  try {
+    const r = await apiGet<{ data: OrgSettings }>(`/clients/${slug}/config/settings`)
+    return { ...ORG_SETTINGS_DEFAULTS, ...r.data }
+  } catch {
+    return { ...ORG_SETTINGS_DEFAULTS }
+  }
+}
+
+export async function apiSaveOrgSettings(slug: string, settings: OrgSettings): Promise<OrgSettings> {
+  if (!isApiEnabled) return { ...settings }
+  const r = await apiSend<{ data: OrgSettings }>('PUT', `/clients/${slug}/config/settings`, { data: settings })
   return r.data
 }
 
@@ -992,6 +1030,9 @@ export interface PublicReviewPayload {
   canApprove: boolean
   link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
   brand?: PublicReviewBrand
+  // GF-92 (B/E) — optional so an older/un-upgraded API response never blanks
+  // the AI-generated badge for external reviewers; absent => treat as true.
+  settings?: { showAiGeneratedLabel: boolean }
   posts: PublicReviewPost[]
   postDecisions?: PublicPostDecision[]
   comments: ReviewComment[]

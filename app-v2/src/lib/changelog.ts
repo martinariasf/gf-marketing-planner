@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-06',
+    title: 'New: a Configuration page with two per-client dashboard switches',
+    items: [
+      'A new "Configuration" tab lets you turn the "AI generated" label on posts on or off, and turn on auto-programming so an approved post is sent straight to your publishing tool instead of waiting for a separate "Programmed" step.',
+      'If auto-programming a post fails (for example a past date, or no publishing tool connected), the approval still goes through — you just get a heads-up instead of the approval failing outright.',
+    ],
+  },
+  {
+    date: '2026-08-06',
     title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
     items: [
       'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
