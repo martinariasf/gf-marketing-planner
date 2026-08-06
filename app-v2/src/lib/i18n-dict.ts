@@ -511,6 +511,10 @@ const en: Dict = {
   'approvals.viewPost':         'View post',
   'approvals.publishedLocked':  'Published — status is locked',
   'approvals.publishedNoLink':  'Published',
+  // GF-92 — scheduling confirmation shown on a Programmed card
+  'schedule.confirmedAt':      'Scheduled for {date} via {provider}',
+  'schedule.notConfirmed':     'Marked Programmed, but no scheduling job was found',
+  'schedule.failed':           'Scheduling failed: {error}',
   'calendar.statusLabel':       'Status',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'Could not update status',
@@ -1385,6 +1389,10 @@ const de: Dict = {
   'approvals.viewPost':         'Post ansehen',
   'approvals.publishedLocked':  'Veröffentlicht — Status ist gesperrt',
   'approvals.publishedNoLink':  'Veröffentlicht',
+  // GF-92 — Terminbestätigung auf einer programmierten Karte
+  'schedule.confirmedAt':      'Geplant für {date} via {provider}',
+  'schedule.notConfirmed':     'Als Programmiert markiert, aber kein Planungsjob gefunden',
+  'schedule.failed':           'Planung fehlgeschlagen: {error}',
   'calendar.statusLabel':       'Status',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'Status konnte nicht geändert werden',
@@ -2253,6 +2261,10 @@ const es: Dict = {
   'approvals.viewPost':         'Ver publicación',
   'approvals.publishedLocked':  'Publicado — el estado está bloqueado',
   'approvals.publishedNoLink':  'Publicado',
+  // GF-92 — confirmación de programación en una tarjeta Programada
+  'schedule.confirmedAt':      'Programado para {date} vía {provider}',
+  'schedule.notConfirmed':     'Marcado como Programado, pero no se encontró un trabajo de programación',
+  'schedule.failed':           'Error al programar: {error}',
   'calendar.statusLabel':       'Estado',
   'calendar.statusSet':         '{id} → {status}',
   'calendar.statusFailed':      'No se pudo actualizar el estado',

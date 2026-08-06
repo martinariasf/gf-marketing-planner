@@ -73,6 +73,18 @@ function existingJobId(post: Record<string, unknown>): string | null {
   return generic ?? legacy
 }
 
+// GF-92 (A3) — legacy rows can have `approval.status` ahead of top-level
+// `status` (e.g. written before A1's status-mirroring fix). Mirrors the SPA's
+// laneFor(): prefer the approval lane, fall back to status.
+function laneOf(post: Record<string, unknown>): string {
+  const approval = post.approval
+  if (approval && typeof approval === 'object') {
+    const approvalStatus = (approval as Record<string, unknown>).status
+    if (typeof approvalStatus === 'string' && approvalStatus) return approvalStatus
+  }
+  return String(post.status ?? '')
+}
+
 /**
  * React to a status transition by driving the scheduling provider.
  *
@@ -89,7 +101,7 @@ export async function applyStatusToSchedule(
   current: Record<string, unknown>,
   nextStatus: string | undefined,
 ): Promise<ScheduleSyncResult | null> {
-  const prevStatus = String(current.status ?? '')
+  const prevStatus = laneOf(current)
   // A post is "going to be scheduled" if it's being moved into the lane, or it's
   // already in the lane and we're re-driving it (e.g. a date change = reschedule).
   const willBeScheduled = nextStatus === SCHEDULED || (nextStatus === undefined && prevStatus === SCHEDULED)
@@ -171,7 +183,7 @@ export async function refreshPublishStatus(
   slug: string,
   post: Record<string, unknown>,
 ): Promise<ScheduleSyncResult | null> {
-  if (String(post.status ?? '') !== SCHEDULED) return null
+  if (laneOf(post) !== SCHEDULED) return null
   const jobId = existingJobId(post)
   if (!jobId) return null
   try {

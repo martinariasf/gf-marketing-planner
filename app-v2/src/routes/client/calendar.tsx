@@ -37,7 +37,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap } from '@/lib/post-status'
+import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap, scheduleConfirmationFor } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -74,6 +74,7 @@ import {
   Send,
   Trash2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useI18n } from '@/lib/i18n'
@@ -1417,44 +1418,79 @@ function StatusSelect({
   const current = laneFor(post) as ApprovalDecision
   const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
   const StepIcon = step.Icon
+  // GF-92 — the "scheduled" label doesn't mean a provider job actually exists;
+  // surface the real confirmation (or its absence) next to the control.
+  const scheduleConfirmation = current === 'scheduled' ? scheduleConfirmationFor(post) : null
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
-        >
-          {busy ? (
-            <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
-          ) : (
-            <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
+          >
+            {busy ? (
+              <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
+            ) : (
+              <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+            )}
+            {t(step.labelKey)}
+            <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {WORKFLOW.map((s) => {
+            const Icon = s.Icon
+            // GF-37 — block scheduling (Programmed) a post dated in the past.
+            const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
+            return (
+              <DropdownMenuItem
+                key={s.key}
+                disabled={s.key === current || pastSchedule}
+                onClick={() => onSetStatus(s.key)}
+                title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
+              >
+                <Icon className="h-3.5 w-3.5 mr-2" />
+                {t(s.labelKey)}
+                {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {scheduleConfirmation?.kind === 'confirmed' && (
+        <span className={cn('text-ink-muted', size === 'xs' ? 'text-[9px]' : 'text-[10px]')}>
+          {t('schedule.confirmedAt', {
+            date: scheduleConfirmation.scheduledFor ? fmtDate(scheduleConfirmation.scheduledFor) : '—',
+            provider: scheduleConfirmation.provider ?? '—',
+          })}
+        </span>
+      )}
+      {scheduleConfirmation?.kind === 'failed' && (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 text-rose-700',
+            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
           )}
-          {t(step.labelKey)}
-          <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {WORKFLOW.map((s) => {
-          const Icon = s.Icon
-          // GF-37 — block scheduling (Programmed) a post dated in the past.
-          const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
-          return (
-            <DropdownMenuItem
-              key={s.key}
-              disabled={s.key === current || pastSchedule}
-              onClick={() => onSetStatus(s.key)}
-              title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
-            >
-              <Icon className="h-3.5 w-3.5 mr-2" />
-              {t(s.labelKey)}
-              {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        >
+          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+          {t('schedule.failed', { error: scheduleConfirmation.lastError })}
+        </span>
+      )}
+      {scheduleConfirmation?.kind === 'missingJob' && (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 text-amber-700',
+            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
+          )}
+        >
+          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+          {t('schedule.notConfirmed')}
+        </span>
+      )}
+    </span>
   )
 }
 

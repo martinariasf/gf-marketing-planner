@@ -259,7 +259,10 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
   if (typeof p.approval !== 'object' || p.approval === null) {
     p.approval = { ...DEFAULT_APPROVAL, status: p.status }
   } else {
-    p.approval = { ...DEFAULT_APPROVAL, ...(p.approval as object) }
+    // GF-92: an approval block without a `status` key (the shape Viktor writes)
+    // must inherit the post's top-level status, not silently default to 'idea'
+    // — otherwise laneFor() puts a scheduled post back in Draft.
+    p.approval = { ...DEFAULT_APPROVAL, status: p.status, ...(p.approval as object) }
   }
   if (typeof p.publishing !== 'object' || p.publishing === null) {
     p.publishing = { ...DEFAULT_PUBLISHING }

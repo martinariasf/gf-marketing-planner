@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-06',
+    title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
+    items: [
+      'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
+      'A Programmed post now shows whether it was actually scheduled with the provider (with the date and provider name), and flags it clearly when the schedule could not be confirmed or failed.',
+    ],
+  },
+  {
     date: '2026-07-08',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

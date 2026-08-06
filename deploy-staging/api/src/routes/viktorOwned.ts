@@ -531,12 +531,20 @@ viktorOwned.post(
     // error and DO NOT write the approval row, so the post is never shown as
     // Programmed without a live job (TASK-014/016).
     let schedulingPatch: Record<string, unknown> | null = null
+    let schedulingStatus: string | undefined
     {
       const current = await buildPost(slug, body.postId)
       if (current) {
         try {
           const result = await applyStatusToSchedule(slug, current, body.decision)
-          if (result) schedulingPatch = result.publishing
+          if (result) {
+            schedulingPatch = result.publishing
+            // Never overwrite a post that's already published — the provider is
+            // the source of truth for that transition, not the approval decision.
+            if (result.status && String(current.status ?? '') !== 'published') {
+              schedulingStatus = result.status
+            }
+          }
         } catch (err) {
           const resp = schedulingProblem(c, err)
           if (resp) return resp
@@ -555,7 +563,9 @@ viktorOwned.post(
     }
     await withPb((pb) => pb.collection('approvals_v2').create(row))
     if (schedulingPatch) {
-      await persistSchedulingPatch(slug, body.postId, { publishing: schedulingPatch }, actor)
+      const patch: Record<string, unknown> = { publishing: schedulingPatch }
+      if (schedulingStatus) patch.status = schedulingStatus
+      await persistSchedulingPatch(slug, body.postId, patch, actor)
     }
     await audit(principal, {
       action: 'approval.decide',
