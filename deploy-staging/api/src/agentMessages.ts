@@ -33,6 +33,7 @@ export type MessageKey =
   | 'no_final_text' // run completed but the agent sent no final text
   | 'completed_with_writes' // completed, dashboard updated, but no final text
   | 'stream_ended' // event stream ended after tool activity, before a reply
+  | 'output_truncated' // response hit the model's output-length limit mid-reply (GF-100)
 
 // Pattern → key. Order matters: quota/billing is checked before generic rate
 // limits because some 402s read as both. Lower-cased haystack is matched.
@@ -43,10 +44,16 @@ const QUOTA_PATTERNS = [
   'insufficient_quota',
   'insufficient balance',
   'daily limit',
+  'daily limit exceeded',
   'exceeded your current quota',
   'credits have been exhausted',
   'billing',
   'quota', // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+  // OpenRouter's 403 "Key limit exceeded" (GF-100) is billing, not auth — see
+  // agent/error_classifier.py on the box, which buckets it as FailoverReason.billing
+  // for the same reason. Deliberately NOT a bare '403': that would swallow
+  // unrelated auth failures that also carry a 403 status.
+  'key limit',
   // Checked before RATE_LIMIT, so a quota-flavoured error gets the "come back
   // tomorrow" message rather than the transient "try again shortly" one.
 ]
@@ -108,6 +115,11 @@ const CATALOG: Record<MessageKey, Record<Lang, string>> = {
     es: 'Estuve trabajando en tu pedido, pero se cortó la conexión antes de responder. Si no ves el cambio, recarga el panel.',
     de: 'Ich habe an deiner Anfrage gearbeitet, aber die Verbindung brach vor der Antwort ab. Falls du die Änderung nicht siehst, lade das Dashboard neu.',
     en: 'I was working on your request, but the connection dropped before I replied. If you don’t see the change, refresh the dashboard.',
+  },
+  output_truncated: {
+    es: 'La respuesta se hizo demasiado larga y no pude terminarla. Pídemelo por partes más pequeñas.',
+    de: 'Die Antwort wurde zu lang und ich konnte sie nicht fertigstellen. Bitte frag mich in kleineren Teilen.',
+    en: 'The response got too long and I couldn’t finish it. Try asking me in smaller parts.',
   },
 }
 

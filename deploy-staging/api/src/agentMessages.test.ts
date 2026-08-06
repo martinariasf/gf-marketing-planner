@@ -27,6 +27,18 @@ test('classify: OpenRouter daily-limit / billing → quota_exhausted', () => {
   }
 })
 
+test('classify: OpenRouter 403 "Key limit exceeded" → quota_exhausted (GF-100)', () => {
+  assert.equal(classify('403 Key limit exceeded'), 'quota_exhausted')
+  assert.equal(classify('OpenRouter error: Key limit exceeded for this key'), 'quota_exhausted')
+  assert.equal(classify('402: daily limit exceeded'), 'quota_exhausted')
+})
+
+test('classify: a bare 403 with no billing marker does not leak into quota_exhausted', () => {
+  // Regression guard: '403' alone must not be a quota pattern — it would
+  // swallow unrelated auth failures (e.g. "403 Forbidden: invalid token").
+  assert.equal(classify('403 Forbidden: invalid token'), 'run_failed')
+})
+
 test('classify: throttles → rate_limited', () => {
   for (const raw of ['429 Too Many Requests', 'rate limit reached', 'RESOURCE_EXHAUSTED', 'request was throttled']) {
     assert.equal(classify(raw), 'rate_limited', raw)
@@ -54,6 +66,7 @@ test('message: every key resolves a non-empty string in every language', () => {
     'no_final_text',
     'completed_with_writes',
     'stream_ended',
+    'output_truncated',
   ]
   for (const key of keys) {
     for (const lang of SUPPORTED_LANGS) {
@@ -76,7 +89,7 @@ test('message: languages actually differ (not accidentally all English)', () => 
 
 test('message: copy carries no technical jargon (GF-39 spirit)', () => {
   const banned = /traceback|stack|http|curl|tool|iteration|verifier|402|429|null|undefined|exception/i
-  const keys: MessageKey[] = ['quota_exhausted', 'rate_limited', 'timed_out', 'run_failed', 'no_final_text', 'completed_with_writes', 'stream_ended']
+  const keys: MessageKey[] = ['quota_exhausted', 'rate_limited', 'timed_out', 'run_failed', 'no_final_text', 'completed_with_writes', 'stream_ended', 'output_truncated']
   for (const key of keys) {
     for (const lang of SUPPORTED_LANGS) {
       assert.doesNotMatch(message(key, lang), banned, `${key}/${lang} leaks jargon`)
