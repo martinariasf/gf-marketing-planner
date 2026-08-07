@@ -47,6 +47,7 @@ import {
   CHAT_ATTACHMENT_MAX_DOC_BYTES,
   CHAT_ATTACHMENT_MAX_COUNT,
   CHAT_ATTACHMENT_DOC_EXTENSIONS,
+  absoluteUrl,
   type AgentJob,
   type ChatTurn,
   type ChatThread,
@@ -100,12 +101,21 @@ interface Message {
 function recordToMessage(record: ChatMessageRecord): Message | null {
   if (record.role !== 'user' && record.role !== 'assistant') return null
   const withAttachments = record as ChatMessageRecord & { attachments?: ChatAttachment[] }
+  // GF-68 review fix: PB persists attachment.url as a same-origin relative
+  // path (e.g. "/api/v1/clients/<slug>/chat/attachments/<id>/file"). The
+  // upload path (apiUploadChatAttachment) already runs it through
+  // absoluteUrl() before it ever reaches state; history replay skipped that,
+  // so in dev against a remote VITE_API_BASE the persisted relative URL
+  // resolved against the Vite dev server instead of the API and 404'd.
+  const attachments = withAttachments.attachments?.map((att) =>
+    att.url ? { ...att, url: absoluteUrl(att.url) } : att,
+  )
   return {
     id: record.id,
     created: record.created,
     role: record.role,
     content: record.content,
-    attachments: withAttachments.attachments ?? undefined,
+    attachments: attachments ?? undefined,
   }
 }
 
@@ -622,7 +632,7 @@ export function ChatSheet({
     async (files: FileList | File[]) => {
       const list = Array.from(files)
       if (pendingAttachments.length + list.length > CHAT_ATTACHMENT_MAX_COUNT) {
-        toast.error(t('chat.attachTooLarge'))
+        toast.error(t('chat.attachTooMany'))
         return
       }
       for (const file of list) {

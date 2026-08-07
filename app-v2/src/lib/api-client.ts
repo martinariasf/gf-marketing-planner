@@ -579,7 +579,11 @@ export async function apiUploadChatAttachment(slug: string, file: File): Promise
 
 // The API returns same-origin absolute paths (/api/v1/...). When the SPA runs
 // against a remote API_BASE in dev, prefix it; in prod they're same-origin.
-function absoluteUrl(path: string): string {
+// Exported so the chat history-replay path (chat-sheet.tsx recordToMessage)
+// can apply the same normalization the upload path already does — a
+// persisted relative attachment URL from PB otherwise resolves against the
+// Vite dev server, not the remote API, and 404s.
+export function absoluteUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
   if (!API_BASE) return path
   try {

@@ -202,6 +202,7 @@ const en: Dict = {
   'chat.attachRemove':      'Remove attachment',
   'chat.attachUploading':   'Uploading…',
   'chat.attachTooLarge':    'File is too large',
+  'chat.attachTooMany':     'Too many attachments — max 4 files per message',
   'chat.attachUnsupported': 'Unsupported file type — images (PNG/JPEG/WEBP/GIF) or text documents only',
   'chat.attachDropHint':    'Drop images or documents to attach',
   // Slash chip hints
@@ -1095,6 +1096,7 @@ const de: Dict = {
   'chat.attachRemove':      'Anhang entfernen',
   'chat.attachUploading':   'Wird hochgeladen…',
   'chat.attachTooLarge':    'Datei ist zu groß',
+  'chat.attachTooMany':     'Zu viele Anhänge — max. 4 Dateien pro Nachricht',
   'chat.attachUnsupported': 'Nicht unterstützter Dateityp — nur Bilder (PNG/JPEG/WEBP/GIF) oder Textdokumente',
   'chat.attachDropHint':    'Bilder oder Dokumente hier ablegen, um sie anzuhängen',
   'chat.chip.draft':        'Post zu <Thema> entwerfen',
@@ -1970,6 +1972,7 @@ const es: Dict = {
   'chat.attachRemove':      'Quitar adjunto',
   'chat.attachUploading':   'Subiendo…',
   'chat.attachTooLarge':    'El archivo es demasiado grande',
+  'chat.attachTooMany':     'Demasiados adjuntos — máximo 4 archivos por mensaje',
   'chat.attachUnsupported': 'Tipo de archivo no soportado — solo imágenes (PNG/JPEG/WEBP/GIF) o documentos de texto',
   'chat.attachDropHint':    'Suelta imágenes o documentos aquí para adjuntarlos',
   'chat.chip.draft':        'redacta un post sobre <tema>',

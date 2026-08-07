@@ -42,6 +42,53 @@ function chatAttachmentUrl(slug: string, id: string): string {
   return `/api/v1/clients/${slug}/chat/attachments/${id}/file`
 }
 
+// `env.publicApiBase` is documented/configured as an absolute URL that
+// already ends in "/api/v1" (see env.ts and docker-compose.yml's
+// PUBLIC_API_BASE default). `chatAttachmentUrl()` above also returns a path
+// that starts with "/api/v1/...". Concatenating the two verbatim doubles the
+// prefix into ".../api/v1/api/v1/..." — a path that matches no route and
+// that the agent's own `_internal_api_url()` rewrite (which splits on the
+// *first* literal "/api/v1/") would also mis-resolve.
+//
+// Normalize by stripping a trailing "/api/v1" (with or without slash) off
+// the configured base before joining, so the result always has exactly one
+// "/api/v1/" segment no matter how PUBLIC_API_BASE happens to be set.
+export function publicOrigin(): string {
+  return env.publicApiBase.replace(/\/api\/v1\/?$/, '')
+}
+
+// Builds the absolute, agent-facing URL for a chat attachment. Guaranteed to
+// contain exactly one "/api/v1/" occurrence — see `publicOrigin()` above.
+// Exported so tests can assert the real, behavioural output rather than
+// grepping chat.ts's source text.
+export function chatAttachmentAgentUrl(slug: string, id: string): string {
+  return `${publicOrigin()}${chatAttachmentUrl(slug, id)}`
+}
+
+// Cross-tenant guard for GF-68 attachments: a `chat_attachments` record
+// fetched by id must belong to the SAME client slug as the route being
+// called, or a caller authorized for one client could have another client's
+// attachment bytes/text injected into a different tenant's agent
+// conversation. Extracted to a pure, exported function (rather than an
+// inline `if` in the route handler) so it can be exercised with real
+// behavioural test cases — two attachment records against two different
+// slugs — instead of a source-text regex match.
+export interface TenantCheckedAttachment {
+  id: string
+  slug: string
+}
+export type AttachmentTenantCheck = { ok: true } | { ok: false; status: 403; detail: string }
+export function checkAttachmentTenant(rec: TenantCheckedAttachment, routeSlug: string): AttachmentTenantCheck {
+  if (rec.slug !== routeSlug) {
+    return {
+      ok: false,
+      status: 403,
+      detail: `Attachment "${rec.id}" does not belong to client "${routeSlug}"`,
+    }
+  }
+  return { ok: true }
+}
+
 interface AttachmentForInput {
   id: string
   kind: 'image' | 'document'
@@ -60,7 +107,7 @@ function buildAgentInput(message: string, slug: string, attachments: AttachmentF
   attachments.forEach((att, i) => {
     const n = i + 1
     if (att.kind === 'image') {
-      const url = `${env.publicApiBase}${chatAttachmentUrl(slug, att.id)}`
+      const url = chatAttachmentAgentUrl(slug, att.id)
       lines.push(
         `${n}. IMAGE: ${url}`,
         `   (pass this URL directly as a reference_images entry if calling image_generate — do not describe it in words)`,
@@ -239,12 +286,9 @@ chat.post(
       } catch {
         return problem(c, { title: 'Bad Request', status: 400, detail: `Attachment "${id}" not found` })
       }
-      if (rec.slug !== slug) {
-        return problem(c, {
-          title: 'Forbidden',
-          status: 403,
-          detail: `Attachment "${id}" does not belong to client "${slug}"`,
-        })
+      const tenantCheck = checkAttachmentTenant(rec, slug)
+      if (!tenantCheck.ok) {
+        return problem(c, { title: 'Forbidden', status: tenantCheck.status, detail: tenantCheck.detail })
       }
       attachmentRecords.push(rec)
     }
