@@ -166,6 +166,16 @@ export async function applyStatusToSchedule(
       if (provider) await provider.cancel(priorJob)
     }
     return {
+      // GF-92 Layer-5 round-2 review, MINOR — mirror the top-level status here
+      // too, not just on the movingIn path above. `movingOut` only holds when
+      // `nextStatus !== undefined`, so this is always a concrete target status
+      // (e.g. 'approved'). Without it, callers that gate the status write on
+      // `result.status` being truthy (viktorOwned.ts's /approvals handler)
+      // cancel the provider job but never update the post's top-level status,
+      // leaving it stale at 'scheduled' while approval.status moves on —
+      // exactly the top-level/approval divergence this whole sync module
+      // exists to eliminate.
+      status: nextStatus,
       publishing: {
         ...existingPublishing(current),
         providerJobId: null,

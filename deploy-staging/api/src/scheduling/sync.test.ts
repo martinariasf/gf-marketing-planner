@@ -110,6 +110,12 @@ test('applyStatusToSchedule cancels the provider job when a legacy row moves out
   assert.equal(cancel.mock.calls.length, 1)
   assert.equal(cancel.mock.calls[0].arguments[0], 'x')
   assert.equal((result?.publishing as Record<string, unknown>).providerJobId, null)
+  // GF-92 Layer-5 round-2 review, MINOR — the cancel path must mirror the
+  // top-level status too, not just clear the publishing sub-object. Without
+  // this, viktorOwned.ts's /approvals handler (which only writes
+  // patch.status when result.status is truthy) cancels the job but leaves
+  // the post's raw `status` stuck at 'scheduled' forever.
+  assert.equal(result?.status, 'approved')
 })
 
 // GF-92 Layer-5 review, finding 1/2 — acceptance criterion 5: "must never
