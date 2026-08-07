@@ -39,6 +39,25 @@ RUN cd /opt/hermes/skills && rm -rf -- */ && ls -A
 # core text-only schema. Idempotent; mirrors staging. See patches/ for details.
 COPY --chown=root:root patches/patch_api_server.py /tmp/patch_api_server.py
 RUN /opt/hermes/.venv/bin/python3 /tmp/patch_api_server.py
+
+# [GF-100] Notify the user instead of failing silently when a limit is hit
+# (daily quota, OpenRouter billing cap, rate limit, auth failure) or the
+# model's response gets truncated. Two independently-revertible patches share
+# one ES/DE/EN copy module:
+#  - patch_localized_errors.py rebinds gateway/run.py's
+#    _gateway_provider_error_reply / _normalize_empty_agent_response to
+#    localized versions (Telegram/TUI side; the dashboard side already
+#    ships via deploy-staging/api/src/agentMessages.ts).
+#  - patch_truncation_reply.py replaces the 4 "final_response: None" +
+#    "response truncated" return sites in agent/conversation_loop.py with the
+#    localized output_truncated string, so the raw English error never
+#    reaches _normalize_empty_agent_response in the first place.
+# See patches/_gf_messages.py for the anchor table and shared copy.
+COPY --chown=root:root patches/_gf_messages.py /opt/hermes/agent/_gf_messages.py
+COPY --chown=root:root patches/patch_localized_errors.py /tmp/patch_localized_errors.py
+COPY --chown=root:root patches/patch_truncation_reply.py /tmp/patch_truncation_reply.py
+RUN /opt/hermes/.venv/bin/python3 /tmp/patch_localized_errors.py \
+ && /opt/hermes/.venv/bin/python3 /tmp/patch_truncation_reply.py
 USER 10000
 
 # Copy custom plugins into the user-plugin directory that hermes scans at

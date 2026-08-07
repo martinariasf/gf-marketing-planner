@@ -39,3 +39,13 @@ test('chat relay localizes each terminal branch via the catalog', () => {
   // hard-timeout abort → timed_out
   assert.match(src, /localized\('timed_out', lang\)/)
 })
+
+// GF-100: the generic completed_with_writes/no_final_text fallback copy must
+// never overwrite a non-empty agent reply. chat.ts guards this by only
+// substituting the catalog copy when the trimmed output is empty; agentJobs.ts
+// (finalizeAgentJob) applies the same guard via `args.output?.trim() || fallbackFor(...)`.
+// This is a source-level regression guard, not a runtime one — see the file
+// header for why this route can't be unit-invoked directly.
+test('chat relay only substitutes fallback copy when the agent output is empty', () => {
+  assert.match(src, /if \(!assistantFinalText\.trim\(\)[\s\S]{0,40}\)\s*\{\s*\n\s*assistantFinalText = localized\('completed_with_writes', lang\)/)
+})
