@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
-import { toast, Toaster } from 'sonner'
+import { toast } from 'sonner'
 import { Sparkles, CalendarClock } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { InfoHint } from '@/components/ui/info-hint'
@@ -43,8 +43,6 @@ export default function ConfigurationView() {
 
   return (
     <div className="space-y-6">
-      <Toaster position="bottom-right" />
-
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
           {t('config.eyebrow')}

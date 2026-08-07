@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
-import { toast, Toaster } from 'sonner'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Suggestion, SuggestionKind, SuggestionStatus, Confidence } from '@/types'
@@ -91,8 +91,6 @@ export default function SuggestionsView() {
 
   return (
     <div className="space-y-6">
-      <Toaster position="bottom-right" />
-
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
