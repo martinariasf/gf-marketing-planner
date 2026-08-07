@@ -44,6 +44,13 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    date: '2026-08-06',
+    title: 'Attach images and documents in chat',
+    items: [
+      'You can now attach images and text documents when chatting with Viktor — drag and drop them onto the chat composer or use the new paperclip button. Attached images can be used directly as a reference for image generation; attached documents (notes, transcripts, CSV, etc.) are read and used as context for the reply.',
+    ],
+  },
+  {
     date: '2026-07-08',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

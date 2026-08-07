@@ -577,9 +577,56 @@ export async function apiDeleteInspiration(slug: string, id: string): Promise<vo
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
 }
 
+// ── GF-68: chat image/document attachments ──────────────────────────────────
+// Mirror the server-side constants in deploy-staging/api/src/routes/chatAttachments.ts
+// so the composer can pre-validate and show a good error before uploading.
+export const CHAT_ATTACHMENT_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+export const CHAT_ATTACHMENT_MAX_IMAGE_BYTES = 10_000_000
+export const CHAT_ATTACHMENT_MAX_DOC_BYTES = 2_000_000
+export const CHAT_ATTACHMENT_MAX_COUNT = 4
+// Extensions accepted for text-format documents (kept in sync with the
+// server's TEXT_EXT_RE in deploy-staging/api/src/textUpload.ts).
+export const CHAT_ATTACHMENT_DOC_EXTENSIONS = [
+  '.txt', '.md', '.markdown', '.vtt', '.srt', '.csv', '.json', '.log', '.text',
+]
+
+export interface ChatAttachment {
+  id: string
+  kind: 'image' | 'document'
+  filename: string
+  mimeType: string
+  size: number
+  url?: string
+  textLength?: number
+  createdAt?: string
+}
+
+export async function apiUploadChatAttachment(slug: string, file: File): Promise<ChatAttachment> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await authedFetch(`/clients/${slug}/chat/attachments`, { method: 'POST', body: form })
+  if (!res.ok) {
+    let detail = `Upload failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { detail?: string; title?: string }
+      detail = body.detail || body.title || detail
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail)
+  }
+  const parsed = (await res.json()) as { items: ChatAttachment[] }
+  const item = parsed.items[0]
+  return item.url ? { ...item, url: absoluteUrl(item.url) } : item
+}
+
 // The API returns same-origin absolute paths (/api/v1/...). When the SPA runs
 // against a remote API_BASE in dev, prefix it; in prod they're same-origin.
-function absoluteUrl(path: string): string {
+// Exported so the chat history-replay path (chat-sheet.tsx recordToMessage)
+// can apply the same normalization the upload path already does — a
+// persisted relative attachment URL from PB otherwise resolves against the
+// Vite dev server, not the remote API, and 404s.
+export function absoluteUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
   if (!API_BASE) return path
   try {
@@ -634,6 +681,9 @@ export async function* apiChatStream(args: {
   thread: string
   message: string
   history: ChatTurn[]
+  /** GF-68: ids of attachments already uploaded via apiUploadChatAttachment.
+   * NEVER send base64 file data over this path — only ids. */
+  attachments?: Array<{ id: string }>
   signal?: AbortSignal
 }): AsyncGenerator<ChatStreamEvent> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
@@ -641,7 +691,12 @@ export async function* apiChatStream(args: {
   const res = await fetch(`${API_BASE}/clients/${args.slug}/chat/stream`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
-    body: JSON.stringify({ thread: args.thread, message: args.message, history: args.history }),
+    body: JSON.stringify({
+      thread: args.thread,
+      message: args.message,
+      history: args.history,
+      ...(args.attachments && args.attachments.length ? { attachments: args.attachments } : {}),
+    }),
     signal: args.signal,
   })
   if (!res.ok || !res.body) {

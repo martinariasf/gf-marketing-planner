@@ -5,6 +5,7 @@ import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
 import { loadOrgSettings, DEFAULTS as ORG_SETTINGS_DEFAULTS, type OrgSettings } from '../orgSettings.js'
+import { isTextUpload } from '../textUpload.js'
 
 export type CalendarRange = {
   startMonth: string
@@ -241,15 +242,7 @@ planningConfig.post(
 // Only text-based files are accepted (transcripts, notes, captions, CSV, JSON).
 // Binary formats (PDF/DOCX) would need a parser dependency and are rejected with
 // a clear message rather than stored as unreadable bytes.
-const TEXT_EXT_RE = /\.(txt|md|markdown|vtt|srt|csv|json|log|text)$/i
 const MAX_UPLOAD_BYTES = 15_000_000
-
-function isTextUpload(file: File): boolean {
-  const type = (file.type || '').toLowerCase()
-  if (type.startsWith('text/')) return true
-  if (type === 'application/json') return true
-  return TEXT_EXT_RE.test(file.name || '')
-}
 
 planningConfig.post(
   '/clients/:slug/information-sources/upload',
