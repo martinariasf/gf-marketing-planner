@@ -22,7 +22,7 @@ import {
   zodDetail,
 } from '../schemas/post.js'
 import { approvalDecisionForPatch } from '../approvalFromPatch.js'
-import { applyStatusToSchedule, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
+import { applyStatusToSchedule, laneOf, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
 import { SchedulingError } from '../scheduling/provider.js'
 
 type AssetManifest = {
@@ -541,7 +541,11 @@ viktorOwned.post(
             schedulingPatch = result.publishing
             // Never overwrite a post that's already published — the provider is
             // the source of truth for that transition, not the approval decision.
-            if (result.status && String(current.status ?? '') !== 'published') {
+            // Use the same lane resolution as applyStatusToSchedule (laneOf), so
+            // this guard and the scheduling decision can never disagree (GF-92
+            // Layer-5 review, finding 1): a legacy row with status:'approved' and
+            // approval.status:'published' must be caught here too.
+            if (result.status && laneOf(current) !== 'published') {
               schedulingStatus = result.status
             }
           }

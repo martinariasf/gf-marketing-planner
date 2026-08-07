@@ -111,3 +111,31 @@ test('applyStatusToSchedule cancels the provider job when a legacy row moves out
   assert.equal(cancel.mock.calls[0].arguments[0], 'x')
   assert.equal((result?.publishing as Record<string, unknown>).providerJobId, null)
 })
+
+// GF-92 Layer-5 review, finding 1/2 — acceptance criterion 5: "must never
+// write status for a post already published". This covers the exact legacy
+// shape the reviewer called out: top-level status still 'approved' but
+// approval.status already 'published' (i.e. laneOf() resolves to
+// 'published' even though the raw status field does not).
+test('applyStatusToSchedule never re-schedules an already-published post (legacy shape)', async () => {
+  const schedule = mock.fn(async () => ({ jobId: 'should-not-happen', scheduledFor: 'x' }))
+  const reschedule = mock.fn(async () => ({ jobId: 'should-not-happen', scheduledFor: 'x' }))
+  fakeProvider = {
+    name: 'postiz',
+    schedule,
+    reschedule,
+    cancel: async () => {},
+    getStatus: async () => ({ state: 'published' }),
+  }
+
+  const current = {
+    status: 'approved',
+    approval: { status: 'published' },
+    publishing: { providerJobId: 'original-job' },
+  }
+  const result = await applyStatusToSchedule('acme', current, 'scheduled')
+
+  assert.equal(result, null)
+  assert.equal(schedule.mock.calls.length, 0)
+  assert.equal(reschedule.mock.calls.length, 0)
+})
