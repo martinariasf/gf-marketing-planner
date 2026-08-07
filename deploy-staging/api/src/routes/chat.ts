@@ -61,6 +61,19 @@ export function publicOrigin(): string {
 // contain exactly one "/api/v1/" occurrence — see `publicOrigin()` above.
 // Exported so tests can assert the real, behavioural output rather than
 // grepping chat.ts's source text.
+//
+// Round-2 review asked whether the Hermes container can actually resolve
+// this PUBLIC hostname (staging.marketing.gfinnov.com), since the API
+// otherwise talks to Hermes over an internal Docker hostname. Confirmed by
+// reading deploy-staging/staging-demo-agent/plugins/image_gen_openrouter/
+// __init__.py: `_internal_api_url()` rewrites ANY url containing "/api/v1/"
+// to `${API_BASE}/<the part after /api/v1/>` before the agent ever fetches
+// it (see `_resolve_image_bytes`, used by `_reference_to_data_uri`, which is
+// exactly the path `image_generate(reference_images=[...])` takes — the use
+// this URL is built for, per `buildAgentInput()` below). `API_BASE` is the
+// agent's own in-container env var pointing at the API's Docker service
+// name, so the public hostname in this URL is never actually dereferenced
+// by the agent process — it's rewritten first. Safe as-is; no code change.
 export function chatAttachmentAgentUrl(slug: string, id: string): string {
   return `${publicOrigin()}${chatAttachmentUrl(slug, id)}`
 }

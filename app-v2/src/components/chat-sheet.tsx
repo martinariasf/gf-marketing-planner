@@ -323,18 +323,17 @@ export function ChatSheet({
     let cancelled = false
     Promise.all([apiLoadChatHistory(slug, thread), apiLoadAgentJobs(slug, thread)]).then(([items, jobs]) => {
       if (cancelled) return
+      // GF-68 review round 2: this used to build Message objects inline,
+      // copying record.attachments verbatim and skipping the absoluteUrl()
+      // normalization that recordToMessage() applies. That left this —
+      // the primary history-replay path — still serving relative
+      // attachment URLs that 404 in dev against a remote VITE_API_BASE.
+      // Route through the single shared normalizer so there is only one
+      // place that ever needs to remember to normalize.
       const hist: Message[] = items
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => {
-          const record = m as typeof m & { created?: string; attachments?: ChatAttachment[] }
-          return {
-            id: record.id,
-            created: record.created,
-            role: record.role as 'user' | 'assistant',
-            content: record.content,
-            attachments: record.attachments ?? undefined,
-          }
-        })
+        .map((m) => recordToMessage(m as unknown as ChatMessageRecord))
+        .filter((m): m is Message => m !== null)
       setMessages(orderMessages(hist))
       setAgentJobs(jobs)
     })
