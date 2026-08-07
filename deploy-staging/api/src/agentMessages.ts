@@ -37,23 +37,35 @@ export type MessageKey =
 
 // Pattern → key. Order matters: quota/billing is checked before generic rate
 // limits because some 402s read as both. Lower-cased haystack is matched.
-const QUOTA_PATTERNS = [
-  '402',
-  'payment required',
-  'insufficient credit', // matches "insufficient credits"
-  'insufficient_quota',
-  'insufficient balance',
-  'daily limit',
-  'daily limit exceeded',
-  'exceeded your current quota',
-  'credits have been exhausted',
-  'billing',
-  'quota', // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+//
+// [GF-100 Layer-5 round-2] These used to be plain substrings matched via
+// `.includes()` — worse than the Python side's regex, because `.includes()`
+// has *no* word-boundary option at all. That let unrelated words swallow a
+// pattern as a substring: 'quota' matched inside "quotation", 'billing'
+// matched inside "Billington", 'key limit' matched inside "monkey limit" /
+// "turkey limit", 'payment required' matched inside "overpayment required".
+// Converted to \b-bounded regexes so this classifier makes the same call as
+// the Telegram-side one in
+// deploy-prod/gf-innov-agent/patches/patch_localized_errors.py
+// (_GF_QUOTA_ERROR_PATTERN) — same provider error must not read one way on
+// the dashboard and another way on Telegram (GF-100 acceptance criterion 4).
+// Keep the two lists in sync if either changes.
+const QUOTA_PATTERNS: RegExp[] = [
+  /\b402\b/,
+  /\bpayment\s+required\b/,
+  /\binsufficient\s+credits?\b/, // matches "insufficient credit(s)"
+  /\binsufficient_quota\b/,
+  /\binsufficient\s+balances?\b/,
+  /\bdaily\s+limit\b/,
+  /\bexceeded\s+your\s+current\s+quota\b/,
+  /\bcredits?\s+have\s+been\s+exhausted\b/,
+  /\bbilling\b/,
+  /\bquota\b/, // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
   // OpenRouter's 403 "Key limit exceeded" (GF-100) is billing, not auth — see
   // agent/error_classifier.py on the box, which buckets it as FailoverReason.billing
   // for the same reason. Deliberately NOT a bare '403': that would swallow
   // unrelated auth failures that also carry a 403 status.
-  'key limit',
+  /\bkey\s+limit\b/,
   // Checked before RATE_LIMIT, so a quota-flavoured error gets the "come back
   // tomorrow" message rather than the transient "try again shortly" one.
 ]
@@ -74,7 +86,7 @@ const RATE_LIMIT_PATTERNS = [
 export function classify(rawError: string | null | undefined): MessageKey {
   const hay = (rawError ?? '').toLowerCase()
   if (!hay.trim()) return 'run_failed'
-  if (QUOTA_PATTERNS.some((p) => hay.includes(p))) return 'quota_exhausted'
+  if (QUOTA_PATTERNS.some((p) => p.test(hay))) return 'quota_exhausted'
   if (RATE_LIMIT_PATTERNS.some((p) => hay.includes(p))) return 'rate_limited'
   return 'run_failed'
 }

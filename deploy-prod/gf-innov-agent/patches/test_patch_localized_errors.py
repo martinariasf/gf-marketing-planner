@@ -55,16 +55,44 @@ def _build_fake_run_module():
 
 
 def _install_fake_gf_messages():
+    """Install fake `agent` / `agent._gf_messages` modules and return the prior
+    sys.modules entries (or _SENTINEL if absent) so the caller can restore
+    them — this test must not leak fake modules into sys.modules for any
+    other in-process test that later imports the real `agent` package
+    (finding 3, round-2 review)."""
+    prior = {
+        "agent": sys.modules.get("agent", _SENTINEL),
+        "agent._gf_messages": sys.modules.get("agent._gf_messages", _SENTINEL),
+    }
     agent_pkg = types.ModuleType("agent")
     gf_messages = types.ModuleType("agent._gf_messages")
     gf_messages.render = lambda key, lang: f"[{key}]"
     gf_messages.resolve_gf_lang = lambda: "en"
     sys.modules["agent"] = agent_pkg
     sys.modules["agent._gf_messages"] = gf_messages
+    return prior
+
+
+_SENTINEL = object()
+
+
+def _restore_sys_modules(prior: dict) -> None:
+    for name, value in prior.items():
+        if value is _SENTINEL:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = value
 
 
 def main() -> int:
-    _install_fake_gf_messages()
+    prior_modules = _install_fake_gf_messages()
+    try:
+        return _run_cases()
+    finally:
+        _restore_sys_modules(prior_modules)
+
+
+def _run_cases() -> int:
     block = _load_append_block()
     ns = _build_fake_run_module()
     exec(block, ns)  # noqa: S102 — trusted local file, test-only
@@ -77,10 +105,39 @@ def main() -> int:
         ("403 Key limit exceeded", "quota_exhausted"),
         ("daily limit exceeded", "quota_exhausted"),
         ("Payment required (402)", "quota_exhausted"),
+        ("insufficient credits remaining", "quota_exhausted"),
+        ("insufficient credit", "quota_exhausted"),
+        ("insufficient balance transfer failed", "quota_exhausted"),
+        ("insufficient_quota", "quota_exhausted"),
+        ("billing address invalid — please update your plan", "quota_exhausted"),
         ("429 rate limit exceeded, please slow down", "rate_limited"),
         ("some generic failure with no known keyword", "provider_failed"),
         ("401 provider authentication failed", "auth_failed"),
         ("request blocked due to policy violation", "policy_rejected"),
+        # --- near-miss cases per alternative audited in patch_localized_errors.py:
+        # each of these contains an unrelated word that merely *contains* one
+        # of the quota alternatives as a substring, and must NOT classify as
+        # quota_exhausted.
+        ("insufficient credentials for authentication", "provider_failed"),
+        ("monkey limit reached on the zoo API", "provider_failed"),
+        ("turkey limit exceeded for this recipe endpoint", "provider_failed"),
+        # NB: these two land in rate_limited, not provider_failed — the fake
+        # _GATEWAY_RATE_LIMIT_RE here mirrors the REAL upstream regex in
+        # gateway/run.py, which matches a bare unbounded "quota" too (see the
+        # anchor table at the top of patch_localized_errors.py: "this bucket
+        # currently also catches billing/quota text"). That's a pre-existing
+        # upstream over-match in a regex this patch does NOT touch (it's
+        # defined in gateway/run.py itself, not appended by this patch) — out
+        # of scope for this finding, which is specifically about
+        # _GF_QUOTA_ERROR_PATTERN. Asserting the actual (rate_limited) outcome
+        # here rather than the ideal one, so this test doesn't silently start
+        # asserting something untrue about the fake harness.
+        ("insufficient_quotation marks used in the request body", "rate_limited"),
+        ("insufficient balancer readings off nominal", "provider_failed"),
+        ("overpayment required notice from the invoicing system", "provider_failed"),
+        ("quotation needed before we can proceed", "rate_limited"),
+        ("overbilling dispute raised by customer", "provider_failed"),
+        ("Billington Corp returned an unexpected error", "provider_failed"),
     ]
 
     failures = []

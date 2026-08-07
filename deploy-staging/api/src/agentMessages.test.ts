@@ -39,6 +39,40 @@ test('classify: a bare 403 with no billing marker does not leak into quota_exhau
   assert.equal(classify('403 Forbidden: invalid token'), 'run_failed')
 })
 
+// [GF-100 Layer-5 round-2] QUOTA_PATTERNS moved from unbounded `.includes()`
+// substrings to \b-bounded regexes. Each near-miss below contains one of the
+// quota alternatives as a mere substring of an unrelated word and must NOT
+// classify as quota_exhausted — mirrors the near-miss table audited in
+// deploy-prod/gf-innov-agent/patches/patch_localized_errors.py /
+// test_patch_localized_errors.py so both classifiers agree on the same
+// inputs (acceptance criterion 4).
+test('classify: near-miss strings that merely contain a quota substring do not classify as quota_exhausted', () => {
+  const nearMisses = [
+    'insufficient credentials for authentication', // "credit" is not actually a substring of "credentials" — kept as a documented non-repro case
+    'monkey limit reached on the zoo API', // contains "key limit"
+    'turkey limit exceeded for this recipe endpoint', // contains "key limit"
+    'overpayment required notice from the invoicing system', // contains "payment required"
+    'Billington Corp returned an unexpected error', // contains "billing"
+    'overbilling dispute raised by customer', // contains "billing"
+  ]
+  for (const raw of nearMisses) {
+    assert.notEqual(classify(raw), 'quota_exhausted', raw)
+  }
+})
+
+test('classify: "quotation" strings (contain "quota" as a substring) do not classify as quota_exhausted', () => {
+  // These two contain "quota" as a substring of "quotation" but no other
+  // quota or rate-limit marker, so with the \b-bounded QUOTA_PATTERNS they
+  // correctly fall through to the safe default (run_failed) instead of
+  // quota_exhausted. NB: the Python-side test for the equivalent Telegram
+  // classifier asserts 'rate_limited' for the same near-miss strings,
+  // because gateway/run.py's pre-existing (out-of-scope) rate-limit regex
+  // also matches a bare "quota" — a divergence documented there, not fixed
+  // here since it lives in an upstream regex this task doesn't touch.
+  assert.equal(classify('insufficient_quotation marks used in the request body'), 'run_failed')
+  assert.equal(classify('quotation needed before we can proceed'), 'run_failed')
+})
+
 test('classify: throttles → rate_limited', () => {
   for (const raw of ['429 Too Many Requests', 'rate limit reached', 'RESOURCE_EXHAUSTED', 'request was throttled']) {
     assert.equal(classify(raw), 'rate_limited', raw)

@@ -78,9 +78,58 @@ for anchor in ("def _gateway_provider_error_reply(", "def _normalize_empty_agent
 # APPEND_BLOCK triple-quoted string itself; verified correct by exec'ing it,
 # but repr() removes the whole class of "count the backslashes" risk instead
 # of relying on that verification staying true forever.)
+#
+# [GF-100 Layer-5 round-2] Every alternative below is now \b-bounded on
+# whichever side it lacked one — the original had only `\bquota\b` and
+# `\b402\b` bounded, and re.search happily matches an unbounded alternative
+# as a substring of an unrelated, longer word. Audited each alternative
+# against a plausible unrelated string (see review2-gf-100.md finding 1 and
+# test_patch_localized_errors.py's near-miss cases for the full table):
+#   key\s+limit          -> "monkey limit" / "turkey limit" both contain the
+#                            substring "key limit" with no leading boundary.
+#                            Fixed: \bkey\s+limit\b
+#   daily\s+limit         -> no plausible English word ends in "...daily", so
+#                            this one wasn't actually reachable, but bounded
+#                            anyway for consistency: \bdaily\s+limit\b
+#   insufficient\s+credit -> reviewer's claimed repro ("insufficient
+#                            credentials") does NOT actually match — "credit"
+#                            is not a substring of "credentials" (they diverge
+#                            at the 5th character: cred-I-t vs cred-E-ntials).
+#                            Verified with re.search; see report. The general
+#                            class of bug is still real though: a bare
+#                            unbounded "credit" would swallow "accreditation"-
+#                            style words if "insufficient" ever prefixed one,
+#                            and a *trailing* \b was needed to stop it bleeding
+#                            into an unrelated longer word. A naive `\b` after
+#                            "credit" would break the intentional "insufficient
+#                            credits" (plural) match (\b doesn't fire between
+#                            two \w chars), so the fix is an explicit optional
+#                            plural instead: \binsufficient\s+credits?\b
+#   insufficient_quota     -> no leading \b; matches inside
+#                            "insufficient_quotation" (unrelated string, e.g. a
+#                            log line about quoting marks). Fixed with a
+#                            trailing \b too (underscore is a \w char, so \b
+#                            works correctly on both sides here, unlike the
+#                            plural case above): \binsufficient_quota\b
+#   insufficient\s+balance -> analogous to "credit": "insufficient balancer
+#                            readings" would match "insufficient balance" as a
+#                            substring with no trailing boundary. Same fix
+#                            shape as credit(s): \binsufficient\s+balances?\b
+#   payment\s+required     -> no leading \b; matches inside "overpayment
+#                            required notice" (an unrelated string — e.g. an
+#                            invoice-system message, not a provider quota
+#                            error). Fixed: \bpayment\s+required\b
+#   \bquota\b              -> already correctly bounded both sides. No change.
+#   \b402\b                -> already correctly bounded both sides. No change.
+#   billing                -> no boundary at all; matches inside "overbilling"
+#                            (arguably still on-topic) but also inside a
+#                            company/product name like "Billington" (a false
+#                            positive with no billing relationship at all).
+#                            Fixed: \bbilling\b
 _GF_QUOTA_ERROR_PATTERN = (
-    r"(key\s+limit|daily\s+limit|insufficient\s+credit|insufficient_quota|"
-    r"insufficient\s+balance|payment\s+required|\bquota\b|\b402\b|billing)"
+    r"(\bkey\s+limit\b|\bdaily\s+limit\b|\binsufficient\s+credits?\b|"
+    r"\binsufficient_quota\b|\binsufficient\s+balances?\b|"
+    r"\bpayment\s+required\b|\bquota\b|\b402\b|\bbilling\b)"
 )
 
 APPEND_BLOCK = '''
