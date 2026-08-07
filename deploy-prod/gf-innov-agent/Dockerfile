@@ -6,6 +6,11 @@
 
 FROM hermes-agent:base
 
+# GF-89 — force UTF-8 everywhere in the container (locale + Python I/O), so
+# subprocess calls (e.g. the postiz CLI) and Python's own stdio never fall
+# back to an ASCII/latin-1 default that mangles accented text.
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 PYTHONUTF8=1
+
 # Postiz CLI — official `postiz` package from gitroomhq/postiz-agent.
 # Auth via POSTIZ_API_KEY env var; no browser flow needed.
 USER root
