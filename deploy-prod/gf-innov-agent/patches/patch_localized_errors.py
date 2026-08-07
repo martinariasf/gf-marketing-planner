@@ -69,6 +69,20 @@ for anchor in ("def _gateway_provider_error_reply(", "def _normalize_empty_agent
         )
         sys.exit(1)
 
+# Built as a plain (non-raw) Python string constant HERE, in this script's own
+# top-level source — i.e. exactly one layer of string literal, so `\s`/`\b`
+# mean what they look like. It is then embedded into APPEND_BLOCK below via
+# repr(), which round-trips it into valid Python/regex source no matter how
+# many backslashes it takes to represent — no hand-doubled escapes to get
+# wrong. (An earlier draft hand-escaped this same pattern inside the
+# APPEND_BLOCK triple-quoted string itself; verified correct by exec'ing it,
+# but repr() removes the whole class of "count the backslashes" risk instead
+# of relying on that verification staying true forever.)
+_GF_QUOTA_ERROR_PATTERN = (
+    r"(key\s+limit|daily\s+limit|insufficient\s+credit|insufficient_quota|"
+    r"insufficient\s+balance|payment\s+required|\bquota\b|\b402\b|billing)"
+)
+
 APPEND_BLOCK = '''
 
 ''' + MARKER + '''
@@ -78,14 +92,14 @@ APPEND_BLOCK = '''
 # fall back to the original English-producing logic on any unexpected shape,
 # so a bug here degrades to the pre-GF-100 behaviour rather than crashing the
 # gateway.
+import logging as _logging
 from agent._gf_messages import render as _gf_render, resolve_gf_lang as _gf_resolve_lang
 
 _gf_original_gateway_provider_error_reply = _gateway_provider_error_reply
 _gf_original_normalize_empty_agent_response = _normalize_empty_agent_response
 
 _GF_QUOTA_ERROR_RE = re.compile(
-    r"(key\\s+limit|daily\\s+limit|insufficient\\s+credit|insufficient_quota|"
-    r"insufficient\\s+balance|payment\\s+required|\\bquota\\b|\\b402\\b|billing)",
+''' + repr(_GF_QUOTA_ERROR_PATTERN) + ''',
     re.IGNORECASE,
 )
 
@@ -117,13 +131,18 @@ def _normalize_empty_agent_response(agent_result: dict, response: str, *, histor
     """Localized replacement for the original _normalize_empty_agent_response.
 
     Mirrors the original branch structure exactly (see anchor table above);
-    only the human-authored copy is localized. Raw error/diagnostic text
-    embedded mid-message (error_detail, err) stays as-is, same as the
-    original — it is not something we author, so there is nothing to
-    translate, and truncating/hiding it would lose real debugging signal.
+    only the human-authored copy is localized. Unlike the original, raw
+    error/diagnostic text (error_detail, err) is NOT appended to the
+    user-facing string anymore — a provider error body, stack trace, or API
+    key prefix could be sitting in there, and that would leak straight to
+    Telegram/TUI (GF-100 acceptance criterion 3). It is still logged
+    server-side so the debugging signal isn't lost, just not shipped to the
+    user.
     """
     if response:
         return response
+
+    _gf_logger = _logging.getLogger("gf100.localized_errors")
 
     try:
         lang = _gf_resolve_lang()
@@ -137,8 +156,9 @@ def _normalize_empty_agent_response(agent_result: dict, response: str, *, histor
             ) or ("400" in error_str and history_len > 50)
             if is_context_failure:
                 return _gf_render("context_too_large", lang)
+            _gf_logger.warning("GF-100 request_failed detail (not shown to user): %s", str(error_detail)[:300])
             return (
-                f"{_gf_render('request_failed_prefix', lang)}: {str(error_detail)[:300]}\\n"
+                f"{_gf_render('request_failed_prefix', lang)}\\n"
                 f"{_gf_render('request_failed_suffix', lang)}"
             )
 
@@ -146,7 +166,8 @@ def _normalize_empty_agent_response(agent_result: dict, response: str, *, histor
         if api_calls > 0 and not agent_result.get("interrupted"):
             if agent_result.get("partial"):
                 err = agent_result.get("error", "processing incomplete")
-                return f"⚠️ {_gf_render('processing_stopped_prefix', lang)}: {str(err)[:200]}. {_gf_render('processing_stopped_suffix', lang)}"
+                _gf_logger.warning("GF-100 processing_stopped detail (not shown to user): %s", str(err)[:200])
+                return f"⚠️ {_gf_render('processing_stopped_prefix', lang)}. {_gf_render('processing_stopped_suffix', lang)}"
             return _gf_render("no_response_generated", lang)
 
         return response

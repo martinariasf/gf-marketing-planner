@@ -21,6 +21,13 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-06',
+    title: "You'll now be told when a limit is hit, instead of silence",
+    items: [
+      "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
+    ],
+  },
+  {
     date: '2026-07-08',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

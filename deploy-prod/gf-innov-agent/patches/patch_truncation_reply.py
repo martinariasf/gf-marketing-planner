@@ -32,7 +32,7 @@
 # "<one of the two literal strings>") and requires exactly 4 matches — if
 # conversation_loop.py changes upstream and the count drifts, this hard-fails
 # instead of silently patching the wrong number of sites.
-import sys, re, py_compile, shutil
+import sys, re, py_compile
 
 p = "/opt/hermes/agent/conversation_loop.py"
 src = open(p, encoding="utf-8").read()

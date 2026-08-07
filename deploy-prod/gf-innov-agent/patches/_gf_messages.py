@@ -16,9 +16,9 @@ DEFAULT_LANG = "en"
 # mirrors the "no technical jargon" rule in agentMessages.ts.
 GF_MESSAGES: dict[str, dict[str, str]] = {
     "quota_exhausted": {
-        "es": "Has alcanzado el límite de uso de hoy. Los créditos se renuevan a medianoche — ¡hablamos mañana!",
-        "de": "Du hast das heutige Nutzungslimit erreicht. Das Guthaben wird um Mitternacht zurückgesetzt — bis morgen!",
-        "en": "You've reached today's usage limit. Credits renew at midnight — talk tomorrow!",
+        "es": "Has alcanzado el límite de uso de hoy. Los créditos se renuevan a medianoche UTC — ¡hablamos mañana!",
+        "de": "Du hast das heutige Nutzungslimit erreicht. Das Guthaben wird um Mitternacht UTC zurückgesetzt — bis morgen!",
+        "en": "You've reached today's usage limit. Credits renew at midnight UTC — talk tomorrow!",
     },
     "rate_limited": {
         "es": "Estoy recibiendo muchas peticiones a la vez. Espera un momento y vuelve a intentarlo.",
