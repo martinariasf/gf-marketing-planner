@@ -327,6 +327,11 @@ export interface SetApprovalResult {
   // failed (past date, no provider key, provider down). The approval still
   // succeeds as 'approved'; this is a non-fatal, human-readable heads-up.
   scheduleWarning?: string
+  // GF-92 (D) — the FINAL decision the server actually recorded. When
+  // auto-schedule-on-approve succeeds, the server writes 'scheduled' even
+  // though the caller asked for 'approved' — callers must use this (not
+  // their local `decision` variable) for any user-facing confirmation.
+  decision?: ApprovalDecision
 }
 
 export async function apiSetApproval(
@@ -336,7 +341,7 @@ export async function apiSetApproval(
   note?: string,
 ): Promise<SetApprovalResult> {
   const r = await apiSend<SetApprovalResult>('POST', `/clients/${slug}/approvals`, { postId, decision, note })
-  return { scheduleWarning: r.scheduleWarning }
+  return { scheduleWarning: r.scheduleWarning, decision: r.decision }
 }
 
 export type SuggestionPatch = {

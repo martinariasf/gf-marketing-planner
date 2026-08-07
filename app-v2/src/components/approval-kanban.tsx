@@ -95,10 +95,19 @@ export function ApprovalKanban({
     setPending((p) => new Set(p).add(post.id))
     try {
       const result = await apiSetApproval(slug, post.id, decision)
+      // GF-92 Layer-5 review, finding 3 — the server's final decision can
+      // differ from what we asked for (auto-schedule-on-approve promotes
+      // 'approved' to 'scheduled'). Use it for the toast and the optimistic
+      // override so the UI never claims "Approved" while the board shows it
+      // as Scheduled.
+      const finalDecision = result.decision ?? decision
+      if (finalDecision !== decision) {
+        setOverrides((o) => ({ ...o, [post.id]: finalDecision }))
+      }
       if (result.scheduleWarning) {
         toast.warning(result.scheduleWarning, { duration: 4000 })
       } else {
-        toast(`${nameOf(post)} → ${t(`status.${decision}`)}`, { duration: 1800 })
+        toast(`${nameOf(post)} → ${t(`status.${finalDecision}`)}`, { duration: 1800 })
       }
       onChanged()
     } catch (err) {

@@ -367,10 +367,16 @@ export default function CalendarView() {
     setApprovingId(post.id)
     try {
       const result = await apiSetApproval(slug, post.id, decision)
+      // GF-92 Layer-5 review, finding 3 — auto-schedule-on-approve can
+      // promote the server's final decision to 'scheduled' even though we
+      // asked for 'approved'. Use the server's decision for the toast.
+      const finalDecision = result.decision ?? decision
       if (result.scheduleWarning) {
         toast.warning(result.scheduleWarning, { duration: 4000 })
       } else {
-        toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
+        toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${finalDecision}`) }), {
+          duration: 1600,
+        })
       }
       refetch()
     } catch (err) {

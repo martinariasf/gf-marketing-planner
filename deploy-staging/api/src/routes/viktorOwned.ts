@@ -572,21 +572,39 @@ viktorOwned.post(
                   publishing: { ...((current.publishing as object) ?? {}), ...schedulingPatch },
                 } as Record<string, unknown>)
               : (current as Record<string, unknown>)
+            // applyStatusToSchedule returns null (rather than throwing) in
+            // exactly two cases: (a) the post is already published — laneOf()
+            // resolves 'published' and the function bails before doing
+            // anything, which is a correct silent no-op, not a scheduling
+            // failure; or (b) the transition isn't a scheduling transition at
+            // all. Since we always pass nextStatus='scheduled' here, (b) can't
+            // happen on this call — the only realistic null is (a). Guard on
+            // that explicitly so we never emit a misleading "no provider
+            // configured" warning for an already-published post, while still
+            // warning if some other, currently-unforeseen null case appears.
+            const alreadyPublished = laneOf(postForSchedule) === 'published'
             try {
               const result = await applyStatusToSchedule(slug, postForSchedule, 'scheduled')
               if (result) {
                 schedulingPatch = result.publishing
                 if (result.status) schedulingStatus = result.status
                 finalDecision = 'scheduled'
+              } else if (!alreadyPublished) {
+                scheduleWarning =
+                  'Auto-schedule could not be applied to this post; it was approved but not scheduled.'
               }
             } catch (err) {
               // Auto-schedule must NEVER fail the approval (past date, no
-              // provider key, provider down, etc). Record the approval as
-              // 'approved' and surface a non-fatal warning instead.
+              // provider key, provider down, a raw network/provider error,
+              // etc). Record the approval as 'approved' and surface a
+              // non-fatal, user-safe warning instead — never rethrow, and
+              // never leak a raw provider error body or stack trace to the
+              // client.
               if (err instanceof ScheduleRejected || err instanceof SchedulingError) {
                 scheduleWarning = err.message
               } else {
-                throw err
+                scheduleWarning =
+                  'Auto-schedule failed unexpectedly; the post was approved but not scheduled. Check the scheduling provider configuration and try scheduling it manually.'
               }
             }
           }

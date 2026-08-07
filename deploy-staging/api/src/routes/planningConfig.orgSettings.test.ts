@@ -71,6 +71,17 @@ test('PUT /config/settings with the dash role succeeds and persists both keys', 
   const body = await res.json()
   assert.equal(res.status, 200)
   assert.deepEqual(body.data, { showAiGeneratedLabel: false, autoScheduleOnApprove: true })
+
+  // GF-92 Layer-5 review, finding 6 — the PUT response body alone doesn't
+  // prove persistence (acceptance criterion 2: "survive reload"). Read the
+  // value back via a fresh GET to prove it was actually stored, not just
+  // echoed.
+  const readBack = await planningConfig.request('/clients/acme/config/settings', {
+    headers: { Authorization: 'Bearer dash_test' },
+  })
+  const readBackBody = await readBack.json()
+  assert.equal(readBack.status, 200)
+  assert.deepEqual(readBackBody.data, { showAiGeneratedLabel: false, autoScheduleOnApprove: true })
 })
 
 test('PUT /config/settings rejects a missing/non-boolean key with 422', async () => {

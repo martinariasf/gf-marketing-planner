@@ -66,6 +66,18 @@ mock.module('../scheduling/sync.js', {
     applyStatusToSchedule,
     refreshPublishStatus: async () => null,
     ScheduleRejected: FakeScheduleRejected,
+    // GF-92a — laneOf() is exported from sync.ts and used by the approvals
+    // route's already-published guard. Mirror its real behavior (prefer
+    // approval.status, fall back to status) so that guard exercises real
+    // logic against this test's fake posts.
+    laneOf: (post: Record<string, unknown>) => {
+      const approval = post.approval
+      if (approval && typeof approval === 'object') {
+        const approvalStatus = (approval as Record<string, unknown>).status
+        if (typeof approvalStatus === 'string' && approvalStatus) return approvalStatus
+      }
+      return String(post.status ?? '')
+    },
   },
 })
 mock.module('../scheduling/provider.js', {
@@ -142,6 +154,51 @@ test('toggle ON + past date -> ends approved with a non-fatal scheduleWarning, H
   assert.equal(res.status, 201)
   assert.equal(body.decision, 'approved')
   assert.match(body.scheduleWarning, /past/)
+})
+
+test('toggle ON + no provider configured -> ends approved with a non-fatal scheduleWarning, HTTP 201', async () => {
+  // GF-92 Layer-5 review, finding 5 — the contract explicitly lists "no
+  // provider key" as a case that must warn, not 5xx.
+  fakeSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: true }
+  currentPost = { id: 'p1', status: 'in_review', date: '2099-01-01T10:00:00Z', publishing: {} }
+  scheduleImpl = async (_s, _c, nextStatus) => {
+    if (nextStatus === 'scheduled') {
+      throw new FakeScheduleRejected(
+        'No scheduling provider is configured for this client. Add a Postiz API key under Integrations, then try again.',
+      )
+    }
+    return null
+  }
+
+  const res = await postApproval('approved')
+  const body = await res.json()
+  assert.equal(res.status, 201)
+  assert.equal(body.decision, 'approved')
+  assert.match(body.scheduleWarning, /provider/i)
+})
+
+test('toggle ON + provider down (generic Error, not a typed scheduling error) -> ends approved with a non-fatal, user-safe scheduleWarning, HTTP 201', async () => {
+  // GF-92 Layer-5 review, finding 1 — "provider down" in practice throws a
+  // plain Error / TypeError from a failed fetch, NOT ScheduleRejected or
+  // SchedulingError. Auto-schedule failure must never fail the approval,
+  // regardless of the error's type, and must never leak a raw error message
+  // (e.g. a provider response body or stack trace) to the client.
+  fakeSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: true }
+  currentPost = { id: 'p1', status: 'in_review', date: '2099-01-01T10:00:00Z', publishing: {} }
+  scheduleImpl = async (_s, _c, nextStatus) => {
+    if (nextStatus === 'scheduled') {
+      throw new TypeError('fetch failed: ECONNREFUSED 10.0.0.5:443 secret-internal-detail')
+    }
+    return null
+  }
+
+  const res = await postApproval('approved')
+  const body = await res.json()
+  assert.equal(res.status, 201)
+  assert.equal(body.decision, 'approved')
+  assert.ok(typeof body.scheduleWarning === 'string' && body.scheduleWarning.length > 0)
+  // The raw error message must NOT be forwarded to the client.
+  assert.doesNotMatch(body.scheduleWarning, /ECONNREFUSED|secret-internal-detail/)
 })
 
 test('toggle OFF -> ends approved, and the scheduling provider is never invoked for the extra auto-schedule attempt', async () => {
