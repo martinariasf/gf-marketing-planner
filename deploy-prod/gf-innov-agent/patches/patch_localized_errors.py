@@ -126,10 +126,63 @@ for anchor in ("def _gateway_provider_error_reply(", "def _normalize_empty_agent
 #                            company/product name like "Billington" (a false
 #                            positive with no billing relationship at all).
 #                            Fixed: \bbilling\b
+#
+# [GF-100 Layer-5 round-3] Two-way diff against the dashboard's QUOTA_PATTERNS
+# (deploy-staging/api/src/agentMessages.ts) turned up a real divergence
+# (review3-gf-100.md finding 1) plus a real word-boundary gap (review3-gf-100.md
+# question). Full reconciliation table — every alternative on either side,
+# checked against the other:
+#
+#   Alternative                              | TS (agentMessages.ts) | Python (this file, before round 3)
+#   \b402\b                                  | yes                   | yes
+#   \bpayment\s+required\b                   | yes                   | yes
+#   \binsufficient\s+credits?\b              | yes                   | yes
+#   \binsufficient_quota\b                   | yes                   | yes
+#   \binsufficient\s+balances?\b             | yes                   | yes
+#   \bdaily\s+limit\b                        | yes                   | yes
+#   \bexceeded\s+your\s+current\s+quota\b    | yes                   | MISSING -> added below
+#   \bcredits?\s+have\s+been\s+exhausted\b   | yes                   | MISSING -> added below
+#   \bbilling\b                              | yes                   | yes
+#   \bquota\b                                | yes                   | yes
+#   \bkey\s+limit\b                          | yes                   | yes
+#   \bquota_exceeded\b (underscore/code form) | MISSING -> added below | MISSING -> added below
+#
+# "exceeded your current quota" and "credits have been exhausted" are real
+# OpenAI/OpenRouter-flavoured phrases the dashboard side already listed but
+# this file never picked up — that is finding 1: a provider error containing
+# either phrase classified as quota_exhausted on the dashboard but fell
+# through to provider_failed on Telegram. Added here so both paths agree.
+#
+# `quota_exceeded` (underscore form): `\bquota\b` does NOT match inside
+# "quota_exceeded" because `\b` never fires between two \w characters (`a`
+# and `_` are both \w) — same mechanism as the `insufficient_quota` fix
+# above, just never applied to the "exceeded" spelling. This is not
+# theoretical: verified 2026-08-07 via read-only SSH against
+# hermes-agent:base —
+#   - /opt/hermes/agent/auxiliary_client.py:2261's `_is_payment_error` keyword
+#     list includes the literal substring "quota_exceeded" (alongside
+#     "quota exceeded") specifically to catch Vertex AI/Bedrock daily-quota
+#     error text, proving the underscore form is a real provider string, not
+#     a hypothetical.
+#   - /opt/hermes/agent/error_classifier.py's `_classify_by_error_code`
+#     matches structured error-code fields via exact-string set membership
+#     (`code_lower in {"insufficient_quota", ...}`), not regex, so it was
+#     never exposed to this \b gap in the first place — but it confirms
+#     underscore-separated codes ("insufficient_quota", "billing_not_active",
+#     "payment_required") are the normal shape for this provider family.
+#   - No occurrence of "quota_exhausted" (our own MessageKey name) was found
+#     anywhere in /opt/hermes — it is not a real provider string, so no
+#     pattern was added for it; adding one would be speculative, not
+#     evidence-based.
+#   Fixed with an explicit alternative: \bquota_exceeded\b (both boundaries
+#   land on non-\w chars — start/end of string, whitespace, or punctuation —
+#   so this is exact with no near-miss risk).
 _GF_QUOTA_ERROR_PATTERN = (
     r"(\bkey\s+limit\b|\bdaily\s+limit\b|\binsufficient\s+credits?\b|"
     r"\binsufficient_quota\b|\binsufficient\s+balances?\b|"
-    r"\bpayment\s+required\b|\bquota\b|\b402\b|\bbilling\b)"
+    r"\bpayment\s+required\b|\bexceeded\s+your\s+current\s+quota\b|"
+    r"\bcredits?\s+have\s+been\s+exhausted\b|\bquota_exceeded\b|"
+    r"\bquota\b|\b402\b|\bbilling\b)"
 )
 
 APPEND_BLOCK = '''

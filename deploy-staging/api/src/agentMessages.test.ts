@@ -27,6 +27,19 @@ test('classify: OpenRouter daily-limit / billing → quota_exhausted', () => {
   }
 })
 
+// [GF-100 Layer-5 round-3] question: `\bquota\b` alone does not match the
+// underscore/code form "quota_exceeded" (\b never fires between two \w
+// chars, and `_` is \w). Confirmed real via read-only SSH against
+// hermes-agent:base: /opt/hermes/agent/auxiliary_client.py's
+// `_is_payment_error` keyword list includes the literal substring
+// "quota_exceeded" (next to "quota exceeded") specifically to catch Vertex
+// AI/Bedrock daily-quota error text — not a hypothetical. Mirrors the
+// equivalent fix in patch_localized_errors.py's _GF_QUOTA_ERROR_PATTERN.
+test('classify: underscore/code form "quota_exceeded" → quota_exhausted (GF-100 round 3)', () => {
+  assert.equal(classify('quota_exceeded'), 'quota_exhausted')
+  assert.equal(classify('Error: quota_exceeded — daily cap reached'), 'quota_exhausted')
+})
+
 test('classify: OpenRouter 403 "Key limit exceeded" → quota_exhausted (GF-100)', () => {
   assert.equal(classify('403 Key limit exceeded'), 'quota_exhausted')
   assert.equal(classify('OpenRouter error: Key limit exceeded for this key'), 'quota_exhausted')

@@ -61,6 +61,14 @@ const QUOTA_PATTERNS: RegExp[] = [
   /\bcredits?\s+have\s+been\s+exhausted\b/,
   /\bbilling\b/,
   /\bquota\b/, // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+  // [GF-100 Layer-5 round-3] `\bquota\b` does NOT match "quota_exceeded" —
+  // `\b` never fires between two \w chars, and `_` is \w. Verified 2026-08-07
+  // via read-only SSH that this underscore form is a real provider string:
+  // /opt/hermes/agent/auxiliary_client.py's `_is_payment_error` keyword list
+  // includes the literal "quota_exceeded" substring (next to "quota
+  // exceeded") to catch Vertex AI/Bedrock daily-quota error text. No
+  // near-miss risk: both boundaries land on non-\w chars.
+  /\bquota_exceeded\b/,
   // OpenRouter's 403 "Key limit exceeded" (GF-100) is billing, not auth — see
   // agent/error_classifier.py on the box, which buckets it as FailoverReason.billing
   // for the same reason. Deliberately NOT a bare '403': that would swallow

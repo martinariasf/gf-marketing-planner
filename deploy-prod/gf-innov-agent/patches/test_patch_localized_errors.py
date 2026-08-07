@@ -110,6 +110,19 @@ def _run_cases() -> int:
         ("insufficient balance transfer failed", "quota_exhausted"),
         ("insufficient_quota", "quota_exhausted"),
         ("billing address invalid — please update your plan", "quota_exhausted"),
+        # [GF-100 Layer-5 round-3] finding 1: these two alternatives existed
+        # on the dashboard side (agentMessages.ts QUOTA_PATTERNS) but were
+        # missing here, so the same provider string classified differently
+        # on Telegram vs. the dashboard. Added to _GF_QUOTA_ERROR_PATTERN.
+        ("You exceeded your current quota, please check your plan", "quota_exhausted"),
+        ("Your credits have been exhausted for today", "quota_exhausted"),
+        # [GF-100 Layer-5 round-3] question: underscore/code form of "quota
+        # exceeded". `\bquota\b` alone does not match this (no \b between `a`
+        # and `_`) — confirmed real via SSH: auxiliary_client.py's
+        # _is_payment_error keyword list includes the literal substring
+        # "quota_exceeded" to catch Vertex AI/Bedrock daily-quota text.
+        ("quota_exceeded", "quota_exhausted"),
+        ("Error: quota_exceeded — daily cap reached", "quota_exhausted"),
         ("429 rate limit exceeded, please slow down", "rate_limited"),
         ("some generic failure with no known keyword", "provider_failed"),
         ("401 provider authentication failed", "auth_failed"),
@@ -121,17 +134,25 @@ def _run_cases() -> int:
         ("insufficient credentials for authentication", "provider_failed"),
         ("monkey limit reached on the zoo API", "provider_failed"),
         ("turkey limit exceeded for this recipe endpoint", "provider_failed"),
-        # NB: these two land in rate_limited, not provider_failed — the fake
-        # _GATEWAY_RATE_LIMIT_RE here mirrors the REAL upstream regex in
-        # gateway/run.py, which matches a bare unbounded "quota" too (see the
-        # anchor table at the top of patch_localized_errors.py: "this bucket
-        # currently also catches billing/quota text"). That's a pre-existing
-        # upstream over-match in a regex this patch does NOT touch (it's
-        # defined in gateway/run.py itself, not appended by this patch) — out
-        # of scope for this finding, which is specifically about
-        # _GF_QUOTA_ERROR_PATTERN. Asserting the actual (rate_limited) outcome
-        # here rather than the ideal one, so this test doesn't silently start
-        # asserting something untrue about the fake harness.
+        # DELIBERATE, DOCUMENTED DIVERGENCE (review2 + review3 finding 2,
+        # accepted by Martin — do NOT "fix" by touching _GATEWAY_RATE_LIMIT_RE
+        # or by editing gateway/run.py): these two land in rate_limited, not
+        # provider_failed. The fake _GATEWAY_RATE_LIMIT_RE here mirrors the
+        # REAL upstream regex in gateway/run.py, which matches a bare
+        # unbounded "quota" too (see the anchor table at the top of
+        # patch_localized_errors.py: "this bucket currently also catches
+        # billing/quota text"). That upstream regex is pre-existing,
+        # out-of-scope for GF-100, and this patch's whole mechanism
+        # (append-and-rebind, see the file header) is designed to avoid
+        # touching original gateway/run.py code — including this regex. So
+        # the dashboard (agentMessages.ts) classifies these same near-miss
+        # strings as run_failed while Telegram classifies them as
+        # rate_limited: a real, known, permanently-accepted divergence for
+        # inputs that are not real provider errors (nobody's provider
+        # actually returns "insufficient_quotation marks used"). Asserting
+        # the actual (rate_limited) outcome here rather than the ideal one,
+        # so this test doesn't silently start asserting something untrue
+        # about the fake harness.
         ("insufficient_quotation marks used in the request body", "rate_limited"),
         ("insufficient balancer readings off nominal", "provider_failed"),
         ("overpayment required notice from the invoicing system", "provider_failed"),
