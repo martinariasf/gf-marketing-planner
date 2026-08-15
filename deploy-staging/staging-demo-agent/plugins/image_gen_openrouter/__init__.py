@@ -1452,19 +1452,30 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     # explicit `channel` arg, fall back to the linked post's channel, then to
     # any explicit aspect_ratio the agent passed.
     channel = (args.get("channel") or "").strip().lower()
+    # Only used to DECIDE whether to fetch the post / inject an implicit story
+    # (below) — never used in place of the caller's raw aspect_ratio value, so
+    # an explicitly empty aspect_ratio="" still means what it always meant.
     explicit_aspect = str(args.get("aspect_ratio") or "").strip().lower()
     # GF-69: if the caller didn't pass an explicit aspect_ratio, but the linked
     # post's own format is "story", treat that as an implicit story request —
     # it resolves to 1080x1920 (not the 1080x1350 channel default) with the
     # agent never having to pass aspect_ratio itself. One shared post fetch
     # covers both the channel fallback and the format lookup.
+    implicit_story = False
     if post_id and (not channel or not explicit_aspect):
         linked_post = _fetch_post(post_id)
         if not channel:
             channel = str(linked_post.get("channel") or "").strip().lower()
         if not explicit_aspect and str(linked_post.get("format") or "").strip().lower() == "story":
-            explicit_aspect = "story"
-    aspect_ratio = _resolve_image_aspect(explicit_aspect or DEFAULT_ASPECT_RATIO, channel)
+            implicit_story = True
+    if implicit_story:
+        aspect_ratio = _resolve_image_aspect("story", channel)
+    else:
+        # Unchanged from before GF-69: default to DEFAULT_ASPECT_RATIO only
+        # when the `aspect_ratio` KEY IS ABSENT (dict.get's default arg). An
+        # explicit aspect_ratio — including an explicit "" — is passed through
+        # exactly as the caller gave it, same as the original behaviour.
+        aspect_ratio = _resolve_image_aspect(args.get("aspect_ratio", DEFAULT_ASPECT_RATIO), channel)
     # Accept reference_images as a list, or a single string for convenience.
     refs = args.get("reference_images") or args.get("reference_image") or []
     if isinstance(refs, str):
