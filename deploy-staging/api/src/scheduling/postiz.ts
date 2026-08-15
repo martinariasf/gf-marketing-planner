@@ -12,6 +12,7 @@
 
 import { withPb } from '../pb.js'
 import { decryptSecret } from '../secrets.js'
+import { isStoryFormat } from '../schemas/post.js'
 import {
   SchedulingError,
   type JobStatus,
@@ -90,16 +91,28 @@ export function toPostizPayload(post: SchedulablePost, when: string): Record<str
   const media = (post.mediaUrls ?? (post.image ? [post.image] : [])).filter(
     (u): u is string => typeof u === 'string' && u.length > 0,
   )
-  return {
+  const channels = post.channels ?? (post.channel ? [post.channel] : [])
+  const payload: Record<string, unknown> = {
     type: 'scheduled',
     // Postiz expects an ISO date for the publish time.
     date: new Date(when).toISOString(),
     // The dashboard/agent has already chosen channels; pass them through so the
     // operator's connected Postiz integrations fan out correctly.
-    channels: post.channels ?? (post.channel ? [post.channel] : []),
+    channels,
     content,
     media,
   }
+  // GF-69 — tell Postiz's Instagram provider whether this is a Story or a feed
+  // post. Verified contract (instagram.dto.ts): `settings: { __type:
+  // 'instagram', post_type: 'post' | 'story' }`. Only added when instagram is
+  // among the post's channels — a story format with no instagram channel sends
+  // no instagram settings block at all. Deliberately additive: this does NOT
+  // restructure the payload to Postiz's documented `posts[]` shape (that
+  // divergence is GF-26's problem, not GF-69's).
+  if (channels.includes('instagram')) {
+    payload.settings = { __type: 'instagram', post_type: isStoryFormat(post) ? 'story' : 'post' }
+  }
+  return payload
 }
 
 export class PostizProvider implements SchedulingProvider {

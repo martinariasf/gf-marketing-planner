@@ -358,11 +358,15 @@ function PostContent({
             // in the external review, not just images.
             media: post.media,
             channel: post.channel ?? '',
+            // GF-69 — pass format through so a story post renders its 9:16
+            // frame + badge here too, not just in the internal dashboard.
+            format: post.format,
           }}
           clientName={brand?.name ?? ''}
           handle={brand?.handle ?? ''}
           logoInitials={brand?.logoInitials ?? ''}
           aiLabel={(showAiLabel ?? true) ? t('common.aiGenerated') : undefined}
+          storyLabel={t('mockup.storyBadge')}
         />
         {cover && (
           <button

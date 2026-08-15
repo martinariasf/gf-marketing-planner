@@ -58,6 +58,8 @@ function toSchedulable(slug: string, post: Record<string, unknown>): Schedulable
     channels,
     image: typeof post.image === 'string' ? post.image : undefined,
     mediaUrls,
+    // GF-69: carried through so toPostizPayload can tell a story from a feed post.
+    format: typeof post.format === 'string' ? post.format : undefined,
   }
 }
 
