@@ -12,6 +12,10 @@ export interface MockupPost {
   slides?: Array<{ image: string; caption?: string }>
   media?: Array<{ type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string }>
   channel: string
+  // GF-69 — canonical post type ("single image" | "carousel" | "story" | …).
+  // Optional so every existing caller (that never set it) keeps rendering the
+  // square/carousel feed frame unchanged.
+  format?: string
 }
 
 interface Props {
@@ -25,6 +29,8 @@ interface Props {
   metrics?: { likes?: number; comments?: number; shares?: number }
   /** GF-65 — localized "AI generated" disclosure shown on the post media. Omit to hide. */
   aiLabel?: string
+  /** GF-69 — localized "Story" badge shown on an Instagram story post. Omit to hide. */
+  storyLabel?: string
 }
 
 export function ChannelMockup({
@@ -35,6 +41,7 @@ export function ChannelMockup({
   subtitle,
   metrics,
   aiLabel,
+  storyLabel,
 }: Props) {
   if (post.channel === 'linkedin') {
     return (
@@ -48,5 +55,13 @@ export function ChannelMockup({
       />
     )
   }
-  return <InstagramMockup post={post} handle={handle} logoInitials={logoInitials} aiLabel={aiLabel} />
+  return (
+    <InstagramMockup
+      post={post}
+      handle={handle}
+      logoInitials={logoInitials}
+      aiLabel={aiLabel}
+      storyLabel={storyLabel}
+    />
+  )
 }

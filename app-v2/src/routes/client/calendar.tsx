@@ -91,6 +91,7 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
+import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey } from '@/lib/post-format'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
@@ -948,6 +949,7 @@ export default function CalendarView() {
                               logoInitials={plan.client.logoInitials}
                               subtitle={brief.company.industry}
                               aiLabel={settings.showAiGeneratedLabel ? t('common.aiGenerated') : undefined}
+                              storyLabel={t('mockup.storyBadge')}
                             />
                           ) : (
                             <PicturePane
@@ -1820,15 +1822,22 @@ function CopyPane({
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  // GF-69 — editable post type (Single image / Carousel / Story). `post.format`
+  // is always a non-empty string by the time it reaches the SPA (coalescePost
+  // fills it structurally on the API side), so this just mirrors the server value.
+  const initialFormat = post.format || (isCarousel(post) ? 'carousel' : 'single image')
+  const [format, setFormat] = useState(initialFormat)
 
   const channelsChanged = channels.join(',') !== initialChannels.join(',')
+  const formatChanged = format !== initialFormat
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
     cta !== (post.cta ?? '') ||
     date !== initialDate ||
-    channelsChanged
+    channelsChanged ||
+    formatChanged
 
   const save = async () => {
     if (locked) {
@@ -1850,6 +1859,8 @@ function CopyPane({
       patch.channels = channels
       patch.channel = channels[0]
     }
+    // GF-69 — the picker sets metadata only; it never touches slides/media.
+    if (formatChanged) patch.format = format
     // GF-16 — only send the date when it actually changed and is non-empty
     // (the API rejects an empty date with a 422).
     if (date !== initialDate) {
@@ -1879,6 +1890,7 @@ function CopyPane({
     setDate(initialDate)
     setChannels(initialChannels)
     setChannelOpen(false)
+    setFormat(initialFormat)
   }
 
   // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
@@ -1999,6 +2011,38 @@ function CopyPane({
             onChange={(e) => setDate(e.target.value)}
             className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
+        </div>
+      )}
+
+      {/* GF-69 — editable post type. Metadata only: never creates/deletes/
+          reorders slides or media, even when Carousel is picked on a post
+          with fewer than 2 slides — the preview keeps rendering whatever the
+          post actually has. */}
+      {isApiEnabled ? (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.postTypeLabel')}
+          </p>
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          >
+            {POST_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {t(POST_FORMAT_LABEL_KEY[f])}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.postTypeLabel')}
+          </p>
+          <span className="text-sm text-ink-muted">
+            {t(postFormatLabelKey(initialFormat))}
+          </span>
         </div>
       )}
 
