@@ -40,7 +40,7 @@ Put the brand **colors, fonts, layout and Visual-Guidelines style into the image
 prompt**. An image that ignores the brand palette is wrong even if it looks nice
 — fix it without asking.
 
-## STEP 0.5 — PICK THE FORMAT FROM THE CHANNEL (GF-33)
+## STEP 0.5 — PICK THE FORMAT FROM THE CHANNEL (GF-33) — AND FROM THE POST FORMAT WHEN IT'S A STORY (GF-69)
 
 The **target channel decides the format**, never a global default:
 - **Instagram → VERTICAL 4:5, 1080x1350.** Pass `channel="instagram"` (or
@@ -50,6 +50,17 @@ The **target channel decides the format**, never a global default:
 
 Always pass `channel` (or a `post_id` whose channel is known — the tool reads it
 and sizes automatically). Do NOT hard-code one shape for everything.
+
+**Exception — an Instagram STORY is a different shape (GF-69).** A Story is
+**full-screen 9:16, 1080x1920** — NOT the 4:5 1080x1350 feed image. The POST
+FORMAT overrides the channel default whenever the post is a story:
+- If `post_id` points to a post whose format is `"story"`, the tool detects
+  that automatically and renders 9:16 — no extra argument needed.
+- Generating a story stand-alone (no post yet)? Pass `aspect_ratio="story"`
+  explicitly; it wins even if you also pass `channel="instagram"`.
+- Every other Instagram case (feed single image, carousel slide) still follows
+  the GF-33 channel rule above — this exception is story-only and leaves
+  feed/LinkedIn/X/Facebook sizing untouched.
 
 ## STEP 1 — Generate
 
