@@ -71,7 +71,11 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel, storyLabe
               loading="lazy"
             />
           )}
-          {!video && isCarousel && (
+          {/* format is metadata-only (never mutates slides), so a post can
+              legitimately be format:"story" AND carry >1 slides at the same
+              time — !isStory keeps the slide counter from stacking on top of
+              the story badge below (both use the same top-2 right-2 slot). */}
+          {!video && !isStory && isCarousel && (
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
               <Copy className="h-3 w-3" />
               1/{slideCount}
