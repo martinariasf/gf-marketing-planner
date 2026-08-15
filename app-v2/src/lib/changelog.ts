@@ -21,6 +21,15 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-15',
+    title: 'New: Instagram Story as a post type',
+    items: [
+      'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',
+      'A Story post previews as a real vertical, full-screen phone frame with a "Story" badge, instead of the square feed layout.',
+      'When Viktor generates the picture for a Story, he now makes it full-screen vertical (1080x1920) instead of the feed shape.',
+    ],
+  },
+  {
     date: '2026-08-06',
     title: 'New: a Configuration page with two per-client dashboard switches',
     items: [
