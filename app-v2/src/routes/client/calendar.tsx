@@ -91,7 +91,7 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
-import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey } from '@/lib/post-format'
+import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey, isCanonicalFormat } from '@/lib/post-format'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
@@ -2017,7 +2017,10 @@ function CopyPane({
       {/* GF-69 — editable post type. Metadata only: never creates/deletes/
           reorders slides or media, even when Carousel is picked on a post
           with fewer than 2 slides — the preview keeps rendering whatever the
-          post actually has. */}
+          post actually has. `format` stays free-form on the wire (GF-69
+          TASK-001), so a legacy/non-canonical value (e.g. "reel") is shown as
+          its own extra option instead of leaving the select with nothing
+          selected — the user can still switch it to a canonical value. */}
       {isApiEnabled ? (
         <div>
           <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
@@ -2028,6 +2031,9 @@ function CopyPane({
             onChange={(e) => setFormat(e.target.value)}
             className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           >
+            {!isCanonicalFormat(format) && format && (
+              <option value={format}>{format}</option>
+            )}
             {POST_FORMATS.map((f) => (
               <option key={f} value={f}>
                 {t(POST_FORMAT_LABEL_KEY[f])}
@@ -2041,7 +2047,12 @@ function CopyPane({
             {t('calendar.postTypeLabel')}
           </p>
           <span className="text-sm text-ink-muted">
-            {t(postFormatLabelKey(initialFormat))}
+            {(() => {
+              const key = postFormatLabelKey(initialFormat)
+              // A legacy/non-canonical format (e.g. "reel") has no i18n key —
+              // show the raw stored value rather than mislabeling it.
+              return key ? t(key) : initialFormat
+            })()}
           </span>
         </div>
       )}

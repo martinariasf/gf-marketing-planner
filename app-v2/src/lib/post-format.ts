@@ -20,11 +20,21 @@ export function isStoryFormat(format: string | undefined | null): boolean {
   return typeof format === 'string' && format.trim().toLowerCase() === 'story'
 }
 
-/** i18n key for any format string, including unknown/legacy values (which
- *  fall back to the "Single image" label rather than throwing). */
-export function postFormatLabelKey(format: string | undefined | null): string {
-  const key = (POST_FORMATS as readonly string[]).includes(format ?? '')
-    ? (format as PostFormat)
-    : undefined
-  return key ? POST_FORMAT_LABEL_KEY[key] : POST_FORMAT_LABEL_KEY['single image']
+/** True when `format` is one of the three canonical POST_FORMATS values
+ *  (case/whitespace as stored — this checks the exact wire value, not a
+ *  normalized one, matching how the picker's <select> options are keyed). */
+export function isCanonicalFormat(format: string | undefined | null): format is PostFormat {
+  return (POST_FORMATS as readonly string[]).includes(format ?? '')
+}
+
+/**
+ * i18n key for a canonical format, or the empty/missing case (which falls
+ * back to "Single image" — mirrors the API's own structural default in
+ * coalescePost). Returns undefined for a legacy/non-canonical value like
+ * "reel": there is no key for arbitrary text, so callers should fall back to
+ * showing the raw string instead of mislabeling it as "Single image".
+ */
+export function postFormatLabelKey(format: string | undefined | null): string | undefined {
+  if (!format) return POST_FORMAT_LABEL_KEY['single image']
+  return isCanonicalFormat(format) ? POST_FORMAT_LABEL_KEY[format] : undefined
 }
