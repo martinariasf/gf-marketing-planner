@@ -22,6 +22,13 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-15',
+    title: 'Video posts are labelled "Video", not "Picture"',
+    items: [
+      'When a post carries a video, the media tab in the calendar now reads "Video" (with a film icon) instead of "Picture" — in English, German and Spanish.',
+    ],
+  },
+  {
+    date: '2026-08-15',
     title: 'New: Instagram Story as a post type',
     items: [
       'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',

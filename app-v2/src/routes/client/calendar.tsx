@@ -893,7 +893,10 @@ export default function CalendarView() {
                             rightView === 'picture' ? 'bg-brand-blue text-white' : 'text-ink-muted hover:bg-paper-muted',
                           )}
                         >
-                          <ImageIcon className="h-3 w-3" /> {t('calendar.picture')}
+                          {/* GF-71 — a video post must read "Video", not "Picture". */}
+                          {postVideo(activePost)
+                            ? <><Film className="h-3 w-3" /> {t('calendar.video')}</>
+                            : <><ImageIcon className="h-3 w-3" /> {t('calendar.picture')}</>}
                         </button>
                         <button
                           onClick={() => setRightView('preview')}
