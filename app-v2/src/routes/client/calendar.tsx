@@ -168,6 +168,8 @@ export default function CalendarView() {
   const [approvingId, setApprovingId] = useState<string | null>(null)
   // GF-22 — post pending delete-confirmation, and the in-flight delete state.
   const [deleteTarget, setDeleteTarget] = useState<Post | null>(null)
+  // GF-37 — post awaiting confirmation that it may be approved despite a past date.
+  const [pastApproveTarget, setPastApproveTarget] = useState<Post | null>(null)
   const [deleting, setDeleting] = useState(false)
   // GF-15 — manual post creation from the calendar.
   const [creating, setCreating] = useState(false)
@@ -359,10 +361,18 @@ export default function CalendarView() {
 
   // GF-23 — set a post to any workflow status (Draft/Review/Approved/
   // Programmed/Rechecked/Rejected). Published is terminal and never set here.
-  const setStatus = async (post: Post, decision: ApprovalDecision) => {
+  const setStatus = async (post: Post, decision: ApprovalDecision, confirmedPastDate = false) => {
     // GF-37 — a post cannot be scheduled (Programmed) for a date in the past.
     if (decision === 'scheduled' && dateTiming(post.date) === 'past') {
       toast.error(t('calendar.pastDateNoSchedule'))
+      return
+    }
+    // GF-37 — approving a past-dated post used to succeed silently: the lane
+    // moved, the toast said "→ Approved", and nothing else happened, because
+    // such a post can never reach Programmed. Ask first, and offer the two
+    // concrete ways out (change the date, or approve for the record anyway).
+    if (decision === 'approved' && !confirmedPastDate && dateTiming(post.date) === 'past') {
+      setPastApproveTarget(post)
       return
     }
     setApprovingId(post.id)
@@ -1285,6 +1295,34 @@ export default function CalendarView() {
             >
               {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
               {t('calendar.deleteConfirm')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* GF-37 — approving a post whose date has passed. It can never move on to
+          Programmed, so say that plainly instead of moving the lane in silence. */}
+      <Dialog open={!!pastApproveTarget} onOpenChange={(v) => !v && setPastApproveTarget(null)}>
+        <DialogContent>
+          <DialogTitle>{t('calendar.pastApproveTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('calendar.pastApproveBody', {
+              id: pastApproveTarget ? nameOf(pastApproveTarget) : '',
+              date: pastApproveTarget ? fmtDate(pastApproveTarget.date) : '',
+            })}
+          </DialogDescription>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setPastApproveTarget(null)}>
+              {t('calendar.pastApproveChangeDate')}
+            </Button>
+            <Button
+              onClick={() => {
+                const target = pastApproveTarget
+                setPastApproveTarget(null)
+                if (target) void setStatus(target, 'approved', true)
+              }}
+            >
+              {t('calendar.pastApproveAnyway')}
             </Button>
           </div>
         </DialogContent>

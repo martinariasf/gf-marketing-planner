@@ -91,10 +91,22 @@ export function isIsoInMonthRange(iso: string, range: CalendarRangeConfig): bool
   return key >= range.startMonth && key <= range.endMonth
 }
 
+/**
+ * GF-37 — classify a post date as past/today/future by CALENDAR DAY.
+ *
+ * Read the Y-M-D straight off the string rather than via `new Date(iso)`.
+ * A stored date may be a plain `YYYY-MM-DD` (GF-16 — that is exactly what the
+ * calendar's date input writes), and `new Date('2026-06-15')` is parsed as UTC
+ * midnight. Read back with the local getters in any UTC-negative zone that
+ * becomes the 14th, so *today's* post reported 'past' and the Programmed
+ * control was disabled with a misleading error. The prefix regex handles both
+ * `2026-06-15` and `2026-06-15T09:00:00Z`, matching the normalization idiom
+ * GF-16 already uses in `toDateInputValue`.
+ */
 export function dateTiming(iso: string, now = new Date()): 'past' | 'today' | 'future' {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return 'future'
-  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return 'future'
+  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   if (day < today) return 'past'
   if (day === today) return 'today'
