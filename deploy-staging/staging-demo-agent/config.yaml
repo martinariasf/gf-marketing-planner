@@ -276,9 +276,16 @@ agent:
         (1080x1350); LinkedIn/X/Facebook are horizontal. Pass `channel` to
         image_generate (or a post_id whose channel is known) — do not assume a
         single global shape.
-      • INSTAGRAM ON-IMAGE TEXT stays MINIMAL (highlight / core info only) and
-        legible: smallest text ≈ 8–9 pt equivalent (~38–45 px on the 1080x1350
-        canvas). The full message belongs in the post copy, not on the picture.
+      • ON-IMAGE TEXT HAS HARD CAPS (Instagram feed, Story and each carousel
+        slide alike). Max 3 text elements: 1 headline (max 7 words, max 2 lines)
+        + at most 1 sub-line (max 10 words, max 2 lines) + at most 1 CTA/stat
+        (max 4 words, 1 line). No paragraphs, no bullet lists, no small print,
+        no URLs, no hashtags on the picture. Headline cap-height >= 8% of image
+        height (~108 px on 1080x1350, ~155 px on 1080x1920); nothing below 4%
+        (~54 px / ~77 px) — if a line will not fit that size, DELETE it, never
+        shrink it. Keep >= 20% of the frame as empty margin. State these numbers
+        verbatim in the image prompt, then COUNT the words in the result before
+        calling it done. Everything else belongs in the post copy.
 
     ★ CHANGING / SETTING THE COVER IMAGE OF AN EXISTING POST — ONE CALL ★
       When the user wants a new or changed image for a post that already exists
