@@ -98,6 +98,30 @@ export function laneOf(post: Record<string, unknown>): string {
  * @throws ScheduleRejected on a business rule (past date, no provider)
  * @throws SchedulingError  on a backend failure (Postiz unreachable / rejected)
  */
+/** A stored date carrying no time component, e.g. `2026-06-15` (GF-16). */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * GF-37 — is this post date in the past?
+ *
+ * A date-only value has no time-of-day commitment, so it must be compared by
+ * CALENDAR DAY, not as an instant. `new Date('2026-06-15')` is UTC midnight,
+ * so the old `ts <= Date.now()` rejected a post dated *today* from ~00:00 UTC
+ * onward — the client said "today, allowed", the API answered 422. Values that
+ * do carry a time (`...T09:00:00Z`) keep the exact-instant comparison.
+ *
+ * Known residual: with no per-client timezone anywhere in the API, "today" is
+ * UTC's today. A UTC-negative client late in their local evening is already on
+ * the next UTC day, so a post dated for their local today can still be refused.
+ * Closing that needs a per-client timezone — a product decision, not a patch.
+ */
+function isPastDate(when: string, ts: number): boolean {
+  if (!DATE_ONLY.test(when)) return ts <= Date.now()
+  const now = new Date()
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  return ts < todayUtc
+}
+
 export async function applyStatusToSchedule(
   slug: string,
   current: Record<string, unknown>,
@@ -125,7 +149,7 @@ export async function applyStatusToSchedule(
         'Cannot schedule a post without a valid `date`. Set an ISO date in the future, then try again.',
       )
     }
-    if (ts <= Date.now()) {
+    if (isPastDate(when, ts)) {
       throw new ScheduleRejected(
         `Cannot schedule a post dated in the past (${when}). Reschedule it to a future date, then move it to Programmed.`,
       )

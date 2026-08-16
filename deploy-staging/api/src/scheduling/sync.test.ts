@@ -145,3 +145,72 @@ test('applyStatusToSchedule never re-schedules an already-published post (legacy
   assert.equal(schedule.mock.calls.length, 0)
   assert.equal(reschedule.mock.calls.length, 0)
 })
+
+// GF-37 — a date-only value (`YYYY-MM-DD`, which is what the calendar's date
+// input writes) has no time-of-day, so it must be judged by calendar day.
+// `new Date('2026-06-15')` is UTC midnight, so the old `ts <= Date.now()` test
+// rejected a post dated *today* from 00:00 UTC onward: the client said "today,
+// allowed", the API answered 422.
+
+function utcDayOffset(days: number): string {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function schedulingFake() {
+  const schedule = mock.fn(async () => ({ jobId: 'job-1', scheduledFor: 'x' }))
+  fakeProvider = {
+    name: 'postiz',
+    schedule,
+    reschedule: async () => {
+      throw new Error('not used')
+    },
+    cancel: async () => {},
+    getStatus: async () => ({ state: 'scheduled' }),
+  }
+  return schedule
+}
+
+test('GF-37: a date-only post dated today is schedulable', async () => {
+  const schedule = schedulingFake()
+  const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(0) }
+  const result = await applyStatusToSchedule('acme', current, 'scheduled')
+  assert.equal(schedule.mock.calls.length, 1)
+  assert.equal(result?.status, 'scheduled')
+})
+
+test('GF-37: a date-only post dated tomorrow is schedulable', async () => {
+  const schedule = schedulingFake()
+  const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(1) }
+  await applyStatusToSchedule('acme', current, 'scheduled')
+  assert.equal(schedule.mock.calls.length, 1)
+})
+
+test('GF-37: a date-only post dated yesterday is rejected', async () => {
+  const schedule = schedulingFake()
+  const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(-1) }
+  await assert.rejects(
+    () => applyStatusToSchedule('acme', current, 'scheduled'),
+    (err: Error) => err.name === 'ScheduleRejected' || /past/i.test(err.message),
+  )
+  assert.equal(schedule.mock.calls.length, 0)
+})
+
+test('GF-37: a full-ISO timestamp keeps exact-instant comparison', async () => {
+  const schedule = schedulingFake()
+  const past = { status: 'approved', approval: { status: 'approved' }, date: '2020-01-01T09:00:00Z' }
+  await assert.rejects(() => applyStatusToSchedule('acme', past, 'scheduled'))
+  assert.equal(schedule.mock.calls.length, 0)
+
+  const future = new Date(Date.now() + 3600_000).toISOString()
+  const ahead = { status: 'approved', approval: { status: 'approved' }, date: future }
+  await applyStatusToSchedule('acme', ahead, 'scheduled')
+  assert.equal(schedule.mock.calls.length, 1)
+})
+
+test('GF-37: a post with no date is still rejected', async () => {
+  schedulingFake()
+  const current = { status: 'approved', approval: { status: 'approved' } }
+  await assert.rejects(() => applyStatusToSchedule('acme', current, 'scheduled'))
+})

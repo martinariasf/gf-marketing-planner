@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-16',
+    title: 'Posts dated today can be scheduled again',
+    items: [
+      'A post dated for today was wrongly treated as being in the past, so "Programmed" was blocked with a confusing error. Today\'s posts schedule normally again.',
+      'Approving a post whose date has already passed now says so, instead of quietly moving it and doing nothing. You can change the date, or approve it for the record knowing it will not be published.',
+    ],
+  },
+  {
     date: '2026-08-15',
     title: 'New: Instagram Story as a post type',
     items: [
