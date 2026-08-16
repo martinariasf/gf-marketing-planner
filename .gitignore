@@ -2,3 +2,6 @@
 .claude/
 .worktrees/
 __pycache__/
+
+# tooling caches
+.impeccable/

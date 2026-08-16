@@ -15,7 +15,7 @@
 // client's own assets directory.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { problem } from '../problem.js'
 import { withPb } from '../pb.js'
@@ -52,12 +52,29 @@ assetFiles.get('/clients/:slug/assets/files/:name', async (c) => {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
   const filePath = join(ROOT, 'clients', slug, 'assets', name)
   try {
+    // GF-29 — these files are NOT immutable. The old header said they were
+    // ("unique filenames"), but the image-generation skill tells the agent, for
+    // PIL edits of an existing picture, to "always save to the client assets
+    // path ... the file overwrites in place". So the bytes at a given URL do
+    // change, and `max-age=86400` pinned the stale ones in the browser for a
+    // day: refetching the post JSON returned the correct (unchanged) URL and
+    // the <img> re-rendered straight from cache. That is why "the agent says
+    // it's done but I have to refresh", and why the reload button looked
+    // broken for image edits -- no amount of refetching can beat a cached URL.
+    //
+    // Revalidate instead. A validator makes the common case a cheap 304 rather
+    // than a re-download, so this is close to free while staying correct.
+    const info = await stat(filePath)
+    const etag = `W/"${info.size.toString(16)}-${info.mtimeMs.toString(16)}"`
+    if (c.req.header('if-none-match') === etag) {
+      return c.body(null, 304, { ETag: etag, 'Cache-Control': 'no-cache' })
+    }
     const bytes = await readFile(filePath)
     return c.body(bytes, 200, {
       'Content-Type': CONTENT_TYPE[ext] ?? 'application/octet-stream',
-      // Generated assets are immutable once written (unique filenames), so
-      // allow long caching. The dashboard busts via new filenames, not query.
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'no-cache',
+      ETag: etag,
+      'Last-Modified': info.mtime.toUTCString(),
     })
   } catch {
     return problem(c, { title: 'Not Found', status: 404, detail: 'No such asset file' })
