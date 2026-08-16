@@ -127,18 +127,39 @@ is only described. **Hard rule: never invent, redraw, or guess a logo.**
 
 - Omit `reference_images` for ordinary illustrations that do not need the logo.
 
-## STEP 3 — Text INSIDE the image (GF-32, Instagram especially)
+## STEP 3 — Text INSIDE the image (GF-32) — HARD CAPS, not preferences
 
-When the image carries on-canvas text:
-- **Instagram: keep text MINIMAL** — only the highlight / core info (a short
-  hook, one stat, or the CTA). Do not paste the whole caption onto the image;
-  the body copy lives in the post text, not baked into the picture.
-- **Legible minimum size:** on the 1080x1350 canvas, the smallest text must be
-  at least ~**8–9 pt equivalent** (roughly **38–45 px** tall on 1080x1350).
-  Nothing smaller — tiny text is unreadable on a phone. Prefer fewer, larger
-  words over many small ones.
-- State this in the prompt, e.g. "minimal on-image text: one short headline only,
-  large legible sans-serif, no small print, no paragraphs."
+On-canvas text is capped by COUNT and by PROPORTION OF THE FRAME. "Minimal" is
+not a number and points are a print unit with no meaning on a raster, so both
+are stated here as things you can actually count and measure. **State every
+number below verbatim in the image prompt.**
+
+Applies to Instagram feed (1080x1350), Story (1080x1920) and every carousel
+slide, which each get their own budget:
+
+- **Max 3 text elements total:** 1 headline + at most 1 sub-line + at most 1
+  CTA/stat.
+- **Word and line caps** — headline: max 7 words, max 2 lines. Sub-line: max 10
+  words, max 2 lines. CTA/stat: max 4 words, 1 line. No paragraphs, no bullet
+  lists, no body copy.
+- **Headline size:** cap-height >= 8% of image height (>= ~108 px on 1080x1350,
+  >= ~155 px on 1080x1920). The headline block should occupy 15-25% of frame
+  height.
+- **Floor:** nothing smaller than 4% of image height (~54 px on 1080x1350,
+  ~77 px on 1080x1920). If a line will not fit at that size, **DELETE it** —
+  never shrink it.
+- **Never on the image:** small print, footnotes, legal lines, URLs, hashtags.
+- **Breathing room:** keep >= 20% of the frame as empty margin; text never
+  enters the outer 6%.
+
+Everything that does not fit these caps belongs in the post copy.
+
+If the exact wording has to be perfect, generate a TEXT-FREE plate and composite
+the type afterwards — see `gf-reel-text-overlay` for the ffmpeg route.
+
+**Check the output, not the prompt.** After generating, count the text elements
+and the words, and eyeball the headline against the 8% floor. If it misses,
+regenerate — do not ship it and describe it as compliant.
 
 ## STEP 4 — The visual craft bar (don't produce AI slop)
 
