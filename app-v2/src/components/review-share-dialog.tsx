@@ -46,6 +46,7 @@ import {
   apiLoadReviewActivity,
   apiMarkReviewActivityRead,
   type ReviewLink,
+  type ReviewLinkView,
   type ReviewEvent,
 } from '@/lib/api-client'
 
@@ -79,6 +80,9 @@ export function ReviewShareDialog({
   const [copied, setCopied] = useState<string | null>(null)
   // GF-42 — months the next link will share. Empty = all months in the range.
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
+  // GF-105 — which kind of link the next "Create link" produces. Fixed for the
+  // life of the link, so it is chosen here and never toggled by the reviewer.
+  const [view, setView] = useState<ReviewLinkView>('content')
 
   // The months the sharer can pick from = the months covered by the visible range.
   const availableMonths = monthsInRange(range)
@@ -106,6 +110,7 @@ export function ReviewShareDialog({
   useEffect(() => {
     if (open) {
       setSelectedMonths([])
+      setView('content')
       void refresh()
     }
   }, [open, refresh])
@@ -123,7 +128,11 @@ export function ReviewShareDialog({
         rangeStart: range.startMonth,
         rangeEnd: range.endMonth,
         months,
-        title: t('review.defaultTitle', { start: range.startMonth, end: range.endMonth }),
+        view,
+        title: t(view === 'strategy' ? 'review.strategy.defaultTitle' : 'review.defaultTitle', {
+          start: range.startMonth,
+          end: range.endMonth,
+        }),
       })
       if (link.code) setRevealed((r) => ({ ...r, [link.id]: link.code! }))
       toast.success(t('review.linkCreated'))
@@ -254,6 +263,42 @@ export function ReviewShareDialog({
 
           {/* ── Links ── */}
           <TabsContent value="links" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            {/* GF-105 — the kind of link. Fixed at creation, so it is chosen
+                before "Create link" and explained in one line. */}
+            <div className="space-y-1.5 rounded-lg border border-border-subtle bg-paper p-2.5">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                {t('review.strategy.kindLabel')}
+              </span>
+              <div
+                role="radiogroup"
+                aria-label={t('review.strategy.kindLabel')}
+                className="flex rounded-lg border border-border-subtle bg-paper-muted/50 p-0.5"
+              >
+                {(['content', 'strategy'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === k}
+                    onClick={() => setView(k)}
+                    className={cn(
+                      'flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                      view === k ? 'bg-paper text-ink shadow-sm' : 'text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    {t(k === 'content' ? 'review.strategy.kindContent' : 'review.strategy.kindStrategy')}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] leading-snug text-ink-muted">
+                {t(
+                  view === 'strategy'
+                    ? 'review.strategy.kindHintStrategy'
+                    : 'review.strategy.kindHintContent',
+                )}
+              </p>
+            </div>
+
             <div className="flex items-center justify-between">
               <p className="text-xs text-ink-muted">
                 {t('review.rangeHint', { start: range.startMonth, end: range.endMonth })}
@@ -339,7 +384,10 @@ export function ReviewShareDialog({
                             {link.commentCount ? ` · ${t('review.commentsN', { n: link.commentCount })}` : ''}
                           </p>
                         </div>
-                        <StateBadge state={link.state} t={t} />
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <KindBadge view={link.view} t={t} />
+                          <StateBadge state={link.state} t={t} />
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -485,6 +533,24 @@ export function ReviewShareDialog({
         </Tabs>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// GF-105 — which kind of link this is, so the two are distinguishable in the
+// list. `view` is absent on a link created before the API change; that is the
+// original behaviour, i.e. a content link.
+function KindBadge({ view, t }: { view?: ReviewLinkView; t: (k: string) => string }) {
+  const strategy = view === 'strategy'
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        'shrink-0 text-[10px]',
+        strategy ? 'bg-violet-50 text-violet-700' : 'bg-brand-blue/5 text-brand-blue',
+      )}
+    >
+      {t(strategy ? 'review.strategy.badgeStrategy' : 'review.strategy.badgeContent')}
+    </Badge>
   )
 }
 

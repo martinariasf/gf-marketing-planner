@@ -21,6 +21,18 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-19',
+    title: 'New: share the plan for sign-off, without the artwork',
+    items: [
+      'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
+      'A Strategy link shows the plan as text only — for each post the topic, the post type, the networks it goes to, a description of how the visual will look, and the date. No images and no mockups, so a client can sign off the plan before anything is produced.',
+      'The post copy is still there on every row, tucked behind a "show copy" toggle.',
+      'At the bottom, a calendar grid per month shows how the posts are spread across the days, plus a count of posts by topic, network and post type.',
+      'Your client can comment, approve and request changes exactly as on a content link, and it all lands in the same Activity tab.',
+      'Existing share links are unchanged and keep working as content reviews.',
+    ],
+  },
+  {
     date: '2026-08-15',
     title: 'New: Instagram Story as a post type',
     items: [
