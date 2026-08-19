@@ -1,0 +1,26 @@
+{
+  "id": "p001",
+  "date": "2026-07-06",
+  "channel": "facebook",
+  "format": "Post informativo",
+  "pillar": "Dentro del laboratorio",
+  "campaign": "Volvimos: BVF por dentro",
+  "title": "Volvimos: asi nace una planta en Black Venture Farm",
+  "image": null,
+  "copy": "Volvimos a este espacio, y queremos usarlo para lo unico que nos importa: mostrarte de que esta hecha la planta que llega a tu parcela.\n\nEn Black Venture Farm propagamos in vitro plantas de berries (frambuesa, zarzamora, fresa y arandano), ademas de cactaceas y orquideas. Eso significa que cada planta empieza en el laboratorio, a partir de material seleccionado y libre de patogenos, y no en un lote cualquiera.\n\nEl recorrido es siempre el mismo:\n\n1. Establecimiento: se selecciona y se limpia el material vegetal.\n2. Multiplicacion: se replica en condiciones controladas, sin patogenos.\n3. Enraizamiento: la planta desarrolla su sistema radicular.\n4. Aclimatacion: sale del frasco y aprende a vivir en sustrato.\n5. Vivero: crece hasta estar lista para tu campo.\n\nEn las proximas semanas vamos a mostrar cada una de esas etapas por dentro. Si produces berries en la region, este contenido es para ti.\n\nEscribenos por WhatsApp para conocer nuestra disponibilidad de planta.",
+  "hashtags": ["#BlackVentureFarm", "#BVF", "#InVitro", "#Berries", "#Frambuesa", "#Michoacan", "#PlantaSana"],
+  "cta": "Escribenos por WhatsApp: +52 351 516 3134",
+  "status": "draft",
+  "approval": {
+    "status": "draft",
+    "approvedBy": null,
+    "approvedAt": null,
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": null,
+    "publishedAt": null,
+    "publicUrl": null
+  }
+}

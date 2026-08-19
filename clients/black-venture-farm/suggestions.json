@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "id": "s001",
+      "kind": "post_idea",
+      "title": "Post de reactivacion: el canal lleva casi dos anos sin publicar",
+      "rationale": "La ultima publicacion en Facebook es del 2 de noviembre de 2024 y los Reels tienen alrededor de dos anos, pero la pagina conserva 3.5 mil seguidores. Retomar con un post que reintroduzca la empresa y anuncie que el canal vuelve con contenido tecnico es la forma mas barata de recuperar alcance sobre una audiencia ya ganada.",
+      "suggestedAction": "draft p001 facebook \"Post informativo\" pillar=\"Dentro del laboratorio\" campaign=\"Volvimos: BVF por dentro\" date=2026-07-06 hook=\"Volvimos a este espacio para mostrarte de que esta hecha la planta que llega a tu parcela.\"",
+      "relatedCampaign": "Volvimos: BVF por dentro",
+      "relatedPillar": "Dentro del laboratorio",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-19T12:00:00Z"
+    },
+    {
+      "id": "s002",
+      "kind": "next_action",
+      "title": "Reciclar el archivo de video de laboratorio antes de producir material nuevo",
+      "rationale": "El canal ya tiene Reels y videos de laboratorio, vivero y raiz de frambuesa, mas un reportaje de television local. Ese material sigue siendo vigente y permite sostener tres publicaciones por semana durante julio sin ninguna produccion nueva, mientras se organiza una jornada de grabacion en el laboratorio.",
+      "suggestedAction": "Inventariar los videos existentes de Facebook y YouTube, seleccionar los 8 mejores clips y reprogramarlos como serie 'De la probeta al campo' durante julio y agosto.",
+      "relatedCampaign": "De la probeta al campo",
+      "relatedPillar": "Dentro del laboratorio",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-19T12:00:00Z"
+    },
+    {
+      "id": "s003",
+      "kind": "next_action",
+      "title": "Verificar el sitio web y el correo de contacto publicos",
+      "rationale": "La pagina de Facebook publica bvf.com.mx como sitio web, pero el dominio no resuelve, y el correo de contacto listado (contacto@giddingsfruit.mx) pertenece a otro dominio. Cualquier campana que genere consultas va a perder leads si el enlace del perfil esta roto. Ademas la pagina esta categorizada como 'Cooperativa agraria', que no describe al negocio.",
+      "suggestedAction": "Confirmar con el equipo cual es el sitio y el correo vigentes, corregir el enlace y la categoria de la pagina de Facebook antes de arrancar la campana de agosto.",
+      "relatedPillar": "Sanidad y calidad de planta",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-19T12:00:00Z"
+    },
+    {
+      "id": "s004",
+      "kind": "post_idea",
+      "title": "Abrir la agenda de planta de la temporada 2026-2027 con contenido tecnico, no con precios",
+      "rationale": "La compra de planta se decide con meses de anticipacion y el productor no responde a ofertas, responde a confianza. Un post que explique que significa realmente 'libre de patogenos' y que cambia en su parcela abre la conversacion comercial sin tocar precios, que ademas requieren aprobacion del equipo.",
+      "suggestedAction": "draft p002 facebook \"Reel\" pillar=\"Sanidad y calidad de planta\" campaign=\"Agenda tu planta 2026-2027\" date=2026-08-03 hook=\"'Planta libre de patogenos' se dice facil. Esto es lo que hay detras cuando lo decimos nosotros.\"",
+      "relatedCampaign": "Agenda tu planta 2026-2027",
+      "relatedPillar": "Sanidad y calidad de planta",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-08-19T12:00:00Z"
+    },
+    {
+      "id": "s005",
+      "kind": "follow_up",
+      "title": "Conectar Postiz para sostener la cadencia sin trabajo manual",
+      "rationale": "El plan pide 3-4 publicaciones semanales en Facebook mas replica en Instagram. Sin Postiz conectado la publicacion es manual, y el canal ya demostro que la cadencia manual no se sostiene: se cayo por completo despues de noviembre de 2024.",
+      "suggestedAction": "Crear la organizacion de Black Venture Farm en Postiz, conectar Facebook e Instagram y cargar la API key en el agente.",
+      "relatedPillar": "Dentro del laboratorio",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-08-19T12:00:00Z"
+    }
+  ]
+}

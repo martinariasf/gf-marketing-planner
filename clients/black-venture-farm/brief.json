@@ -1,0 +1,162 @@
+{
+  "company": {
+    "name": "Black Venture Farm",
+    "industry": "Biotecnologia vegetal / propagacion in vitro de plantas de berries",
+    "country": "MX",
+    "website": "http://www.bvf.com.mx/",
+    "contact": { "name": "Equipo Black Venture Farm", "email": "contacto@giddingsfruit.mx", "telegram": null, "phone": "+52 351 516 3134", "whatsapp": "+52 351 516 3134" }
+  },
+  "business": {
+    "model": "B2B: venta de planta propagada in vitro a productores de berries (volumen y contrato por temporada) + venta de ornamentales",
+    "customerType": "Productores y empresas agricolas de berries en Michoacan, Jalisco y el Bajio (desde pequenos productores hasta agroexportadoras), viveristas y comercializadores de ornamentales",
+    "mainOffer": "Propagacion in vitro y venta de planta de berries libre de patogenos: frambuesa, zarzamora, fresa y arandano",
+    "bestSeller": "Planta de frambuesa propagada in vitro para establecimiento de temporada",
+    "differentiators": [
+      "Laboratorio propio de cultivo de tejidos: la planta nace en el laboratorio, no se compra a terceros",
+      "Planta libre de patogenos y con identidad genetica verificada",
+      "Ubicacion en el corazon berrycola de Mexico (Los Reyes y Jacona, Michoacan): cercania real al productor",
+      "Escala de vivero suficiente para abastecer plantaciones comerciales completas",
+      "Acompanamiento tecnico: no se entrega solo la planta, se entrega el criterio para establecerla",
+      "Portafolio complementario de cactaceas y orquideas propagadas con la misma tecnica"
+    ]
+  },
+  "audience": {
+    "segments": [
+      {
+        "name": "Primario - Productores y gerentes agricolas de berries",
+        "demo": "30-60, dueno o gerente de rancho en Michoacan, Jalisco y Guanajuato; decide la compra de planta una o dos veces al ano",
+        "psycho": "La planta es la decision mas cara e irreversible de su ciclo. Le aterra comprar material enfermo o de genetica dudosa y perder una temporada entera. Compra por confianza, referencias de otros productores y evidencia tecnica, no por publicidad.",
+        "where": "Facebook (el canal social real del campo mexicano), WhatsApp, grupos de productores, ferias y seminarios del sector"
+      },
+      {
+        "name": "Secundario - Tecnicos y agronomos de campo",
+        "demo": "25-45, ingenieros agronomos y jefes de sanidad vegetal que recomiendan proveedor de planta",
+        "psycho": "Quieren detalle tecnico: protocolo de laboratorio, sanidad, aclimatacion, vigor de raiz, manejo en las primeras semanas. Valoran contenido que puedan usar en campo y compartir con su equipo.",
+        "where": "Facebook, YouTube, seminarios tecnicos"
+      },
+      {
+        "name": "Terciario - Compradores de ornamentales (cactaceas y orquideas)",
+        "demo": "Viveros, floristerias, coleccionistas y comercializadores en Mexico",
+        "psycho": "Buscan volumen, uniformidad y disponibilidad. Es un negocio secundario para BVF pero de alto atractivo visual y muy util para alcance organico.",
+        "where": "Facebook, Instagram"
+      }
+    ],
+    "painPoints": [
+      "Comprar planta contaminada o con virus y perder una temporada completa de inversion",
+      "Proveedores que no entregan en la ventana de plantacion y descuadran todo el ciclo",
+      "Variabilidad entre lotes: plantas dispares que producen dispar",
+      "Poca claridad sobre el origen y la sanidad real del material vegetal",
+      "Falta de acompanamiento tecnico despues de la entrega"
+    ],
+    "desires": [
+      "Planta uniforme, vigorosa y libre de patogenos, lote tras lote",
+      "Entrega puntual en la fecha de plantacion comprometida",
+      "Un proveedor que entienda de agronomia, no solo de venta",
+      "Evidencia visible del proceso de laboratorio que respalda la sanidad",
+      "Rendimiento y calidad de fruta que justifiquen el costo de la planta"
+    ],
+    "competitors": [
+      "Viveros de berries de Michoacan y Jalisco",
+      "Laboratorios de cultivo de tejidos nacionales",
+      "Programas de planta de las propias comercializadoras y casas de genetica",
+      "Importacion de planta"
+    ],
+    "referenceBrands": [
+      "Casas de genetica de berries internacionales",
+      "Laboratorios de biotecnologia vegetal que comunican su proceso",
+      "Marcas agroindustriales que muestran campo real, no fotos de stock"
+    ]
+  },
+  "voice": {
+    "tone": ["Tecnico y claro", "De productor a productor", "Confiable y sobrio", "Orgullo por el campo mexicano", "Mostrar antes que prometer"],
+    "wordsToUse": [
+      "In vitro",
+      "Libre de patogenos",
+      "Sanidad",
+      "Vigor",
+      "Uniformidad",
+      "Trazabilidad",
+      "Laboratorio",
+      "Temporada",
+      "Establecimiento",
+      "Productor"
+    ],
+    "wordsToAvoid": [
+      "Revolucionario",
+      "El mejor del mercado (sin dato que lo respalde)",
+      "Garantizamos rendimiento",
+      "Milagroso",
+      "Lenguaje de laboratorio sin traduccion al campo",
+      "Comparaciones directas con competidores por nombre"
+    ],
+    "do": [
+      "Mostrar el proceso real: laboratorio, aclimatacion, vivero y planta en campo",
+      "Traducir cada dato tecnico a una consecuencia para el productor (que gana en su parcela)",
+      "Usar fotos y video propios del laboratorio y del vivero",
+      "Dar siempre un dato concreto: etapa, tiempo, tamano de lote, cuidado especifico",
+      "Cerrar con un contacto directo (WhatsApp o telefono) para cotizar"
+    ],
+    "dont": [
+      "Usar fotos de stock de berries genericas: BVF tiene material propio",
+      "Publicar cifras de produccion, hectareas o clientes sin confirmarlas con el equipo",
+      "Prometer disponibilidad o fechas de entrega sin validacion comercial",
+      "Hablar solo de ciencia sin decir por que le importa al productor",
+      "Mencionar por nombre a clientes o a la empresa matriz sin autorizacion"
+    ]
+  },
+  "channels": {
+    "primary": ["facebook"],
+    "secondary": ["youtube", "instagram"],
+    "cadence": "3-4/semana en Facebook + 1-2/mes en YouTube + Reels replicados en Instagram",
+    "language": "es"
+  },
+  "boundaries": {
+    "viktorCanDoWithoutAsking": [
+      "Redactar borradores de posts en espanol de Mexico para Facebook, Instagram y YouTube",
+      "Proponer contenido educativo sobre propagacion in vitro, sanidad vegetal y manejo de planta",
+      "Proponer calendario de publicaciones segun la temporada agricola de berries",
+      "Investigar efemerides del sector, ferias y seminarios de berries en Mexico",
+      "Proponer guiones de video sobre el proceso de laboratorio y vivero"
+    ],
+    "viktorNeedsApprovalFor": [
+      "Cualquier post con precios, condiciones comerciales o disponibilidad de planta",
+      "Cualquier cifra de produccion, superficie, numero de clientes o hectareas abastecidas",
+      "Mencion de variedades protegidas, licencias de genetica o casas de genetica",
+      "Mencion de clientes, de la empresa matriz o de alianzas comerciales",
+      "Afirmaciones de sanidad, certificacion o cumplimiento fitosanitario",
+      "Respuestas a mensajes directos y consultas de clientes (las maneja el equipo comercial)"
+    ],
+    "sensitiveTopics": [
+      "Propiedad intelectual de variedades y acuerdos de licencia",
+      "Certificaciones fitosanitarias y tramites regulatorios (solo lo que el equipo confirme)",
+      "Precios y margenes",
+      "Seguridad y contexto social de la region",
+      "Politica y temas de actualidad ajenos a la marca"
+    ],
+    "communityRules": {
+      "who_handles_dms": "equipo comercial Black Venture Farm (humano)",
+      "escalation_owner": "Equipo Black Venture Farm"
+    }
+  },
+  "metricsThatMatter": [
+    "Consultas de productores por WhatsApp, telefono y mensajes de Facebook",
+    "Solicitudes de cotizacion de planta para la temporada",
+    "Alcance y reproducciones de video entre audiencia de Michoacan y Jalisco",
+    "Compartidos de contenido tecnico (senal de que los agronomos lo usan)",
+    "Crecimiento de seguidores en Facebook"
+  ],
+  "tools": {
+    "design": "Fotos y video propios del laboratorio y el vivero + Canva",
+    "scheduler": "Postiz (pendiente de conexion)",
+    "analytics": "Facebook Insights + YouTube Studio"
+  },
+  "references": {
+    "drive_folder_url": null,
+    "examples": [
+      "Pagina de Facebook @BlackVentureFarmOficial: reels de laboratorio y vivero, 3.5 mil seguidores, ultimo post en noviembre de 2024",
+      "Canal de YouTube de Black Venture Farm: recorridos de laboratorio y participacion en seminarios de berries",
+      "Reportaje en television local sobre el proceso de crecimiento de la planta (Patricio Cortes)"
+    ]
+  },
+  "expectations": "En 90 dias, Black Venture Farm debe pasar de un canal social dormido (ultimo post en noviembre de 2024) a una vitrina tecnica activa que le muestre al productor de berries de que esta hecha su planta, y que genere un flujo constante de consultas y cotizaciones para la temporada de plantacion 2026-2027, sin esfuerzo manual de publicacion del equipo."
+}

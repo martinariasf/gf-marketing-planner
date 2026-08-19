@@ -1,0 +1,126 @@
+{
+  "agency": {
+    "name": "GF Innovative Solutions",
+    "tagline": "Operaciones de marketing potenciadas por IA"
+  },
+  "client": {
+    "name": "Black Venture Farm",
+    "industry": "Biotecnologia vegetal / propagacion in vitro de berries",
+    "handle": "@BlackVentureFarmOficial",
+    "logoInitials": "BV",
+    "primaryChannels": ["facebook", "youtube", "instagram"]
+  },
+  "quarter": {
+    "label": "Q3 2026",
+    "year": 2026,
+    "theme": "Reactivar el canal y convertirlo en la vitrina tecnica de la planta",
+    "months": [
+      { "key": "jul", "name": "Julio",      "weeks": [1, 2, 3, 4] },
+      { "key": "ago", "name": "Agosto",     "weeks": [5, 6, 7, 8] },
+      { "key": "sep", "name": "Septiembre", "weeks": [9, 10, 11, 12] }
+    ]
+  },
+  "headline": "Reactivar los canales de BVF y convertirlos en la vitrina tecnica que abastece la temporada de plantacion 2026-2027.",
+  "positioningStatement": "Cada publicacion deberia hacer pensar a un productor: 'esta gente sabe exactamente de que esta hecha la planta que me va a vender'.",
+  "strategy": "El canal lleva dormido desde noviembre de 2024 con 3.5 mil seguidores ya ganados: la prioridad no es crecer, es reactivar y dar razones para volver a seguir. Julio: reactivacion y reintroduccion de la empresa (quienes somos, que hacemos, el laboratorio por dentro). Agosto: abrir la conversacion comercial de la temporada de plantacion con contenido tecnico que responda las dudas reales del productor. Septiembre: convertir ese interes en consultas y cotizaciones, y usar la agenda de ferias y seminarios del sector como prueba social.",
+  "strategicPriorities": [
+    { "label": "Reactivar el canal",        "description": "Volver a publicar con cadencia sostenida en Facebook. Sin cadencia no hay alcance, y el algoritmo penaliza casi dos anos de silencio." },
+    { "label": "Vitrina del laboratorio",   "description": "Mostrar el proceso in vitro completo: es el diferenciador real y el activo visual mas fuerte que ya existe en el archivo de BVF." },
+    { "label": "Confianza tecnica",         "description": "Responder en publico las dudas que frenan una compra de planta: sanidad, uniformidad, aclimatacion, entrega. El productor compra tranquilidad." },
+    { "label": "Consultas y cotizaciones",  "description": "Meta: un flujo constante de consultas de productores por WhatsApp y Facebook para la temporada 2026-2027. Es el unico KPI que convierte." }
+  ],
+  "kpis": [
+    { "label": "Consultas de productores", "value": "90" },
+    { "label": "Cotizaciones solicitadas", "value": "30" },
+    { "label": "Alcance Facebook",         "value": "120K" },
+    { "label": "Nuevos seguidores",        "value": "+800" }
+  ],
+  "pillars": [
+    { "name": "Sanidad y calidad de planta", "weight": 35, "color": "#211D58", "description": "Por que una planta libre de patogenos cambia el resultado de la temporada: sanidad, identidad genetica, uniformidad y trazabilidad. El pilar que sostiene la venta." },
+    { "name": "Dentro del laboratorio",      "weight": 25, "color": "#8BC07C", "description": "El proceso in vitro paso a paso: establecimiento, multiplicacion, enraizamiento, aclimatacion y vivero. Contenido visual propio, el activo mas fuerte de la marca." },
+    { "name": "Guia del productor",          "weight": 25, "color": "#fa7e1e", "description": "Manejo practico en campo: como recibir la planta, primeras semanas, riego, sustrato, errores comunes al establecer. Contenido que el agronomo guarda y comparte." },
+    { "name": "Ornamentales y equipo",       "weight": 15, "color": "#d62976", "description": "Cactaceas, orquideas y la gente detras del laboratorio. Alcance organico y cara humana de la marca." }
+  ],
+  "campaigns": [
+    { "name": "Volvimos: BVF por dentro",              "pillar": "Dentro del laboratorio",      "startWeek": 1,  "endWeek": 4,  "color": "#8BC07C" },
+    { "name": "De la probeta al campo",                "pillar": "Dentro del laboratorio",      "startWeek": 2,  "endWeek": 12, "color": "#8BC07C" },
+    { "name": "Planta sana, temporada sana",           "pillar": "Sanidad y calidad de planta", "startWeek": 4,  "endWeek": 12, "color": "#211D58" },
+    { "name": "Agenda tu planta 2026-2027",            "pillar": "Sanidad y calidad de planta", "startWeek": 6,  "endWeek": 12, "color": "#211D58" },
+    { "name": "Manual de establecimiento",             "pillar": "Guia del productor",          "startWeek": 5,  "endWeek": 12, "color": "#fa7e1e" },
+    { "name": "Coleccion: cactaceas y orquideas",      "pillar": "Ornamentales y equipo",       "startWeek": 3,  "endWeek": 12, "color": "#d62976" }
+  ],
+  "monthlyFocus": [
+    {
+      "month": "Julio",
+      "theme": "Reactivacion: volver a existir en el feed",
+      "intent": "Retomar la publicacion despues de casi dos anos de silencio. Reintroducir a Black Venture Farm: quienes somos, donde estamos y que hacemos. Recuperar alcance con el material de laboratorio y vivero que ya existe en el archivo.",
+      "priorities": ["Post de reintroduccion de la empresa", "Recorrido por el laboratorio", "Recuperar cadencia de 3 posts por semana"],
+      "keyMoments": ["Post de reactivacion del canal", "Primer video de laboratorio republicado"],
+      "watch": "Alcance y reproducciones de video. En julio la metrica es simplemente volver a ser vistos."
+    },
+    {
+      "month": "Agosto",
+      "theme": "Confianza tecnica antes de la decision de compra",
+      "intent": "Atacar de frente las dudas que frenan la compra de planta: sanidad, uniformidad de lote, aclimatacion y manejo en las primeras semanas. Abrir la conversacion de la temporada de plantacion sin hablar todavia de precios.",
+      "priorities": ["Serie de sanidad y calidad de planta", "Manual de establecimiento (guia del productor)", "Apertura de la agenda de la temporada 2026-2027"],
+      "keyMoments": ["Arranque de la campana Agenda tu planta 2026-2027", "Primera guia tecnica de establecimiento"],
+      "watch": "Compartidos y comentarios tecnicos. Si los agronomos comparten, el contenido esta calibrado."
+    },
+    {
+      "month": "Septiembre",
+      "theme": "Convertir interes en consultas",
+      "intent": "Cerrar el trimestre pidiendo la accion: que el productor escriba. Cada post de septiembre lleva un CTA a WhatsApp. Usar la agenda de ferias y seminarios del sector como prueba social y como excusa de contenido.",
+      "priorities": ["CTA a WhatsApp en todo el contenido", "Testimonio o caso de un productor", "Presencia en la agenda del sector berrycola"],
+      "keyMoments": ["Cierre de la campana Agenda tu planta", "Preparacion de la temporada de seminarios de berries"],
+      "watch": "Consultas de productores y cotizaciones solicitadas. Es el KPI que convierte."
+    }
+  ],
+  "keyDates": [
+    { "date": "2026-07-06", "title": "Reactivacion del canal",                        "type": "marca",     "relevance": "high",   "angle": "Primer post despues de casi dos anos. Reintroducir la empresa y anunciar que el canal vuelve con contenido tecnico." },
+    { "date": "2026-08-03", "title": "Apertura de agenda de planta 2026-2027",         "type": "marca",     "relevance": "high",   "angle": "Invitar a los productores a reservar planta con anticipacion. Sin precios: solo apertura de conversacion." },
+    { "date": "2026-09-01", "title": "Ventana de establecimiento de temporada",        "type": "temporada", "relevance": "high",   "angle": "Contenido de manejo para quienes estan estableciendo planta ahora. Utilidad inmediata en campo." },
+    { "date": "2026-09-28", "title": "Preparacion de la temporada de seminarios de berries", "type": "evento", "relevance": "medium", "angle": "BVF ya ha participado en seminarios internacionales de blueberries. Confirmar fechas con el equipo antes de anunciar cualquier participacion." }
+  ],
+  "platforms": [
+    {
+      "name": "Facebook",
+      "channelKey": "facebook",
+      "role": "Principal - el canal donde ya esta la audiencia de productores",
+      "rationale": "Es el unico canal con audiencia construida (3.5 mil seguidores) y es donde realmente esta el campo mexicano. Los productores y agronomos de Michoacan y Jalisco consumen video corto y posts informativos aqui, y escriben por mensaje directo.",
+      "cadence": "3-4x/semana",
+      "formatMix": [
+        { "label": "Reels (laboratorio y vivero)", "weight": "40%" },
+        { "label": "Posts informativos y tecnicos", "weight": "30%" },
+        { "label": "Albumes de fotos del proceso",  "weight": "20%" },
+        { "label": "Video largo / reportaje",       "weight": "10%" }
+      ],
+      "watch": ["Mensajes directos de productores", "Alcance y reproducciones de video", "Compartidos de contenido tecnico"]
+    },
+    {
+      "name": "YouTube",
+      "channelKey": "youtube",
+      "role": "Secundario - biblioteca tecnica y prueba social",
+      "rationale": "El canal ya tiene recorridos de laboratorio y material de seminarios. Sirve como biblioteca que el equipo comercial puede enviar a un productor que esta evaluando proveedor, y capta busquedas de propagacion in vitro de berries.",
+      "cadence": "1-2/mes",
+      "formatMix": [
+        { "label": "Recorridos de proceso (laboratorio y vivero)", "weight": "50%" },
+        { "label": "Guias tecnicas de establecimiento",            "weight": "30%" },
+        { "label": "Testimonios y participacion en seminarios",    "weight": "20%" }
+      ],
+      "watch": ["Tiempo de visualizacion", "Consultas que mencionan los videos", "Suscriptores"]
+    },
+    {
+      "name": "Instagram",
+      "channelKey": "instagram",
+      "role": "Apoyo - replica de Reels y ornamentales",
+      "rationale": "Canal secundario para reciclar los Reels de laboratorio y explotar el atractivo visual de cactaceas y orquideas. Costo marginal bajo: es el mismo material que ya se produce para Facebook.",
+      "cadence": "2-3x/semana (replica)",
+      "formatMix": [
+        { "label": "Reels replicados de Facebook", "weight": "60%" },
+        { "label": "Ornamentales (cactaceas y orquideas)", "weight": "30%" },
+        { "label": "Stories de temporada", "weight": "10%" }
+      ],
+      "watch": ["Alcance de Reels", "Guardados", "Crecimiento de seguidores"]
+    }
+  ]
+}

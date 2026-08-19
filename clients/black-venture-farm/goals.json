@@ -1,0 +1,55 @@
+{
+  "quarterly": [
+    { "id": "g_grower_leads",  "label": "Consultas de productores",     "target": 90,     "unit": "consultas" },
+    { "id": "g_quotes",        "label": "Cotizaciones solicitadas",     "target": 30,     "unit": "cotizaciones" },
+    { "id": "g_reach",         "label": "Alcance Facebook",             "target": 120000, "unit": "personas" },
+    { "id": "g_followers",     "label": "Nuevos seguidores (FB+IG)",    "target": 800,    "unit": "seguidores" },
+    { "id": "g_video_views",   "label": "Reproducciones de video",      "target": 40000,  "unit": "reproducciones" },
+    { "id": "g_shares",        "label": "Compartidos de contenido tecnico", "target": 300, "unit": "compartidos" }
+  ],
+  "monthly": [
+    {
+      "month": "Julio",
+      "goals": [
+        { "ref": "g_reach",       "target": 30000 },
+        { "ref": "g_video_views", "target": 12000 },
+        { "ref": "g_followers",   "target": 200 },
+        { "ref": "g_grower_leads", "target": 15 }
+      ]
+    },
+    {
+      "month": "Agosto",
+      "goals": [
+        { "ref": "g_reach",        "target": 45000 },
+        { "ref": "g_video_views",  "target": 14000 },
+        { "ref": "g_grower_leads", "target": 30 },
+        { "ref": "g_quotes",       "target": 10 },
+        { "ref": "g_shares",       "target": 120 }
+      ]
+    },
+    {
+      "month": "Septiembre",
+      "goals": [
+        { "ref": "g_reach",        "target": 45000 },
+        { "ref": "g_video_views",  "target": 14000 },
+        { "ref": "g_grower_leads", "target": 45 },
+        { "ref": "g_quotes",       "target": 20 },
+        { "ref": "g_followers",    "target": 300 }
+      ]
+    }
+  ],
+  "weekly": [
+    { "week": 1,  "focus": "Reactivacion: quienes somos y por que volvimos",          "kpi": "alcance" },
+    { "week": 2,  "focus": "Recorrido por el laboratorio in vitro",                   "kpi": "reproducciones de video" },
+    { "week": 3,  "focus": "Cactaceas y orquideas: la coleccion ornamental",          "kpi": "alcance + seguidores" },
+    { "week": 4,  "focus": "Que significa 'libre de patogenos' para tu parcela",      "kpi": "compartidos" },
+    { "week": 5,  "focus": "Aclimatacion: del frasco al vivero",                      "kpi": "reproducciones de video" },
+    { "week": 6,  "focus": "Apertura de agenda de planta 2026-2027",                  "kpi": "consultas de productores" },
+    { "week": 7,  "focus": "Uniformidad de lote: por que todas las plantas importan iguales", "kpi": "compartidos" },
+    { "week": 8,  "focus": "Guia: como recibir y resguardar la planta al llegar",     "kpi": "compartidos + consultas" },
+    { "week": 9,  "focus": "Primeras semanas en campo: riego, sustrato y errores comunes", "kpi": "consultas de productores" },
+    { "week": 10, "focus": "El equipo detras del laboratorio",                        "kpi": "alcance + seguidores" },
+    { "week": 11, "focus": "Testimonio o caso de un productor",                       "kpi": "cotizaciones" },
+    { "week": 12, "focus": "Cierre de trimestre: agenda tu planta para la proxima temporada", "kpi": "cotizaciones" }
+  ]
+}
