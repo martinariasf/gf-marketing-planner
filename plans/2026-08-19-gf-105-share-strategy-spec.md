@@ -142,7 +142,13 @@ New `review.strategy.*` keys in EN, DE and ES in `lib/i18n-dict.ts`.
 - GF-103 (carousel bug when sharing the link), which touches the same surface
   but is a separate defect.
 
-## Follow-on
+## Viktor (in scope, same branch)
 
-Viktor's copywriting skill fills a visual caption on every generated post, so
-the copy fallback fades out over time. Tracked in the same Notion item.
+`agent-skills/core/post-drafting/` and `agent-skills/core/copywriting/` are
+updated so every post Viktor writes carries a visual caption — a one-line
+description of what the image or video will show — on `slides[].caption` for a
+carousel and on `media[].caption` otherwise. Synced to the agents via
+`agent-skills/sync-agent-skills.sh`.
+
+This is what makes the copy fallback temporary rather than permanent: new
+posts get a real brief, old posts keep falling back.
