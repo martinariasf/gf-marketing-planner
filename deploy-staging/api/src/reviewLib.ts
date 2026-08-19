@@ -69,11 +69,30 @@ export interface ReviewLinkRecord {
    */
   months?: string[]
   codeHash: string
+  /**
+   * GF-105 — which kind of review this link is for. 'content' (the default and
+   * the only pre-GF-105 behavior) shows the finished creative; 'strategy' shows
+   * a text-only plan view with every image stripped SERVER-SIDE. Absent or
+   * unrecognized means 'content', so every existing link is unaffected.
+   */
+  view?: ReviewLinkView
   status: 'active' | 'revoked'
   expiresAt?: string
   createdBy?: string
   createdAt?: string
   revokedAt?: string
+}
+
+export type ReviewLinkView = 'content' | 'strategy'
+
+/**
+ * Normalize a stored/submitted link view into a known value. Anything that is
+ * not exactly 'strategy' collapses to 'content' — the safe default, because a
+ * link that fails to parse must never silently become a different kind of
+ * review than the sharer intended.
+ */
+export function parseLinkView(value: unknown): ReviewLinkView {
+  return value === 'strategy' ? 'strategy' : 'content'
 }
 
 /**
@@ -130,7 +149,14 @@ const PUBLIC_MEDIA_TYPES = new Set(['image', 'video'])
 export interface PublicPost {
   id: string
   date: string
+  /** Primary channel. Always equal to `channels[0]` when `channels` is present. */
   channel?: string
+  /**
+   * GF-105 — every target platform, not just the primary one. GF-20 made posts
+   * multi-channel but the sanitizer only ever emitted the singular `channel`,
+   * so a multi-platform post was not expressible in the public payload at all.
+   */
+  channels?: string[]
   format?: string
   pillar?: string
   campaign?: string
@@ -139,8 +165,10 @@ export interface PublicPost {
   hashtags?: string[]
   cta?: string
   image?: string
-  slides?: Array<{ image: string; caption?: string }>
-  media?: Array<{ type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string }>
+  // `image` / `url` are optional because stripVisuals() removes them for a
+  // strategy link, leaving the captions (the design brief) behind.
+  slides?: Array<{ image?: string; caption?: string }>
+  media?: Array<{ type: 'image' | 'video'; url?: string; thumbnail?: string; caption?: string; assetId?: string }>
   /** Read-only label of the internal status, so reviewers see "approved" etc.
    *  without exposing who/when. */
   statusLabel?: string
@@ -152,7 +180,20 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
     date: typeof post.date === 'string' ? post.date : '',
     title: typeof post.title === 'string' ? post.title : '',
   }
-  if (typeof post.channel === 'string') out.channel = post.channel
+  // GF-105 — carry every target platform. `channels` wins when present (it is
+  // the multi-channel field GF-20 introduced); `channel` is kept as the primary
+  // and pinned to channels[0] so existing single-channel consumers still work.
+  const channelList = Array.isArray(post.channels)
+    ? post.channels.filter((ch): ch is string => typeof ch === 'string' && ch.length > 0)
+    : []
+  const primary = typeof post.channel === 'string' && post.channel ? post.channel : undefined
+  const allChannels = channelList.length > 0 ? [...new Set(channelList)] : primary ? [primary] : []
+  if (allChannels.length > 0) {
+    out.channels = allChannels
+    out.channel = allChannels[0]
+  } else if (primary) {
+    out.channel = primary
+  }
   if (typeof post.format === 'string') out.format = post.format
   if (typeof post.pillar === 'string') out.pillar = post.pillar
   if (typeof post.campaign === 'string') out.campaign = post.campaign
@@ -167,7 +208,7 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
       .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
       .filter((s) => typeof s.image === 'string')
       .map((s) => {
-        const slide: { image: string; caption?: string } = { image: s.image as string }
+        const slide: { image?: string; caption?: string } = { image: s.image as string }
         if (typeof s.caption === 'string') slide.caption = s.caption
         return slide
       })
@@ -182,7 +223,7 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
           typeof m.url === 'string',
       )
       .map((m) => {
-        const media: { type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string } = {
+        const media: { type: 'image' | 'video'; url?: string; thumbnail?: string; caption?: string; assetId?: string } = {
           type: m.type as 'image' | 'video',
           url: m.url as string,
         }
@@ -198,6 +239,34 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
     if (typeof status === 'string') out.statusLabel = status
   } else if (typeof post.status === 'string') {
     out.statusLabel = post.status
+  }
+  return out
+}
+
+/**
+ * GF-105 — remove every image-bearing field from an already-sanitized post,
+ * leaving only the plan: pillar, format, platforms, date, copy and the captions
+ * that describe what the visual will show.
+ *
+ * This is the enforcement point for a strategy link's "no pictures" rule, and
+ * it is deliberately server-side: hiding images in CSS would still ship the
+ * URLs to an unauthenticated party, which is exactly what a pre-production
+ * strategy review is meant to avoid.
+ *
+ * Fields removed: `image`, `slides[].image`, `media[].url`, `media[].thumbnail`,
+ * `media[].assetId`. Kept: `slides[].caption`, `media[].caption`, `media[].type`.
+ *
+ * Slides and media entries are kept (not dropped) even when they carry no
+ * caption, so the strategy view can still say how many slides a carousel has.
+ */
+export function stripVisuals(post: PublicPost): PublicPost {
+  const { image: _image, slides, media, ...rest } = post
+  const out: PublicPost = { ...rest }
+  if (slides) {
+    out.slides = slides.map((s) => (s.caption ? { caption: s.caption } : {}))
+  }
+  if (media) {
+    out.media = media.map((m) => (m.caption ? { type: m.type, caption: m.caption } : { type: m.type }))
   }
   return out
 }

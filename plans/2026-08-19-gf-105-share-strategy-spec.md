@@ -126,11 +126,17 @@ New `review.strategy.*` keys in EN, DE and ES in `lib/i18n-dict.ts`.
 
 ## Testing
 
-- Vitest on the sanitizer: `stripVisuals` removes every URL-bearing field and
-  keeps every caption; `sanitizePost` emits `channels` with `channel` first;
-  `parseLinkView` defaults to `content` for absent / empty / junk values.
-- Vitest on the public route: a strategy link's `open` response contains no
-  `image`, no `slides[].image`, no `media[].url`.
+The API suite is `node:test` run through tsx (`npm test` in `deploy-staging/api`),
+not vitest — corrected from the original draft of this plan.
+
+- `src/reviewLib.strategy.test.ts` on the sanitizer: `stripVisuals` removes every
+  URL-bearing field and keeps every caption; `sanitizePost` emits `channels` with
+  `channel` first; `parseLinkView` defaults to `content` for absent / empty /
+  junk values; and a serialize-the-whole-payload assertion that no `https://`,
+  no media host and no assetId survives — so a NEW image-bearing field added to
+  `PublicPost` later cannot silently leak past `stripVisuals`.
+- The content path is asserted unchanged in the same file, since the real risk of
+  this change is regressing the existing creative review.
 - Manual on staging: create one link of each kind on the same range, confirm
   the content link is unchanged, and confirm the strategy link's raw API
   response (not just the page) is image-free.
