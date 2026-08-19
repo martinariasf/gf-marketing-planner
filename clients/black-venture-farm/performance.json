@@ -1,0 +1,35 @@
+{
+  "lastSyncedAt": null,
+  "source": "manual",
+  "posts": {},
+  "aggregates": {
+    "quarterly": { "reach": 0, "followerDelta": 0 },
+    "monthly": {
+      "Julio":      { "reach": 0, "followerDelta": 0 },
+      "Agosto":     { "reach": 0, "followerDelta": 0 },
+      "Septiembre": { "reach": 0, "followerDelta": 0 }
+    },
+    "weekly": {}
+  },
+  "vsGoals": {
+    "g_grower_leads": { "target": 90,     "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_quotes":       { "target": 30,     "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_reach":        { "target": 120000, "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_followers":    { "target": 800,    "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_video_views":  { "target": 40000,  "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_shares":       { "target": 300,    "current": 0, "pace": "behind", "deltaPct": 0 }
+  },
+  "weeklySummary": {
+    "week": 0,
+    "wins": [
+      "Workspace recien creado: marca, plan trimestral y objetivos cargados a partir de la pagina de Facebook de BVF."
+    ],
+    "losses": [
+      "Canal dormido: la ultima publicacion en Facebook es del 2 de noviembre de 2024 y los Reels tienen alrededor de dos anos.",
+      "Sin datos de performance todavia: no hay publicaciones medidas en este workspace.",
+      "Postiz aun no conectado: la publicacion seria manual.",
+      "El sitio web bvf.com.mx no resuelve; el correo de contacto publico pertenece al dominio giddingsfruit.mx."
+    ],
+    "nextTest": "Semana 1: publicar el post de reactivacion (quienes somos y por que volvimos) y medir alcance como linea de base despues de casi dos anos sin publicar."
+  }
+}

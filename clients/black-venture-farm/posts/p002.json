@@ -1,0 +1,26 @@
+{
+  "id": "p002",
+  "date": "2026-08-03",
+  "channel": "facebook",
+  "format": "Reel",
+  "pillar": "Sanidad y calidad de planta",
+  "campaign": "Agenda tu planta 2026-2027",
+  "title": "Que significa 'libre de patogenos' cuando lo dice un laboratorio",
+  "image": null,
+  "copy": "'Planta libre de patogenos' se dice facil. Esto es lo que hay detras cuando lo decimos nosotros.\n\nUna planta propagada in vitro parte de material seleccionado y se multiplica en condiciones controladas de laboratorio. No hereda los virus ni los hongos que arrastra el material tomado directamente de campo.\n\nQue cambia eso en tu parcela:\n\n- Arrancas la temporada sin cargar una enfermedad desde el dia uno.\n- Las plantas del lote se comportan igual entre si, porque vienen del mismo material.\n- El vigor inicial es parejo, y eso ordena tu manejo y tu cosecha.\n\nLa planta es la decision mas cara y mas irreversible de tu ciclo. Vale la pena saber de donde viene.\n\nYa estamos armando la agenda de planta para la proxima temporada. Escribenos y platicamos de tu superficie y tus fechas.",
+  "hashtags": ["#BlackVentureFarm", "#BVF", "#LibresDePatogenos", "#ProduccionInVitro", "#Berries", "#SanidadVegetal", "#Michoacan"],
+  "cta": "Agenda tu planta: escribenos por WhatsApp al +52 351 516 3134",
+  "status": "draft",
+  "approval": {
+    "status": "draft",
+    "approvedBy": null,
+    "approvedAt": null,
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": null,
+    "publishedAt": null,
+    "publicUrl": null
+  }
+}
