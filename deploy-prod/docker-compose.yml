@@ -34,6 +34,13 @@ services:
       PB_ADMIN_EMAIL: "${PB_ADMIN_EMAIL:-}"
       PB_ADMIN_PASSWORD: "${PB_ADMIN_PASSWORD:-}"
       BOOTSTRAP_TOKENS: "${BOOTSTRAP_TOKENS:-}"
+      # Edge-Caddy basicauth usernames that get admin scope (slug '*' = every
+      # client in the switcher). Anything NOT listed here is scoped to a single
+      # client whose slug IS the username. See api/src/routes/authExchange.ts,
+      # whose built-in default is "staging,martin,pilar" — this overrides it so
+      # the operators log in with their email addresses instead of bare names.
+      # Non-secret policy, so set directly here rather than via the box .env.
+      AUTH_EXCHANGE_ADMINS: "staging,pilarariasfornara@gmail.com,info@gfinnov.com"
       # Chat is proxied to the PROD Hermes agent's api_server gateway. Set these
       # to the prod agent container + its gateway key (must match the prod
       # config.yaml extra.key). Until the prod agent exists, leave chat disabled.
