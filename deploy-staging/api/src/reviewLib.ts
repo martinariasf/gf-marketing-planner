@@ -180,14 +180,23 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
     date: typeof post.date === 'string' ? post.date : '',
     title: typeof post.title === 'string' ? post.title : '',
   }
-  // GF-105 — carry every target platform. `channels` wins when present (it is
-  // the multi-channel field GF-20 introduced); `channel` is kept as the primary
-  // and pinned to channels[0] so existing single-channel consumers still work.
+  // GF-105 — carry every target platform. `channels` is the multi-channel field
+  // GF-20 introduced; `channel` is the primary.
+  //
+  // The STORED primary always wins and is moved to the front, rather than simply
+  // taking channels[0]. coalescePost() already keeps the two coherent, so today
+  // they agree — but sanitizePost is a public-safe primitive that must not
+  // depend on its caller having coalesced. Deriving the primary from
+  // channels[0] would silently change `channel` for a CONTENT link too (the
+  // sanitizer runs for both views), which is a live, out-of-scope surface.
   const channelList = Array.isArray(post.channels)
     ? post.channels.filter((ch): ch is string => typeof ch === 'string' && ch.length > 0)
     : []
   const primary = typeof post.channel === 'string' && post.channel ? post.channel : undefined
-  const allChannels = channelList.length > 0 ? [...new Set(channelList)] : primary ? [primary] : []
+  let allChannels = channelList.length > 0 ? [...new Set(channelList)] : primary ? [primary] : []
+  if (primary && allChannels[0] !== primary) {
+    allChannels = [primary, ...allChannels.filter((ch) => ch !== primary)]
+  }
   if (allChannels.length > 0) {
     out.channels = allChannels
     out.channel = allChannels[0]
@@ -199,6 +208,13 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
   if (typeof post.campaign === 'string') out.campaign = post.campaign
   if (typeof post.copy === 'string') out.copy = post.copy
   if (typeof post.cta === 'string') out.cta = post.cta
+  // ⚠ IMAGE-BEARING FIELD. sanitizePost is an allowlist, so nothing reaches the
+  // public payload unless it is named here — but that also means stripVisuals()
+  // below cannot know about a field you add here. If you add ANY new
+  // image/url/thumbnail-bearing field to this function, you MUST also strip it
+  // in stripVisuals(), or it will leak on a strategy link. The two move in
+  // lockstep; the serialize-the-payload test in reviewLib.strategy.test.ts is
+  // the backstop, not the contract.
   if (typeof post.image === 'string') out.image = post.image
   if (Array.isArray(post.hashtags)) {
     out.hashtags = post.hashtags.filter((h): h is string => typeof h === 'string')

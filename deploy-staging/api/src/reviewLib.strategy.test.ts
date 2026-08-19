@@ -82,6 +82,37 @@ test('sanitizePost de-duplicates channels and drops non-strings', () => {
   assert.equal(out.channel, 'instagram')
 })
 
+test('sanitizePost never flips the stored primary channel (L5 #1)', () => {
+  // coalescePost() keeps `channel` == `channels[0]`, so this shape should not
+  // occur in practice — but sanitizePost must not DEPEND on the caller having
+  // coalesced. Taking channels[0] as the primary here would have silently
+  // changed the primary channel on existing CONTENT links too, since the
+  // sanitizer runs for both views.
+  const out = sanitizePost({
+    id: 'p_flip',
+    date: '2026-09-09',
+    title: 'x',
+    channel: 'instagram',
+    channels: ['linkedin', 'facebook'],
+  })
+  assert.equal(out.channel, 'instagram', 'the stored primary must survive')
+  assert.equal(out.channels?.[0], 'instagram', 'the primary must lead the list')
+  // …and nothing the post targeted may be dropped.
+  assert.deepEqual(out.channels, ['instagram', 'linkedin', 'facebook'])
+})
+
+test('sanitizePost moves the primary to the front without duplicating it', () => {
+  const out = sanitizePost({
+    id: 'p_order',
+    date: '2026-09-10',
+    title: 'x',
+    channel: 'facebook',
+    channels: ['linkedin', 'facebook'],
+  })
+  assert.deepEqual(out.channels, ['facebook', 'linkedin'])
+  assert.equal(out.channel, 'facebook')
+})
+
 test('sanitizePost omits channels entirely when the post has none', () => {
   const out = sanitizePost({ id: 'p4', date: '2026-09-07', title: 'x' })
   assert.equal(out.channels, undefined)

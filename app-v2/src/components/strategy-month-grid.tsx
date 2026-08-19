@@ -139,7 +139,10 @@ export function StrategyMonthGrid({
     [posts, colors, untagged],
   )
   const channelTally = useMemo(
-    () => tally(posts.flatMap((p) => strategyChannels(p).map(strategyChannelLabel))),
+    // Tally on the RAW channel key, not the display label: ChannelIcon is keyed
+    // by the raw value, and a channel with no entry in CHANNEL_LABEL would
+    // otherwise round-trip through its own display string and lose its icon.
+    () => tally(posts.flatMap((p) => strategyChannels(p))),
     [posts],
   )
   const formatTally = useMemo(
@@ -242,6 +245,7 @@ export function StrategyMonthGrid({
           total={posts.length}
           hint={t('review.strategy.platformHint')}
           icon
+          display={strategyChannelLabel}
         />
         <TallyBlock title={t('review.strategy.perFormat')} rows={formatTally} total={posts.length} />
       </div>
@@ -255,12 +259,15 @@ function TallyBlock({
   total,
   hint,
   icon = false,
+  display,
 }: {
   title: string
   rows: Tally[]
   total: number
   hint?: string
   icon?: boolean
+  /** Renders `label` for display. `label` itself stays the raw key the icon needs. */
+  display?: (label: string) => string
 }) {
   const max = Math.max(total, ...rows.map((r) => r.count), 1)
   return (
@@ -274,8 +281,8 @@ function TallyBlock({
             <li key={r.label} className="space-y-0.5">
               <div className="flex items-baseline justify-between gap-2 text-[11px]">
                 <span className="flex min-w-0 items-center gap-1 truncate">
-                  {icon && <ChannelIcon channel={r.label.toLowerCase()} className="h-3 w-3" />}
-                  <span className="truncate">{r.label}</span>
+                  {icon && <ChannelIcon channel={r.label} className="h-3 w-3" />}
+                  <span className="truncate">{display ? display(r.label) : r.label}</span>
                 </span>
                 <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] tabular-nums">
                   {r.count}
