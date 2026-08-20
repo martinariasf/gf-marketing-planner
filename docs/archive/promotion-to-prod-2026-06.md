@@ -1,3 +1,6 @@
+> **ARCHIVED.** Progress log of the June 2026 staging to production cutover. That cutover is complete; this is a historical record.
+> See [docs/archive/README.md](./README.md).
+
 # Staging → Production Promotion — Progress Log
 
 > Tracks the first **full-parity cutover** of the GF marketing-planner from

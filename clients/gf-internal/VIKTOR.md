@@ -1,6 +1,6 @@
 # Viktor for GF Innovative Solutions
 
-This document specifies the **Viktor instance** that operates the GF Innovative Solutions marketing dashboard (this folder, slug `gf-internal`). It is a per-client refinement of the generic [AGENT.md](../../AGENT.md). Anything not specified here defaults to AGENT.md.
+This document specifies the **Viktor instance** that operates the GF Innovative Solutions marketing dashboard (this folder, slug `gf-internal`). It is a per-client refinement of the generic [viktor-agent.md](../../docs/viktor-agent.md). Anything not specified here defaults to docs/viktor-agent.md.
 
 When the Viktor instance is deployed, **this file is read first as part of its system prompt**, after `SKILL.md` and `AGENT.md`.
 
@@ -27,14 +27,14 @@ Read `brief.json` `voice` for the canonical rules. Critical anchors:
 
 ## Skills installed
 
-Per [AGENT.md](../../AGENT.md), Viktor loads `.md` skills from `/opt/skills/`. For `viktor-gf-internal`, install the following four (already specified in this repo):
+Per [viktor-agent.md](../../docs/viktor-agent.md), Viktor loads `.md` skills from `/opt/skills/`. For `viktor-gf-internal`, install the following four (already specified in this repo):
 
 1. **[`approvals`](../../deploy/viktor-skills/approvals.md)** — process `approve / reject / revise / block / unblock <id>` from Telegram. Mandatory. This is the trust gate.
 2. **[`sync-postiz-analytics`](../../deploy/viktor-skills/sync-postiz-analytics.md)** — daily 06:00 UTC. Scheduled via Hermes' built-in scheduler. Pulls per-post metrics, rewrites `performance.json`.
 3. **[`weekly-summary`](../../deploy/viktor-skills/weekly-summary.md)** — Monday 09:00 Europe/Berlin. Generates the wins/losses/nextTest digest.
 4. **[`ai-suggestions`](../../deploy/viktor-skills/ai-suggestions.md)** — Wednesday 10:00 Europe/Berlin + reactive after the two daily/weekly skills + on-demand via "suggest" / "ideas".
 
-Still to write (not yet installed; track in [AGENT.md](../../AGENT.md)):
+Still to write (not yet installed; track in [viktor-agent.md](../../docs/viktor-agent.md)):
 
 - `draft` — write a post matching brief voice + plan pillar. Default format is Long-form text on LinkedIn (60% of mix per `plan.platforms[].formatMix`).
 - `nano-banana-image` — generate cover images via the Google API key in env. **Never** generate AI-stock-looking glowy abstracts. Real photo-realistic, screenshot-style, or simple diagrammatic.
@@ -131,7 +131,7 @@ When drafting a post and a field isn't specified by the human:
 
 ## Deployment checklist (when ready)
 
-Follow [AGENT.md "Per-client deployment recipe"](../../AGENT.md#per-client-deployment-recipe), with the values from this file. After `docker run`, before the smoke test:
+Follow [viktor-agent.md "Per-client deployment recipe"](../../docs/viktor-agent.md#per-client-deployment-recipe), with the values from this file. After `docker run`, before the smoke test:
 
 ```bash
 # Smoke test sequence on Telegram (Martin → @gf_innovative_viktor_bot):
