@@ -578,8 +578,11 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
           )}
         </div>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.copyLabel')}</p>
+        {/* GF-107 — `pt-3` on each labelled section, on top of the pane's
+            space-y-4, so the little uppercase label has room above it and the
+            fields read as separate blocks rather than one dense column. */}
+        <div className="pt-3">
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">{t('calendar.copyLabel')}</p>
           {isApiEnabled ? (
             <textarea
               value={copy}
@@ -594,8 +597,8 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
         </div>
 
         {/* CTA promoted above hashtags — it is the line that carries the ask. */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.cta')}</p>
+        <div className="pt-3">
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">{t('calendar.cta')}</p>
           {isApiEnabled ? (
             <input
               value={cta}
@@ -608,8 +611,8 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
           )}
         </div>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+        <div className="pt-3">
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">
             {t('calendar.hashtags')}
             {tags.length > 0 && (
               <span className="ml-1.5 rounded-full bg-brand-blue-100 px-1.5 text-[10px] font-bold text-brand-blue">
