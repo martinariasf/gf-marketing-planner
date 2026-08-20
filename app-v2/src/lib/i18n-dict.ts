@@ -997,6 +997,8 @@ const en: Dict = {
   'review.fb.approvedBy':       'Accepted by {n} reviewer(s)',
   'review.fb.changesBy':        'Changes requested by {n} reviewer(s)',
   'review.fb.commentsBy':       '{n} reviewer comment(s)',
+  'review.fb.section.content':  'On the posts',
+  'review.fb.section.strategy': 'On the strategy',
 
   // GF-17 — content calendar export
   'export.download':    'Download',
@@ -1967,6 +1969,8 @@ const de: Dict = {
   'review.fb.approvedBy':       'Von {n} Reviewer(n) freigegeben',
   'review.fb.changesBy':        'Änderungen angefragt von {n} Reviewer(n)',
   'review.fb.commentsBy':       '{n} Reviewer-Kommentar(e)',
+  'review.fb.section.content':  'Zu den Beiträgen',
+  'review.fb.section.strategy': 'Zur Strategie',
 
   // GF-17 — Content-Kalender exportieren
   'export.download':    'Herunterladen',
@@ -2937,6 +2941,8 @@ const es: Dict = {
   'review.fb.approvedBy':       'Aprobado por {n} revisor(es)',
   'review.fb.changesBy':        'Cambios solicitados por {n} revisor(es)',
   'review.fb.commentsBy':       '{n} comentario(s) de revisores',
+  'review.fb.section.content':  'Sobre las publicaciones',
+  'review.fb.section.strategy': 'Sobre la estrategia',
 
   // GF-17 — exportar el calendario de contenido
   'export.download':    'Descargar',

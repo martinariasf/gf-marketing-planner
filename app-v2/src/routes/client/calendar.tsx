@@ -35,6 +35,9 @@ import {
   isApiEnabled,
   type ApprovalDecision,
   type ReviewFeedback,
+  type ReviewFeedbackComment,
+  type ReviewFeedbackDecision,
+  type ReviewLinkView,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
 import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap, scheduleConfirmationFor } from '@/lib/post-status'
@@ -75,6 +78,7 @@ import {
   Trash2,
   ExternalLink,
   AlertTriangle,
+  Compass,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useI18n } from '@/lib/i18n'
@@ -1650,9 +1654,97 @@ function ReviewSignals({ feedback }: { feedback?: ReviewPostFeedback }) {
 }
 
 /**
+ * GF-106 — which review link a row came from. The API stamps every decision and
+ * comment with a `view`, but an API that predates GF-106 omits the field
+ * entirely; absent MUST read as 'content' so an un-upgraded backend keeps
+ * rendering its feedback instead of blanking the panel.
+ */
+function viewOfRow(row: { view?: ReviewLinkView }): ReviewLinkView {
+  return row.view === 'strategy' ? 'strategy' : 'content'
+}
+
+/**
+ * GF-106 — one bordered, headed section of the external-feedback panel: either
+ * the feedback left on the finished posts, or the feedback left on the strategy
+ * plan. Rendered only when it has something to show, so a post that only ever
+ * got one kind of feedback never shows an empty heading.
+ *
+ * The two sections are told apart structurally — own border, own heading, own
+ * icon — not by colour, because the dashboard runs in light and dark.
+ */
+function FeedbackSection({
+  view,
+  decisions,
+  comments,
+}: {
+  view: ReviewLinkView
+  decisions: ReviewFeedbackDecision[]
+  comments: ReviewFeedbackComment[]
+}) {
+  const t = useT()
+  if (decisions.length === 0 && comments.length === 0) return null
+  const Icon = view === 'strategy' ? Compass : Images
+  return (
+    <section className="rounded-lg border border-border-subtle bg-paper-muted/30 p-3 space-y-2">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        {t(view === 'strategy' ? 'review.fb.section.strategy' : 'review.fb.section.content')}
+      </h4>
+
+      {decisions.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {decisions.map((d) => (
+            <span
+              // GF-106: the view belongs in the key. Before the split a reviewer
+              // had at most ONE decision per post, so reviewer+createdAt was
+              // unique; now they can have one per view, and createdAt falls back
+              // to '' server-side, so two entries could collide. The fold keys on
+              // (reviewer, view), so adding view makes this unique by construction.
+              key={`${d.reviewerName}-${d.view}-${d.createdAt}`}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                d.decision === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
+              )}
+            >
+              {d.decision === 'approved' ? <ThumbsUp className="h-3 w-3" /> : <PenLine className="h-3 w-3" />}
+              {d.reviewerName}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {comments.length > 0 && (
+        <div className="space-y-1.5">
+          {comments.map((c) => (
+            <div
+              key={c.id}
+              className={cn(
+                'text-xs rounded-md px-2.5 py-1.5',
+                c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
+              )}
+            >
+              <span className="font-medium">
+                {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
+              </span>
+              {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
+              <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/**
  * GF-4 v3 — "External feedback" under the month-view post: reviewer decision
  * chips + the comment thread, with a team reply box. Reviewer decisions are
  * signals only; internal Approve/Reject stays in CopyPane.
+ *
+ * GF-106 — the body is split into a Posts section and a Strategy section, so
+ * the team can tell whether the client was reacting to the finished creative or
+ * to the plan. The reply box stays single and shared: a reply threads onto the
+ * latest reviewer comment for this post regardless of which link it came from.
  */
 function ExternalFeedbackPanel({
   slug,
@@ -1699,48 +1791,16 @@ function ExternalFeedbackPanel({
           {t('review.fb.title')}
         </h3>
 
-        {decisions.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {decisions.map((d) => (
-              <span
-                key={`${d.reviewerName}-${d.createdAt}`}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  d.decision === 'approved'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-amber-50 text-amber-700',
-                )}
-              >
-                {d.decision === 'approved' ? (
-                  <ThumbsUp className="h-3 w-3" />
-                ) : (
-                  <PenLine className="h-3 w-3" />
-                )}
-                {d.reviewerName}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {comments.length > 0 && (
-          <div className="space-y-1.5">
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className={cn(
-                  'text-xs rounded-md px-2.5 py-1.5',
-                  c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
-                )}
-              >
-                <span className="font-medium">
-                  {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
-                </span>
-                {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
-                <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        <FeedbackSection
+          view="content"
+          decisions={decisions.filter((d) => viewOfRow(d) === 'content')}
+          comments={comments.filter((c) => viewOfRow(c) === 'content')}
+        />
+        <FeedbackSection
+          view="strategy"
+          decisions={decisions.filter((d) => viewOfRow(d) === 'strategy')}
+          comments={comments.filter((c) => viewOfRow(c) === 'strategy')}
+        />
 
         {lastReviewerComment && (
           <div className="flex items-center gap-2">

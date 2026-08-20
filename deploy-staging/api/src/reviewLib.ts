@@ -96,6 +96,106 @@ export function parseLinkView(value: unknown): ReviewLinkView {
 }
 
 /**
+ * GF-106 — build a lookup from a link id to the view that link was created for.
+ *
+ * Used by the review-feedback aggregation to stamp each decision/comment with
+ * the kind of link the reviewer was looking at when they left it. Anything the
+ * map cannot resolve — a deleted link, a row written before links carried ids,
+ * a missing linkId — collapses to 'content', which is both the pre-GF-105
+ * behavior and the safe default: the row is still returned, never dropped.
+ */
+export function linkViewResolver(
+  links: readonly { id: string; view?: ReviewLinkView }[],
+): (linkId: string | undefined | null) => ReviewLinkView {
+  const byId = new Map<string, ReviewLinkView>()
+  for (const link of links) {
+    if (link?.id) byId.set(link.id, parseLinkView(link.view))
+  }
+  return (linkId) => (linkId ? byId.get(linkId) ?? 'content' : 'content')
+}
+
+/** One reviewer decision on one post, stamped with the link view it came from. */
+export interface FeedbackDecisionEntry {
+  decision: string
+  reviewerName: string
+  createdAt: string
+  view: ReviewLinkView
+}
+
+export interface ReviewFeedbackInputEvent {
+  postId?: string
+  linkId?: string
+  kind: string
+  reviewerName?: string
+  createdAt?: string
+}
+
+/**
+ * GF-106 — the pure fold behind GET /clients/:slug/review-feedback.
+ *
+ * Extracted from the route handler so the merge semantics are unit-testable
+ * without a live PocketBase. Two rules it must keep:
+ *
+ *  1. Decisions are keyed on reviewer AND view. The same person may decide once
+ *     on the strategy link and again on the content link for the SAME post, and
+ *     the split panel has to show both. Keying on the reviewer alone would drop
+ *     one of them.
+ *  2. Within one (reviewer, view) pair, latest still wins. Callers must pass
+ *     `events` in ascending createdAt order, so a plain overwrite keeps the
+ *     newest — these PB collections have no autodate `created`, so that order
+ *     comes from the text `createdAt` the app writes itself.
+ *
+ * Nothing is ever filtered by view: a row whose linkId does not resolve is
+ * stamped 'content' by `viewOf` and still returned.
+ */
+export function buildReviewFeedback<C extends { postId?: string; linkId?: string }>(
+  events: readonly ReviewFeedbackInputEvent[],
+  comments: readonly C[],
+  viewOf: (linkId: string | undefined | null) => ReviewLinkView,
+): {
+  byPost: Record<string, { decisions: FeedbackDecisionEntry[]; comments: (C & { view: ReviewLinkView })[] }>
+  general: { comments: (C & { view: ReviewLinkView })[] }
+} {
+  const decisionsByPost = new Map<string, Map<string, FeedbackDecisionEntry>>()
+  for (const ev of events) {
+    if (!ev.postId) continue
+    const reviewer = ev.reviewerName || 'Guest'
+    const view = viewOf(ev.linkId)
+    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map<string, FeedbackDecisionEntry>()
+    // Separator is U+0000 written as an ESCAPE, never a raw control byte in
+    // the source (a raw one makes git treat this file as binary). It cannot
+    // occur in a reviewer name, so a reviewer literally called "Ann content"
+    // can never collide with reviewer "Ann" on the content view.
+    perReviewer.set(`${reviewer}\u0000${view}`, {
+      decision: ev.kind,
+      reviewerName: reviewer,
+      createdAt: ev.createdAt ?? '',
+      view,
+    })
+    decisionsByPost.set(ev.postId, perReviewer)
+  }
+
+  const byPost: Record<
+    string,
+    { decisions: FeedbackDecisionEntry[]; comments: (C & { view: ReviewLinkView })[] }
+  > = {}
+  const bucket = (postId: string) => (byPost[postId] ??= { decisions: [], comments: [] })
+
+  for (const [postId, perReviewer] of decisionsByPost) {
+    bucket(postId).decisions = [...perReviewer.values()]
+  }
+
+  const general: { comments: (C & { view: ReviewLinkView })[] } = { comments: [] }
+  for (const cm of comments) {
+    const stamped = { ...cm, view: viewOf(cm.linkId) }
+    if (stamped.postId) bucket(stamped.postId).comments.push(stamped)
+    else general.comments.push(stamped)
+  }
+
+  return { byPost, general }
+}
+
+/**
  * Normalize a stored `months` value (which PB may hand back as a JSON array, a
  * JSON string, or undefined) into a clean, de-duplicated list of YYYY-MM keys.
  * Returns an empty array when there is no usable selection — callers treat that
