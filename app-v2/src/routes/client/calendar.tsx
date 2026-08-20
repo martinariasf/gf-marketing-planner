@@ -1695,7 +1695,12 @@ function FeedbackSection({
         <div className="flex items-center gap-1.5 flex-wrap">
           {decisions.map((d) => (
             <span
-              key={`${d.reviewerName}-${d.createdAt}`}
+              // GF-106: the view belongs in the key. Before the split a reviewer
+              // had at most ONE decision per post, so reviewer+createdAt was
+              // unique; now they can have one per view, and createdAt falls back
+              // to '' server-side, so two entries could collide. The fold keys on
+              // (reviewer, view), so adding view makes this unique by construction.
+              key={`${d.reviewerName}-${d.view}-${d.createdAt}`}
               className={cn(
                 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
                 d.decision === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
