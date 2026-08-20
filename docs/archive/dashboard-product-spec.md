@@ -1,3 +1,6 @@
+> **ARCHIVED.** Original product spec, May 2026. Historical — superseded by ARCHITECTURE.md and the Notion platform backlog.
+> See [docs/archive/README.md](./README.md).
+
 **Dashboard Product Spec**
 
 **Product name:** Viktor Marketing Operating Dashboard

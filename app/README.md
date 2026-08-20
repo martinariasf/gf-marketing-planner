@@ -20,7 +20,7 @@ Entry point: `trimester.html`.
 
 ## For the AI agent
 
-If you're an AI agent generating content for this framework, **read [`SKILL.md`](./SKILL.md), not the HTML**. It tells you the one file to write (`data/plan.js`), the full schema, strategist voice rules, and the workflows for common tasks (add a post, plan a quarter, reschedule a campaign).
+If you're an AI agent generating content for this framework, **read [`docs/agent-file-contract.md`](../docs/agent-file-contract.md), not the HTML**. It tells you the one file to write (`data/plan.js`), the full schema, strategist voice rules, and the workflows for common tasks (add a post, plan a quarter, reschedule a campaign).
 
 ## Password gate
 
