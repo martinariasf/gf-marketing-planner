@@ -22,8 +22,10 @@ import {
   linkState,
   parseMonthSelection,
   parseLinkView,
+  linkViewResolver,
   DEFAULT_TTL_DAYS,
   type ReviewLinkRecord,
+  type ReviewLinkView,
 } from '../reviewLib.js'
 
 const MONTH_KEY = z.string().regex(/^\d{4}-\d{2}$/, 'must be a YYYY-MM month key')
@@ -415,6 +417,16 @@ interface ReviewCommentRow {
   createdAt?: string
 }
 
+// GF-106: a decision/comment carries the view of the link it came from, so the
+// dashboard can separate feedback on the finished posts from feedback on the
+// strategy plan. Unresolvable => 'content' (never dropped).
+interface FeedbackDecision {
+  decision: string
+  reviewerName: string
+  createdAt: string
+  view: ReviewLinkView
+}
+
 // GF-66: 'agent' may read aggregated feedback (decisions + comments per post)
 // so Viktor can summarize what reviewers said when asked in the dashboard chat.
 reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('dash', 'admin', 'agent'), async (c) => {
@@ -442,24 +454,42 @@ reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('d
     comments = []
   }
 
+  // GF-106: fetch the client's links ONCE and resolve each row's originating
+  // view from the map. A row whose linkId no longer resolves (deleted link,
+  // pre-id row) is still returned, stamped 'content'.
+  let links: ReviewLinkRecord[] = []
+  try {
+    links = await withPb((pb) =>
+      pb.collection('review_links').getFullList<ReviewLinkRecord>({ filter: `slug="${slug}"` }),
+    )
+  } catch {
+    links = []
+  }
+  const viewOf = linkViewResolver(links)
+
   // Latest decision per (postId, reviewer). Events are createdAt-ascending, so
   // a plain overwrite keeps the newest.
-  const decisionsByPost = new Map<string, Map<string, { decision: string; reviewerName: string; createdAt: string }>>()
+  const decisionsByPost = new Map<string, Map<string, FeedbackDecision>>()
   for (const ev of events) {
     if (!ev.postId) continue
     const reviewer = ev.reviewerName || 'Guest'
-    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map()
-    perReviewer.set(reviewer, {
+    const view = viewOf(ev.linkId)
+    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map<string, FeedbackDecision>()
+    // GF-106: key on reviewer AND view — the same person may decide once on the
+    // strategy link and again on the content link for the same post, and the
+    // split panel must be able to show both. Within one view, latest still wins.
+    perReviewer.set(`${reviewer}\0${view}`, {
       decision: ev.kind,
       reviewerName: reviewer,
       createdAt: ev.createdAt ?? '',
+      view,
     })
     decisionsByPost.set(ev.postId, perReviewer)
   }
 
   const byPost: Record<
     string,
-    { decisions: { decision: string; reviewerName: string; createdAt: string }[]; comments: ReviewCommentRow[] }
+    { decisions: FeedbackDecision[]; comments: (ReviewCommentRow & { view: ReviewLinkView })[] }
   > = {}
   const bucket = (postId: string) =>
     (byPost[postId] ??= { decisions: [], comments: [] })
@@ -467,10 +497,11 @@ reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('d
   for (const [postId, perReviewer] of decisionsByPost) {
     bucket(postId).decisions = [...perReviewer.values()]
   }
-  const general: { comments: ReviewCommentRow[] } = { comments: [] }
+  const general: { comments: (ReviewCommentRow & { view: ReviewLinkView })[] } = { comments: [] }
   for (const cm of comments) {
-    if (cm.postId) bucket(cm.postId).comments.push(cm)
-    else general.comments.push(cm)
+    const stamped = { ...cm, view: viewOf(cm.linkId) }
+    if (stamped.postId) bucket(stamped.postId).comments.push(stamped)
+    else general.comments.push(stamped)
   }
 
   return c.json({ byPost, general })

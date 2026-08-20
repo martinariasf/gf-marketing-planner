@@ -96,6 +96,25 @@ export function parseLinkView(value: unknown): ReviewLinkView {
 }
 
 /**
+ * GF-106 — build a lookup from a link id to the view that link was created for.
+ *
+ * Used by the review-feedback aggregation to stamp each decision/comment with
+ * the kind of link the reviewer was looking at when they left it. Anything the
+ * map cannot resolve — a deleted link, a row written before links carried ids,
+ * a missing linkId — collapses to 'content', which is both the pre-GF-105
+ * behavior and the safe default: the row is still returned, never dropped.
+ */
+export function linkViewResolver(
+  links: readonly { id: string; view?: ReviewLinkView }[],
+): (linkId: string | undefined | null) => ReviewLinkView {
+  const byId = new Map<string, ReviewLinkView>()
+  for (const link of links) {
+    if (link?.id) byId.set(link.id, parseLinkView(link.view))
+  }
+  return (linkId) => (linkId ? byId.get(linkId) ?? 'content' : 'content')
+}
+
+/**
  * Normalize a stored `months` value (which PB may hand back as a JSON array, a
  * JSON string, or undefined) into a clean, de-duplicated list of YYYY-MM keys.
  * Returns an empty array when there is no usable selection — callers treat that
