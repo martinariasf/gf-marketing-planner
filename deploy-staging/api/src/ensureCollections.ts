@@ -309,6 +309,10 @@ const collections: CollectionSpec[] = [
       // expose. Empty/absent = all months in [rangeStart, rangeEnd].
       { name: 'months', type: 'json', maxSize: 5_000 },
       { name: 'codeHash', type: 'text', required: true, max: 128 },
+      // GF-105 — which kind of review this link is for. Not required: an
+      // absent/empty value means 'content', so every pre-GF-105 link keeps its
+      // behaviour and no data migration is needed.
+      { name: 'view', type: 'select', values: ['content', 'strategy'] },
       { name: 'status', type: 'select', required: true, values: ['active', 'revoked'] },
       { name: 'expiresAt', type: 'text', max: 40 },
       { name: 'createdBy', type: 'text', max: 100 },

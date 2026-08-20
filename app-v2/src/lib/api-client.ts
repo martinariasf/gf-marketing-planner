@@ -899,6 +899,8 @@ export async function apiLoadAgentJobs(
 
 // ── GF-4: Content Creation review links (collaboration layer) ────────────────
 
+export type ReviewLinkView = 'content' | 'strategy'
+
 export interface ReviewLink {
   id: string
   publicId: string
@@ -907,6 +909,12 @@ export interface ReviewLink {
   rangeEnd: string
   /** GF-42 — selected month keys (YYYY-MM); empty = all months in the range. */
   months: string[]
+  /**
+   * GF-105 — which kind of review this link is for. 'content' shows the
+   * finished creative (the original behaviour); 'strategy' shows the text-only
+   * plan. Chosen by the sharer at creation and fixed for the life of the link.
+   */
+  view: ReviewLinkView
   status: 'active' | 'revoked'
   state: 'active' | 'revoked' | 'expired'
   expiresAt: string | null
@@ -944,7 +952,14 @@ export interface ReviewEvent {
 
 export async function apiCreateReviewLink(
   slug: string,
-  body: { title?: string; rangeStart: string; rangeEnd: string; months?: string[]; ttlDays?: number },
+  body: {
+    title?: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    view?: ReviewLinkView
+    ttlDays?: number
+  },
 ): Promise<ReviewLink> {
   return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
 }
@@ -1056,7 +1071,10 @@ export async function apiLoadReviewFeedback(slug: string): Promise<ReviewFeedbac
 export interface PublicReviewPost {
   id: string
   date: string
+  /** Primary channel. Equals `channels[0]` when `channels` is present. */
   channel?: string
+  /** GF-105 — every target platform, not only the primary one. */
+  channels?: string[]
   format?: string
   pillar?: string
   campaign?: string
@@ -1064,10 +1082,18 @@ export interface PublicReviewPost {
   copy?: string
   hashtags?: string[]
   cta?: string
+  // GF-105 — every image-bearing field is optional because the API strips them
+  // server-side for a strategy link, leaving only the captions behind. Nothing
+  // here may be assumed present; a content link still populates them as before.
   image?: string
-  slides?: Array<{ image: string; caption?: string }>
-  media?: PostMedia[]
+  slides?: Array<{ image?: string; caption?: string }>
+  media?: PublicReviewMedia[]
   statusLabel?: string
+}
+
+/** Like PostMedia, but `url` is absent on a strategy link (stripped by the API). */
+export interface PublicReviewMedia extends Omit<PostMedia, 'url'> {
+  url?: string
 }
 
 export interface PublicReviewBrand {
@@ -1088,7 +1114,14 @@ export interface PublicReviewPayload {
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
-  link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
+  link: {
+    title: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    /** GF-105 — absent on an un-upgraded API response; treat as 'content'. */
+    view?: ReviewLinkView
+  }
   brand?: PublicReviewBrand
   // GF-92 (B/E) — optional so an older/un-upgraded API response never blanks
   // the AI-generated badge for external reviewers; absent => treat as true.

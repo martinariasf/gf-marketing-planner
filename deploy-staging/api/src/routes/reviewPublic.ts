@@ -29,6 +29,8 @@ import {
   getReviewSession,
   parseMonthSelection,
   monthInSelection,
+  parseLinkView,
+  stripVisuals,
   type ReviewLinkRecord,
   type ReviewSession,
 } from '../reviewLib.js'
@@ -144,9 +146,12 @@ async function listSharedPosts(link: ReviewLinkRecord) {
 
 /** Sanitized, reviewer-safe payload for a link's shared content + comments. */
 async function buildReviewPayload(link: ReviewLinkRecord) {
-  const posts = (await listSharedPosts(link)).map((p) =>
-    sanitizePost(p as Record<string, unknown>),
-  )
+  // GF-105 — a strategy link is a plan review, not a creative review: strip
+  // every image URL here, server-side, so no artwork ever reaches the reviewer.
+  const view = parseLinkView(link.view)
+  const posts = (await listSharedPosts(link))
+    .map((p) => sanitizePost(p as Record<string, unknown>))
+    .map((p) => (view === 'strategy' ? stripVisuals(p) : p))
   let comments: Array<Record<string, unknown>> = []
   try {
     const rows = await withPb((pb) =>
@@ -178,6 +183,7 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
       rangeStart: link.rangeStart,
       rangeEnd: link.rangeEnd,
       months: parseMonthSelection(link.months),
+      view,
     },
     brand,
     // GF-92 (B) — hand-pick ONLY the reviewer-safe field. autoScheduleOnApprove

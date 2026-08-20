@@ -88,10 +88,21 @@ image_generate(prompt="<scene + brand + Visual Guidelines>",
 
 The `image_gen_openrouter` plugin then copies the file into the client assets
 dir, appends the manifest entry, PATCHes the post's `image`, and confirms. You
-MUST NOT copy the file, edit the manifest, or PATCH the post yourself — passing
-`post_id` already did it. Just confirm to the user (in their language), citing
-the url. Only fall back to manual wiring if the result shows
+MUST NOT copy the file, edit the manifest, or PATCH the **asset wiring** —
+`image`, `slides[].image`, `media[].url`, `thumbnail`, `assetId` — yourself;
+passing `post_id` already did it. Just confirm to the user (in their language),
+citing the url. Only fall back to manual wiring if the result shows
 `post_link.linked: false` or an `error`.
+
+**The one exception is the caption.** The plugin never writes
+`slides[].caption` or `media[].caption`, so the prohibition above does not cover
+them: you MUST make sure a caption is on the post. Normally it is already there,
+because `post-drafting` writes the visual caption at draft time and you generate
+*against* it — the caption is the design brief for this image, so read it before
+you write the prompt. Only if the post arrives with no caption do you PATCH one
+on after generating, describing what the finished image actually shows. When you
+do, send `slides` / `media` as WHOLE arrays including every existing entry and
+its current `image`/`url`; a partial array drops the other entries.
 
 For a **reserve / stand-alone** image (no target post), omit `post_id` — the
 plugin publishes it to a public URL and adds a reserve manifest entry.
