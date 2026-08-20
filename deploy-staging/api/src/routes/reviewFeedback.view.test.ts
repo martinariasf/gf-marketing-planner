@@ -52,12 +52,16 @@ test('GF-106: the review-feedback handler resolves views through linkViewResolve
   assert.match(handler, /linkViewResolver\(/)
 })
 
-test('GF-106: decisions and comments are both stamped with a view', () => {
-  // Two resolution sites: one for the decision rows, one for the comment rows.
-  const stamps = handler.match(/viewOf\(/g) ?? []
-  assert.ok(stamps.length >= 2, `expected decisions and comments to be stamped, found ${stamps.length}`)
-  assert.match(handler, /\n\s*view,\r?\n/, 'the decision entry must carry a view field')
-  assert.match(handler, /view: viewOf\(cm\.linkId\)/, 'the comment entry must carry a view field')
+test('GF-106: the handler delegates the stamping fold to buildReviewFeedback', () => {
+  // The fold itself (decisions keyed on reviewer AND view, latest-wins within a
+  // view, orphan rows retained) is a pure function in reviewLib and is covered
+  // BEHAVIOURALLY in reviewLib.feedbackFold.test.ts. All this guard has to prove
+  // is that the handler still routes its rows through it, passing the resolver.
+  assert.match(
+    handler,
+    /buildReviewFeedback\(\s*events,\s*comments,\s*viewOf\s*\)/,
+    'the handler must fold events and comments through buildReviewFeedback with the resolver',
+  )
 })
 
 test('GF-106: review_links is fetched once, not per row', () => {
