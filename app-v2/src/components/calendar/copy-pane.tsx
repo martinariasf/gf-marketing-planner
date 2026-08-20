@@ -31,7 +31,6 @@ import {
   Send,
   Tag,
   Trash2,
-  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -321,8 +320,7 @@ function DateField({ s }: { s: PaneState }) {
     return <span className="text-[11px] font-semibold text-ink">{fmtDate(date)}</span>
   }
   return (
-    <label className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-muted cursor-pointer">
-      <CalendarDays className="h-3.5 w-3.5 text-ink-muted" />
+    <label className="inline-flex items-center rounded-md px-1 py-0.5 hover:bg-paper-muted cursor-pointer">
       <input
         type="date"
         value={date}
@@ -553,18 +551,19 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
     <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
       <LockedNotice s={s} />
       <fieldset disabled={locked} className="contents">
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* GF-107 — two header rows. The publication number identifies the
+            post and sits alone up top; the three things you actually change
+            about its delivery — when, where, in what form — sit together on
+            the row below, in that order. */}
+        <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] font-bold">{postName}</Badge>
-          {/* GF-107 — the date is editable right here, where it is already
-              shown; the duplicate date field in the bottom bar is gone. */}
+          <span className="ml-auto text-[11px] text-ink-muted">v{post.approval.version}</span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
           <DateField s={s} />
-          <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
-          {/* GF-107 — network first, then post type, both in the top-right
-              corner: you pick the platform before deciding the format. */}
-          <div className="ml-auto flex items-center gap-2">
-            <ChannelPicker s={s} post={post} />
-            <PostTypeField s={s} compact />
-          </div>
+          <ChannelPicker s={s} post={post} />
+          <PostTypeField s={s} compact />
         </div>
 
         <TitleField value={title} onChange={setTitle} className="text-xl" />
