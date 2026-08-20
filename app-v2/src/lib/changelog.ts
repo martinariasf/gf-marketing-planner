@@ -22,6 +22,16 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-20',
+    title: 'The plan summary now opens the Strategy link instead of closing it',
+    items: [
+      'In the card view of a Strategy link, the month-by-month plan summary — the calendar grid plus the counts by topic, network and post type — now sits at the TOP, above the first card, so your client sees how the month is laid out before judging any single post.',
+      'The same summary now also sits at the top of the end screen, above the post-by-post recap, instead of below it.',
+      'It can be collapsed with one click, and it stays collapsed while your client swipes through the cards and reaches the end screen.',
+      'The list view is unchanged: there the summary still closes the page.',
+    ],
+  },
+  {
+    date: '2026-08-20',
     title: 'Strategy links now review like the content link, and feedback is split by kind',
     items: [
       'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
