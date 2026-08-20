@@ -14,7 +14,7 @@ import { ChannelIcon, CHANNEL_LABEL, effectiveChannels } from '@/components/chan
 // GF-107 — the status control and the Month-view copy pane now live in their
 // own modules so the three candidate card layouts can share them.
 import { StatusSelect, StatusBadges } from '@/components/calendar/status-select'
-import { CopyPane, parseCardVariant } from '@/components/calendar/copy-pane'
+import { CopyPane } from '@/components/calendar/copy-pane'
 import { ReviewShareDialog } from '@/components/review-share-dialog'
 import {
   DropdownMenu,
@@ -524,9 +524,6 @@ export default function CalendarView() {
   // range to include its month (capped at the 6-month window), let `monthKeys`
   // recompute, then jump and clear the param so it does not re-fire or linger.
   const [searchParams, setSearchParams] = useSearchParams()
-  // GF-107 — `?cardv=a|b|c` picks between the three candidate Month-view card
-  // layouts while we decide on one. Defaults to A.
-  const cardVariant = parseCardVariant(searchParams.get('cardv'))
   const consumedPostParam = useRef<string | null>(null)
   useEffect(() => {
     const targetId = searchParams.get('post')
@@ -854,7 +851,6 @@ export default function CalendarView() {
                     approving={approvingId === activePost.id}
                     onSetStatus={(d) => setStatus(activePost, d)}
                     onDelete={() => setDeleteTarget(activePost)}
-                    variant={cardVariant}
                   />
 
                   {/* Vertical divider */}

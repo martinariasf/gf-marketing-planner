@@ -1,20 +1,19 @@
-// GF-107 — the Month-view copy pane, in three competing layouts.
+// GF-107 — the Month-view copy pane.
 //
-// The pane used to stack eleven full-width blocks, each with its own tiny
-// uppercase label, and rendered the workflow status twice: once as a badge at
-// the top and once as the dropdown at the bottom that actually sets it. The
-// title was a single-line <input> at text-2xl, so a long headline scrolled
-// sideways instead of wrapping.
+// It used to stack eleven full-width blocks, each with its own tiny uppercase
+// label, and rendered the workflow status twice: once as a badge at the top and
+// once as the dropdown at the bottom that actually sets it. The title was a
+// single-line <input> at text-2xl, so a long headline scrolled sideways instead
+// of wrapping, and the publication date appeared both as text and as a form
+// field further down.
 //
-// All the editing behaviour (dirty tracking, PATCH payload, channel toggling)
-// lives in `useCopyPaneState` and is shared verbatim by the three layouts, so
-// picking a winner is purely a matter of deleting the two losers.
+// Now: the header identifies the post (number, version) and carries the three
+// delivery choices on its second row — date, network, post type, in that order.
+// The body is the content. The bottom bar holds the status control, tinted with
+// its own state colour, and the actions.
 //
-//   A — one metadata strip, unlabelled content body
-//   B — two zones, metadata + status in a bottom action bar
-//   C — progressive disclosure, hashtags and details folded away
-//
-// Pick with `?cardv=a|b|c` on the calendar URL; `a` is the default.
+// `useCopyPaneState` keeps every piece of editing behaviour (dirty tracking,
+// PATCH payload, channel toggling) separate from the layout.
 
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -25,7 +24,6 @@ import { StatusSelect } from '@/components/calendar/status-select'
 import {
   Check,
   ChevronDown,
-  ChevronRight,
   Loader2,
   Save,
   Send,
@@ -46,13 +44,6 @@ function isCarousel(post: Post): boolean {
   return Array.isArray(post.slides) && post.slides.length > 1
 }
 
-export type CardVariant = 'a' | 'b' | 'c'
-
-/** The three variants a `?cardv=` value may select. */
-export function parseCardVariant(raw: string | null): CardVariant {
-  return raw === 'b' || raw === 'c' ? raw : 'a'
-}
-
 export interface CopyPaneProps {
   slug: string
   post: Post
@@ -62,7 +53,6 @@ export interface CopyPaneProps {
   approving: boolean
   onSetStatus: (decision: ApprovalDecision) => void
   onDelete: () => void
-  variant?: CardVariant
 }
 
 /**
@@ -459,92 +449,14 @@ function BlockerNote({ s, post }: { s: PaneState; post: Post }) {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Variant A — one metadata strip, unlabelled content body            */
-/* ------------------------------------------------------------------ */
-
-function VariantA(props: CopyPaneProps & { s: PaneState }) {
-  const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
-  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
-
-  return (
-    <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
-      <LockedNotice s={s} />
-      <fieldset disabled={locked} className="contents">
-        {/* One strip: identity, schedule, taxonomy, status. */}
-        <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
-          <Badge variant="outline" className="text-[10px] font-bold">{postName}</Badge>
-          <DateField s={s} />
-          <span className="opacity-40">·</span>
-          <PostTypeField s={s} compact />
-          <Pillar name={post.pillar} color={pillarColor} />
-          {post.campaign && (
-            <Badge variant="outline" className="font-normal">
-              <Tag className="h-3 w-3 mr-1" />
-              {post.campaign}
-            </Badge>
-          )}
-          <span className="opacity-40">·</span>
-          <span>v{post.approval.version}</span>
-          <div className="ml-auto flex items-center gap-2">
-            <ChannelPicker s={s} post={post} />
-            <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} tinted />
-          </div>
-        </div>
-
-        <TitleField value={title} onChange={setTitle} className="text-2xl" />
-
-        {isApiEnabled ? (
-          <textarea
-            value={copy}
-            onChange={(e) => setCopy(e.target.value)}
-            rows={10}
-            placeholder={t('calendar.writeCopy')}
-            className="w-full text-sm leading-relaxed bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        ) : (
-          <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>
-        )}
-
-        {isApiEnabled ? (
-          <textarea
-            value={hashtags}
-            onChange={(e) => setHashtags(e.target.value)}
-            rows={2}
-            placeholder="#hashtag1 #hashtag2 …"
-            className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        ) : (
-          <HashtagChips tags={tags} />
-        )}
-
-        <div className="flex items-baseline gap-3 pt-2 border-t border-border-subtle">
-          <span className="text-[10px] uppercase tracking-wider text-ink-muted shrink-0">{t('calendar.cta')}</span>
-          {isApiEnabled ? (
-            <input
-              value={cta}
-              onChange={(e) => setCta(e.target.value)}
-              placeholder="Call to action…"
-              className="w-full text-sm font-semibold text-brand-blue bg-transparent border-b border-transparent hover:border-border-subtle focus:border-brand-blue focus:outline-none"
-            />
-          ) : (
-            <span className="text-sm font-semibold text-brand-blue">{post.cta}</span>
-          )}
-        </div>
-
-        <BlockerNote s={s} post={post} />
-        <ActionBar s={s} approving={approving} onDelete={onDelete} className="pt-2 border-t border-border-subtle" />
-      </fieldset>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Variant B — two zones, metadata + status in a bottom action bar     */
-/* ------------------------------------------------------------------ */
-
-function VariantB(props: CopyPaneProps & { s: PaneState }) {
-  const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
+/**
+ * The Month-view copy pane: two zones. The header identifies the post and
+ * carries the three delivery choices (when, where, what form); the body is the
+ * content itself; the bottom bar holds the workflow status and the actions.
+ */
+export function CopyPane(props: CopyPaneProps) {
+  const s = useCopyPaneState(props)
+  const { post, postName, pillarColor, approving, onSetStatus, onDelete } = props
   const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
 
   return (
@@ -645,124 +557,3 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Variant C — progressive disclosure                                  */
-/* ------------------------------------------------------------------ */
-
-function VariantC(props: CopyPaneProps & { s: PaneState }) {
-  const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
-  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
-  const [tagsOpen, setTagsOpen] = useState(false)
-  const [detailsOpen, setDetailsOpen] = useState(false)
-
-  return (
-    <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
-      <LockedNotice s={s} />
-      <fieldset disabled={locked} className="contents">
-        <div className="flex items-center gap-2 flex-wrap">
-          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} tinted />
-          <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-muted">
-            {postName}
-            <span className="opacity-40">·</span>
-            <DateField s={s} />
-            <ChannelPicker s={s} post={post} />
-          </span>
-        </div>
-
-        <TitleField value={title} onChange={setTitle} className="text-2xl" />
-
-        {isApiEnabled ? (
-          <textarea
-            value={copy}
-            onChange={(e) => setCopy(e.target.value)}
-            rows={11}
-            placeholder={t('calendar.writeCopy')}
-            className="w-full text-sm leading-relaxed bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        ) : (
-          <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>
-        )}
-
-        <div className="pt-2 border-t border-border-subtle">
-          {isApiEnabled ? (
-            <input
-              value={cta}
-              onChange={(e) => setCta(e.target.value)}
-              placeholder="Call to action…"
-              className="w-full text-sm font-bold text-brand-blue bg-transparent border-b border-transparent hover:border-border-subtle focus:border-brand-blue focus:outline-none"
-            />
-          ) : (
-            post.cta && <p className="text-sm font-bold text-brand-blue">{post.cta}</p>
-          )}
-        </div>
-
-        {/* Hashtags — one chip until you want them. */}
-        <div className="pt-2 border-t border-border-subtle">
-          <button
-            type="button"
-            onClick={() => setTagsOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-blue"
-          >
-            {tagsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {t('calendar.hashtags')}
-            {tags.length > 0 && (
-              <span className="rounded-full bg-brand-blue-100 px-1.5 text-[10px] font-bold">{tags.length}</span>
-            )}
-          </button>
-          {tagsOpen && (
-            <div className="mt-2">
-              {isApiEnabled ? (
-                <textarea
-                  value={hashtags}
-                  onChange={(e) => setHashtags(e.target.value)}
-                  rows={3}
-                  placeholder="#hashtag1 #hashtag2 …"
-                  className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-                />
-              ) : (
-                <HashtagChips tags={tags} max={99} />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Details — pillar, campaign, date, version. */}
-        <div className="pt-2 border-t border-border-subtle">
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-blue"
-          >
-            {detailsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {t('calendar.cardDetails')}
-          </button>
-          {detailsOpen && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <PostTypeField s={s} compact />
-              <Pillar name={post.pillar} color={pillarColor} />
-              {post.campaign && (
-                <Badge variant="outline" className="font-normal">
-                  <Tag className="h-3 w-3 mr-1" />
-                  {post.campaign}
-                </Badge>
-              )}
-              <Badge variant="outline" className="text-[10px]">v{post.approval.version}</Badge>
-            </div>
-          )}
-        </div>
-
-        <BlockerNote s={s} post={post} />
-        <ActionBar s={s} approving={approving} onDelete={onDelete} className="pt-2 border-t border-border-subtle" />
-      </fieldset>
-    </div>
-  )
-}
-
-/** Month-view copy pane. `variant` selects the layout; behaviour is identical. */
-export function CopyPane(props: CopyPaneProps) {
-  const s = useCopyPaneState(props)
-  const variant = props.variant ?? 'a'
-  if (variant === 'b') return <VariantB {...props} s={s} />
-  if (variant === 'c') return <VariantC {...props} s={s} />
-  return <VariantA {...props} s={s} />
-}
