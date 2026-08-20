@@ -559,15 +559,17 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
               shown; the duplicate date field in the bottom bar is gone. */}
           <DateField s={s} />
           <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
-          <div className="ml-auto">
+          {/* GF-107 — network first, then post type, both in the top-right
+              corner: you pick the platform before deciding the format. */}
+          <div className="ml-auto flex items-center gap-2">
             <ChannelPicker s={s} post={post} />
+            <PostTypeField s={s} compact />
           </div>
         </div>
 
         <TitleField value={title} onChange={setTitle} className="text-xl" />
 
         <div className="flex items-center gap-2 flex-wrap">
-          <PostTypeField s={s} compact />
           <Pillar name={post.pillar} color={pillarColor} />
           {post.campaign && (
             <Badge variant="outline" className="font-normal">
