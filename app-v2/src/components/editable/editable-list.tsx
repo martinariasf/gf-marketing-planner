@@ -3,6 +3,7 @@ import { X, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEdit } from '@/lib/edit-store'
+import { useT } from '@/lib/i18n'
 
 interface Props {
   items: string[]
@@ -28,8 +29,9 @@ export function EditableList({
   bulletClassName,
   bullet = '·',
   renderBullet,
-  placeholder = 'Add item',
+  placeholder,
 }: Props) {
+  const t = useT()
   const { editMode } = useEdit()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -125,7 +127,7 @@ export function EditableList({
               <input
                 autoFocus
                 value={draft}
-                placeholder={placeholder}
+                placeholder={placeholder ?? t('common.addItem')}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commitNew}
                 onKeyDown={(e) => {

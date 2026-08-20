@@ -3,6 +3,7 @@ import { X, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useEdit } from '@/lib/edit-store'
+import { useT } from '@/lib/i18n'
 
 type Tone = 'default' | 'green' | 'blue' | 'red'
 
@@ -32,8 +33,9 @@ export function EditablePills({
   items,
   onChange,
   tone = 'default',
-  placeholder = 'Add item',
+  placeholder,
 }: Props) {
+  const t = useT()
   const { editMode } = useEdit()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -87,7 +89,7 @@ export function EditablePills({
         <input
           autoFocus
           value={draft}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('common.addItem')}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
