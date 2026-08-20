@@ -12,7 +12,7 @@ End-to-end playbook for adding a new client to the Viktor Marketing Operating Da
 
 ## Prerequisites
 
-- The 11 intake answers (see [SKILL.md](../SKILL.md) "Required intake for a new client") collected from the client.
+- The 11 intake answers (see [agent-file-contract.md](../docs/agent-file-contract.md) "Required intake for a new client") collected from the client.
 - A short slug (kebab-case, no spaces). Example: `acme-fitness`.
 
 ## Step 1 — Create the file tree
