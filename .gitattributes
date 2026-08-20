@@ -1,1 +1,2 @@
 agent-skills/**/*.sh text eol=lf
+agent-skills/**/*.py text eol=lf
