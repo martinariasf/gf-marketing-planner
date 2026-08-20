@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,8 +10,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
-import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER, effectiveChannels } from '@/components/channel-icon'
-import { Pillar } from '@/components/pillar'
+import { ChannelIcon, CHANNEL_LABEL, effectiveChannels } from '@/components/channel-icon'
+// GF-107 — the status control and the Month-view copy pane now live in their
+// own modules so the three candidate card layouts can share them.
+import { StatusSelect, StatusBadges } from '@/components/calendar/status-select'
+import { CopyPane, parseCardVariant } from '@/components/calendar/copy-pane'
 import { ReviewShareDialog } from '@/components/review-share-dialog'
 import {
   DropdownMenu,
@@ -37,7 +39,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap, scheduleConfirmationFor } from '@/lib/post-status'
+import { postSeqMap } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -48,11 +50,9 @@ import {
   ChevronRight,
   ChevronDown,
   RefreshCw,
-  Tag,
   ImageIcon,
   Maximize2,
   Wand2,
-  Save,
   Loader2,
   Eye,
   Upload,
@@ -67,14 +67,11 @@ import {
   Film,
   Plus,
   PieChart as PieChartIcon,
-  Check,
   ThumbsUp,
   PenLine,
   MessageSquare,
   Send,
   Trash2,
-  ExternalLink,
-  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useI18n } from '@/lib/i18n'
@@ -91,20 +88,8 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
-import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey, isCanonicalFormat } from '@/lib/post-format'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
-
-const STATUS_STYLES: Record<string, string> = {
-  idea:           'bg-neutral-100 text-neutral-700',
-  drafting:       'bg-amber-50 text-amber-700',
-  in_review:      'bg-blue-50 text-blue-700',
-  needs_revision: 'bg-orange-50 text-orange-700',
-  approved:       'bg-emerald-50 text-emerald-700',
-  scheduled:      'bg-violet-50 text-violet-700',
-  published:      'bg-brand-green-100 text-brand-green-600',
-  rejected:       'bg-rose-50 text-rose-700',
-}
 
 /** A post is a carousel when it carries more than one slide. */
 function isCarousel(post: Post): post is Post & { slides: Slide[] } {
@@ -118,17 +103,6 @@ function postVideo(post: Post) {
 /** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
 function weekOfMonth(iso: string) {
   return Math.ceil(new Date(iso).getDate() / 7)
-}
-
-/**
- * GF-16 — normalize a stored post date (full ISO or plain YYYY-MM-DD) to the
- * `YYYY-MM-DD` value an `<input type="date">` expects. Empty string if unparseable.
- */
-function toDateInputValue(iso: string): string {
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso ?? '')
-  if (m) return m[1]
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -550,6 +524,9 @@ export default function CalendarView() {
   // range to include its month (capped at the 6-month window), let `monthKeys`
   // recompute, then jump and clear the param so it does not re-fire or linger.
   const [searchParams, setSearchParams] = useSearchParams()
+  // GF-107 — `?cardv=a|b|c` picks between the three candidate Month-view card
+  // layouts while we decide on one. Defaults to A.
+  const cardVariant = parseCardVariant(searchParams.get('cardv'))
   const consumedPostParam = useRef<string | null>(null)
   useEffect(() => {
     const targetId = searchParams.get('post')
@@ -877,6 +854,7 @@ export default function CalendarView() {
                     approving={approvingId === activePost.id}
                     onSetStatus={(d) => setStatus(activePost, d)}
                     onDelete={() => setDeleteTarget(activePost)}
+                    variant={cardVariant}
                   />
 
                   {/* Vertical divider */}
@@ -1383,130 +1361,6 @@ function ContentMixChart({
 }
 
 /**
- * GF-23 — workflow status control. For a live (non-published) post it is a
- * dropdown over the full workflow (Draft/Review/Approved/Programmed/Rechecked/
- * Rejected). A published post is read-only: it shows the Published badge and a
- * link to the live Postiz post when one is known.
- */
-function StatusSelect({
-  post,
-  busy,
-  onSetStatus,
-  size = 'sm',
-}: {
-  post: Post
-  busy: boolean
-  onSetStatus: (decision: ApprovalDecision) => void
-  size?: 'sm' | 'xs'
-}) {
-  const t = useT()
-
-  if (isPublished(post)) {
-    const url = publishedUrl(post)
-    return (
-      <span className="inline-flex items-center gap-1.5 flex-wrap">
-        <Badge variant="secondary" className={cn(size === 'xs' ? 'text-[9px]' : 'text-[10px]', STATUS_STYLES.published)}>
-          <Send className={cn(size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3', 'mr-1')} />
-          {t('status.published')}
-        </Badge>
-        {url && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              'inline-flex items-center gap-1 font-medium text-brand-blue hover:underline',
-              size === 'xs' ? 'text-[10px]' : 'text-xs',
-            )}
-          >
-            <ExternalLink className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-            {t('calendar.viewPublished')}
-          </a>
-        )}
-      </span>
-    )
-  }
-
-  const current = laneFor(post) as ApprovalDecision
-  const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
-  const StepIcon = step.Icon
-  // GF-92 — the "scheduled" label doesn't mean a provider job actually exists;
-  // surface the real confirmation (or its absence) next to the control.
-  const scheduleConfirmation = current === 'scheduled' ? scheduleConfirmationFor(post) : null
-  return (
-    <span className="inline-flex items-center gap-1.5 flex-wrap">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
-          >
-            {busy ? (
-              <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
-            ) : (
-              <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-            )}
-            {t(step.labelKey)}
-            <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {WORKFLOW.map((s) => {
-            const Icon = s.Icon
-            // GF-37 — block scheduling (Programmed) a post dated in the past.
-            const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
-            return (
-              <DropdownMenuItem
-                key={s.key}
-                disabled={s.key === current || pastSchedule}
-                onClick={() => onSetStatus(s.key)}
-                title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
-              >
-                <Icon className="h-3.5 w-3.5 mr-2" />
-                {t(s.labelKey)}
-                {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {scheduleConfirmation?.kind === 'confirmed' && (
-        <span className={cn('text-ink-muted', size === 'xs' ? 'text-[9px]' : 'text-[10px]')}>
-          {t('schedule.confirmedAt', {
-            date: scheduleConfirmation.scheduledFor ? fmtDate(scheduleConfirmation.scheduledFor) : '—',
-            provider: scheduleConfirmation.provider ?? '—',
-          })}
-        </span>
-      )}
-      {scheduleConfirmation?.kind === 'failed' && (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 text-rose-700',
-            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
-          )}
-        >
-          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-          {t('schedule.failed', { error: scheduleConfirmation.lastError })}
-        </span>
-      )}
-      {scheduleConfirmation?.kind === 'missingJob' && (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 text-amber-700',
-            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
-          )}
-        >
-          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-          {t('schedule.notConfirmed')}
-        </span>
-      )}
-    </span>
-  )
-}
-
-/**
  * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
  * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
@@ -1770,396 +1624,6 @@ function ExternalFeedbackPanel({
   )
 }
 
-function StatusBadges({ post }: { post: Post }) {
-  const approval = post.approval.status || post.status
-  const isPublished = post.status === 'published' || Boolean(post.publishing.publishedAt || post.publishing.publicUrl)
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES[approval] ?? STATUS_STYLES[post.status])}>
-        {approval.replace('_', ' ')}
-      </Badge>
-      {isPublished && (
-        <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES.published)}>
-          published
-        </Badge>
-      )}
-    </div>
-  )
-}
-/** Left pane: editable title + copy, saved into posts_patches via the API. */
-function CopyPane({
-  slug,
-  post,
-  postName,
-  pillarColor,
-  onSaved,
-  approving,
-  onSetStatus,
-  onDelete,
-}: {
-  slug: string
-  post: Post
-  postName: string
-  pillarColor?: string
-  onSaved: () => void
-  approving: boolean
-  onSetStatus: (decision: ApprovalDecision) => void
-  onDelete: () => void
-}) {
-  const t = useT()
-  // GF-37 — a published post is terminal: the editor is read-only / greyed out.
-  const locked = isPublished(post)
-  const initialHashtags = (post.hashtags ?? []).join(' ')
-  const initialDate = toDateInputValue(post.date)
-  const [title, setTitle] = useState(post.title ?? '')
-  const [copy, setCopy] = useState(post.copy ?? '')
-  const [hashtags, setHashtags] = useState(initialHashtags)
-  const [cta, setCta] = useState(post.cta ?? '')
-  // GF-16 — editable publication date (YYYY-MM-DD for the date input).
-  const [date, setDate] = useState(initialDate)
-  // GF-20 — editable target networks (multi-select, picked above the title).
-  const initialChannels = effectiveChannels(post)
-  const [channels, setChannels] = useState<Channel[]>(initialChannels)
-  const [channelOpen, setChannelOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  // GF-69 — editable post type (Single image / Carousel / Story). `post.format`
-  // is always a non-empty string by the time it reaches the SPA (coalescePost
-  // fills it structurally on the API side), so this just mirrors the server value.
-  const initialFormat = post.format || (isCarousel(post) ? 'carousel' : 'single image')
-  const [format, setFormat] = useState(initialFormat)
-
-  const channelsChanged = channels.join(',') !== initialChannels.join(',')
-  const formatChanged = format !== initialFormat
-  const dirty =
-    title !== (post.title ?? '') ||
-    copy !== (post.copy ?? '') ||
-    hashtags !== initialHashtags ||
-    cta !== (post.cta ?? '') ||
-    date !== initialDate ||
-    channelsChanged ||
-    formatChanged
-
-  const save = async () => {
-    if (locked) {
-      toast(t('calendar.publishedReadOnly'))
-      return
-    }
-    if (!dirty || saving) return
-    const patch: Record<string, unknown> = {}
-    if (title !== post.title) patch.title = title
-    if (copy !== post.copy) patch.copy = copy
-    if (hashtags !== initialHashtags) {
-      // Space- or newline-separated tokens → string[]; drop empties, keep as typed.
-      patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
-    }
-    if (cta !== (post.cta ?? '')) patch.cta = cta
-    if (channelsChanged && channels.length > 0) {
-      // Persist the multi-network list and keep the primary `channel` in sync so
-      // every single-channel reader (list icon, exports, mockups) stays coherent.
-      patch.channels = channels
-      patch.channel = channels[0]
-    }
-    // GF-69 — the picker sets metadata only; it never touches slides/media.
-    if (formatChanged) patch.format = format
-    // GF-16 — only send the date when it actually changed and is non-empty
-    // (the API rejects an empty date with a 422).
-    if (date !== initialDate) {
-      if (!date) {
-        toast.error(t('calendar.dateRequired'))
-        return
-      }
-      patch.date = date
-    }
-    setSaving(true)
-    try {
-      await apiPatchPost(slug, post.id, patch)
-      toast(t('calendar.updated', { id: postName }), { duration: 1600 })
-      onSaved()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('calendar.saveFailed'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const reset = () => {
-    setTitle(post.title ?? '')
-    setCopy(post.copy ?? '')
-    setHashtags(initialHashtags)
-    setCta(post.cta ?? '')
-    setDate(initialDate)
-    setChannels(initialChannels)
-    setChannelOpen(false)
-    setFormat(initialFormat)
-  }
-
-  // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
-  const toggleChannel = (c: Channel) => {
-    setChannels((prev) => {
-      const has = prev.includes(c)
-      if (has && prev.length === 1) return prev // never empty
-      const next = new Set(prev)
-      if (has) next.delete(c)
-      else next.add(c)
-      return CHANNEL_ORDER.filter((x) => next.has(x))
-    })
-  }
-
-  return (
-    <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
-      {locked && (
-        <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-paper-muted px-3 py-2 text-[11px] text-ink-muted">
-          <Send className="h-3.5 w-3.5 shrink-0" />
-          <span>{t('calendar.publishedReadOnly')}</span>
-        </div>
-      )}
-      {/* GF-37 — disabled fieldset makes every nested control read-only when the
-          post is published; `contents` keeps the existing layout intact. */}
-      <fieldset disabled={locked} className="contents">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="text-[10px]">{postName}</Badge>
-        <StatusBadges post={post} />
-        <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
-
-        {/* GF-20 — target-network selector, top-right above the title. Multi-select:
-            a post can target several networks at once (each gets its own preview). */}
-        <div className="ml-auto">
-          {isApiEnabled ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setChannelOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                aria-haspopup="listbox"
-                aria-expanded={channelOpen}
-                aria-label={t('context.selectNetwork')}
-              >
-                {channels.map((c) => (
-                  <ChannelIcon key={c} channel={c} className="h-4 w-4" />
-                ))}
-                {channels.length === 1 && (
-                  <span className="font-medium">{CHANNEL_LABEL[channels[0]]}</span>
-                )}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </button>
-              {channelOpen && (
-                <>
-                  {/* click-away backdrop */}
-                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
-                  <ul
-                    role="listbox"
-                    aria-multiselectable="true"
-                    className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
-                  >
-                    {CHANNEL_ORDER.map((c) => {
-                      const on = channels.includes(c)
-                      return (
-                        <li key={c}>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={on}
-                            onClick={() => toggleChannel(c)}
-                            className={cn(
-                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
-                              on && 'font-medium',
-                            )}
-                          >
-                            <ChannelIcon channel={c} className="h-4 w-4" />
-                            <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
-                            {on && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </>
-              )}
-            </div>
-          ) : (
-            <span className="flex items-center gap-1">
-              {effectiveChannels(post).map((c) => (
-                <ChannelIcon key={c} channel={c} className="h-4 w-4" />
-              ))}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        {isApiEnabled ? (
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t('calendar.postTitle')}
-            className="w-full text-2xl font-bold text-ink leading-tight bg-transparent border-b border-transparent hover:border-border-subtle focus:border-brand-blue focus:outline-none transition-colors"
-          />
-        ) : (
-          <h2 className="text-2xl font-bold text-ink leading-tight">{post.title}</h2>
-        )}
-      </div>
-
-      {/* GF-16 — editable publication date. */}
-      {isApiEnabled && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.publishDate')}
-          </p>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          />
-        </div>
-      )}
-
-      {/* GF-69 — editable post type. Metadata only: never creates/deletes/
-          reorders slides or media, even when Carousel is picked on a post
-          with fewer than 2 slides — the preview keeps rendering whatever the
-          post actually has. `format` stays free-form on the wire (GF-69
-          TASK-001), so a legacy/non-canonical value (e.g. "reel") is shown as
-          its own extra option instead of leaving the select with nothing
-          selected — the user can still switch it to a canonical value. */}
-      {isApiEnabled ? (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.postTypeLabel')}
-          </p>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          >
-            {!isCanonicalFormat(format) && format && (
-              <option value={format}>{format}</option>
-            )}
-            {POST_FORMATS.map((f) => (
-              <option key={f} value={f}>
-                {t(POST_FORMAT_LABEL_KEY[f])}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.postTypeLabel')}
-          </p>
-          <span className="text-sm text-ink-muted">
-            {(() => {
-              const key = postFormatLabelKey(initialFormat)
-              // A legacy/non-canonical format (e.g. "reel") has no i18n key —
-              // show the raw stored value rather than mislabeling it.
-              return key ? t(key) : initialFormat
-            })()}
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <Pillar name={post.pillar} color={pillarColor} />
-        {post.campaign && (
-          <Badge variant="outline" className="font-normal">
-            <Tag className="h-3 w-3 mr-1" />
-            {post.campaign}
-          </Badge>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.copyLabel')}</p>
-        {isApiEnabled ? (
-          <textarea
-            value={copy}
-            onChange={(e) => setCopy(e.target.value)}
-            rows={10}
-            placeholder={t('calendar.writeCopy')}
-            className="w-full text-sm leading-relaxed bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        ) : (
-          <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>
-        )}
-      </div>
-
-      {isApiEnabled ? (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.hashtags')}</p>
-          <textarea
-            value={hashtags}
-            onChange={(e) => setHashtags(e.target.value)}
-            rows={2}
-            placeholder="#hashtag1 #hashtag2 …"
-            className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        </div>
-      ) : (
-        post.hashtags.length > 0 && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.hashtags')}</p>
-            <p className="text-xs text-brand-blue font-medium">{post.hashtags.join(' ')}</p>
-          </div>
-        )
-      )}
-
-      {isApiEnabled ? (
-        <div className="pt-2 border-t border-border-subtle">
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">{t('calendar.cta')}</p>
-          <input
-            value={cta}
-            onChange={(e) => setCta(e.target.value)}
-            placeholder="Call to action…"
-            className="w-full text-sm font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          />
-        </div>
-      ) : (
-        post.cta && (
-          <div className="pt-2 border-t border-border-subtle">
-            <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">{t('calendar.cta')}</p>
-            <p className="text-sm font-medium">{post.cta}</p>
-          </div>
-        )
-      )}
-
-      {post.approval.blockerReason && (
-        <p className="text-xs text-rose-700 bg-rose-50 px-3 py-2 rounded-md">
-          {t('calendar.blocked', { reason: post.approval.blockerReason })}
-        </p>
-      )}
-
-      {isApiEnabled && dirty && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-            {t('common.saveChanges')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
-            {t('common.discard')}
-          </Button>
-        </div>
-      )}
-      {isApiEnabled && (
-        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
-            {t('calendar.statusLabel')}
-          </span>
-          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} />
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={approving}
-            onClick={onDelete}
-            className="ml-auto text-ink-muted hover:text-rose-700"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-            {t('calendar.deletePost')}
-          </Button>
-        </div>
-      )}
-      </fieldset>
-    </div>
-  )
-}
 
 /**
  * Right pane picture. Single-image posts render exactly as before (full image,
