@@ -38,8 +38,14 @@ import { useT } from '@/lib/i18n'
 import { fmtDate } from '@/lib/format'
 import { apiPatchPost, isApiEnabled, type ApprovalDecision } from '@/lib/api-client'
 import { isPublished } from '@/lib/post-status'
+import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey, isCanonicalFormat } from '@/lib/post-format'
 import { toast } from 'sonner'
 import type { Post, Channel } from '@/types'
+
+/** A post is a carousel when it carries more than one slide. */
+function isCarousel(post: Post): boolean {
+  return Array.isArray(post.slides) && post.slides.length > 1
+}
 
 export type CardVariant = 'a' | 'b' | 'c'
 
@@ -91,16 +97,21 @@ function useCopyPaneState({ slug, post, postName, onSaved }: CopyPaneProps) {
   const initialChannels = effectiveChannels(post)
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [channelOpen, setChannelOpen] = useState(false)
+  // GF-69 — editable post type (Single image / Carousel / Story).
+  const initialFormat = post.format || (isCarousel(post) ? 'carousel' : 'single image')
+  const [format, setFormat] = useState(initialFormat)
   const [saving, setSaving] = useState(false)
 
   const channelsChanged = channels.join(',') !== initialChannels.join(',')
+  const formatChanged = format !== initialFormat
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
     cta !== (post.cta ?? '') ||
     date !== initialDate ||
-    channelsChanged
+    channelsChanged ||
+    formatChanged
 
   const save = async () => {
     if (locked) {
@@ -115,6 +126,7 @@ function useCopyPaneState({ slug, post, postName, onSaved }: CopyPaneProps) {
       patch.hashtags = hashtags.split(/\s+/).map((x) => x.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
+    if (formatChanged) patch.format = format
     if (channelsChanged && channels.length > 0) {
       patch.channels = channels
       patch.channel = channels[0]
@@ -145,6 +157,7 @@ function useCopyPaneState({ slug, post, postName, onSaved }: CopyPaneProps) {
     setHashtags(initialHashtags)
     setCta(post.cta ?? '')
     setDate(initialDate)
+    setFormat(initialFormat)
     setChannels(initialChannels)
     setChannelOpen(false)
   }
@@ -166,6 +179,7 @@ function useCopyPaneState({ slug, post, postName, onSaved }: CopyPaneProps) {
     t, locked, saving, dirty, save, reset,
     title, setTitle, copy, setCopy, hashtags, setHashtags, cta, setCta,
     date, setDate, channels, channelOpen, setChannelOpen, toggleChannel, tags,
+    format, setFormat, initialFormat,
   }
 }
 
@@ -240,6 +254,83 @@ function HashtagChips({ tags, max = 8 }: { tags: string[]; max?: number }) {
         </button>
       )}
     </div>
+  )
+}
+
+/**
+ * GF-69 — editable post type (Single image / Carousel / Story). Metadata only:
+ * it never creates, deletes or reorders slides or media. `format` stays
+ * free-form on the wire, so a legacy value (e.g. "reel") is offered as its own
+ * extra option rather than leaving the select with nothing selected.
+ */
+function PostTypeField({ s, compact = false }: { s: PaneState; compact?: boolean }) {
+  const { t, format, setFormat, initialFormat } = s
+  if (!isApiEnabled) {
+    // A non-canonical format has no i18n key — show the raw stored value
+    // rather than mislabeling it.
+    const key = postFormatLabelKey(initialFormat)
+    const label = key ? t(key) : initialFormat
+    return compact ? (
+      <Badge variant="outline" className="font-normal">{label}</Badge>
+    ) : (
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+          {t('calendar.postTypeLabel')}
+        </p>
+        <span className="text-sm text-ink-muted">{label}</span>
+      </div>
+    )
+  }
+  const select = (
+    <select
+      value={format}
+      onChange={(e) => setFormat(e.target.value)}
+      aria-label={t('calendar.postTypeLabel')}
+      className={cn(
+        'bg-paper border border-border-subtle rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/30',
+        compact ? 'text-[11px] px-2 py-1' : 'text-sm px-3 py-2',
+      )}
+    >
+      {!isCanonicalFormat(format) && format && <option value={format}>{format}</option>}
+      {POST_FORMATS.map((f) => (
+        <option key={f} value={f}>
+          {t(POST_FORMAT_LABEL_KEY[f])}
+        </option>
+      ))}
+    </select>
+  )
+  if (compact) return select
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+        {t('calendar.postTypeLabel')}
+      </p>
+      {select}
+    </div>
+  )
+}
+
+/**
+ * GF-16 — the publication date, edited in place where the date is already
+ * displayed. Showing it twice (once as text, once as a form field lower down)
+ * was pure duplication.
+ */
+function DateField({ s }: { s: PaneState }) {
+  const { t, date, setDate, locked } = s
+  if (!isApiEnabled || locked) {
+    return <span className="text-[11px] font-semibold text-ink">{fmtDate(date)}</span>
+  }
+  return (
+    <label className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-muted cursor-pointer">
+      <CalendarDays className="h-3.5 w-3.5 text-ink-muted" />
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        aria-label={t('calendar.publishDate')}
+        className="bg-transparent text-[11px] font-semibold text-ink focus:outline-none"
+      />
+    </label>
   )
 }
 
@@ -376,7 +467,7 @@ function BlockerNote({ s, post }: { s: PaneState; post: Post }) {
 
 function VariantA(props: CopyPaneProps & { s: PaneState }) {
   const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
-  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, date, setDate, tags } = s
+  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
 
   return (
     <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
@@ -385,20 +476,9 @@ function VariantA(props: CopyPaneProps & { s: PaneState }) {
         {/* One strip: identity, schedule, taxonomy, status. */}
         <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
           <Badge variant="outline" className="text-[10px] font-bold">{postName}</Badge>
-          {isApiEnabled ? (
-            <label className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-paper-muted cursor-pointer">
-              <CalendarDays className="h-3.5 w-3.5" />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent text-[11px] font-semibold text-ink focus:outline-none"
-              />
-            </label>
-          ) : (
-            <span className="font-semibold text-ink">{fmtDate(post.date)}</span>
-          )}
+          <DateField s={s} />
           <span className="opacity-40">·</span>
+          <PostTypeField s={s} compact />
           <Pillar name={post.pillar} color={pillarColor} />
           {post.campaign && (
             <Badge variant="outline" className="font-normal">
@@ -467,7 +547,7 @@ function VariantA(props: CopyPaneProps & { s: PaneState }) {
 
 function VariantB(props: CopyPaneProps & { s: PaneState }) {
   const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
-  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, date, setDate, tags } = s
+  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
 
   return (
     <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
@@ -475,7 +555,9 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
       <fieldset disabled={locked} className="contents">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="text-[10px] font-bold">{postName}</Badge>
-          <span className="text-[11px] font-semibold text-ink">{fmtDate(post.date)}</span>
+          {/* GF-107 — the date is editable right here, where it is already
+              shown; the duplicate date field in the bottom bar is gone. */}
+          <DateField s={s} />
           <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
           <div className="ml-auto">
             <ChannelPicker s={s} post={post} />
@@ -485,6 +567,7 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
         <TitleField value={title} onChange={setTitle} className="text-xl" />
 
         <div className="flex items-center gap-2 flex-wrap">
+          <PostTypeField s={s} compact />
           <Pillar name={post.pillar} color={pillarColor} />
           {post.campaign && (
             <Badge variant="outline" className="font-normal">
@@ -551,17 +634,6 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
         {/* Bottom bar: the coloured status stays exactly where it already was. */}
         <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-border-subtle">
           <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} tinted />
-          {isApiEnabled && (
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
-              <CalendarDays className="h-3.5 w-3.5" />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-paper border border-border-subtle rounded-md px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-              />
-            </label>
-          )}
           <ActionBar s={s} approving={approving} onDelete={onDelete} className="ml-auto" />
         </div>
       </fieldset>
@@ -575,7 +647,7 @@ function VariantB(props: CopyPaneProps & { s: PaneState }) {
 
 function VariantC(props: CopyPaneProps & { s: PaneState }) {
   const { s, post, postName, pillarColor, approving, onSetStatus, onDelete } = props
-  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, date, setDate, tags } = s
+  const { t, locked, copy, setCopy, title, setTitle, cta, setCta, hashtags, setHashtags, tags } = s
   const [tagsOpen, setTagsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -588,7 +660,7 @@ function VariantC(props: CopyPaneProps & { s: PaneState }) {
           <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-muted">
             {postName}
             <span className="opacity-40">·</span>
-            {fmtDate(post.date)}
+            <DateField s={s} />
             <ChannelPicker s={s} post={post} />
           </span>
         </div>
@@ -662,20 +734,13 @@ function VariantC(props: CopyPaneProps & { s: PaneState }) {
           </button>
           {detailsOpen && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <PostTypeField s={s} compact />
               <Pillar name={post.pillar} color={pillarColor} />
               {post.campaign && (
                 <Badge variant="outline" className="font-normal">
                   <Tag className="h-3 w-3 mr-1" />
                   {post.campaign}
                 </Badge>
-              )}
-              {isApiEnabled && (
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="bg-paper border border-border-subtle rounded-md px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                />
               )}
               <Badge variant="outline" className="text-[10px]">v{post.approval.version}</Badge>
             </div>
