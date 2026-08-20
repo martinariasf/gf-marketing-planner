@@ -21,7 +21,7 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2026-08-19',
+    date: '2026-08-20',
     title: 'New: share the plan for sign-off, without the artwork',
     items: [
       'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
