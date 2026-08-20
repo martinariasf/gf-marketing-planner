@@ -1042,10 +1042,26 @@ export interface ReviewFeedbackComment {
   status?: 'open' | 'resolved'
   source: 'reviewer' | 'dashboard'
   createdAt?: string
+  /**
+   * GF-106 — which kind of review link this feedback came from, so the
+   * dashboard can split "what the client said about the posts" from "what they
+   * said about the strategy". OPTIONAL on purpose: an API that predates GF-106
+   * omits it entirely, and absent must be read as 'content' so the panel keeps
+   * rendering every row instead of blanking.
+   */
+  view?: ReviewLinkView
+}
+
+export interface ReviewFeedbackDecision {
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+  /** GF-106 — see ReviewFeedbackComment.view. Absent means 'content'. */
+  view?: ReviewLinkView
 }
 
 export interface ReviewPostFeedback {
-  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  decisions: ReviewFeedbackDecision[]
   comments: ReviewFeedbackComment[]
 }
 
