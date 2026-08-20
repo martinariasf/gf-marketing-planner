@@ -21,8 +21,7 @@ Telegram/WhatsApp.
 ## Layout
 
 ```
-app-v2/          The live dashboard (Vite + React). This is what CI builds and deploys.
-app/             Archived v1 HTML/JS framework. Not deployed, kept for reference.
+app-v2/          The dashboard (Vite + React). This is what CI builds and deploys.
 agent-skills/    Viktor's skills — core/ (shared) and clients/<slug>/ (per-client overrides).
 clients/         Per-client data files, rsynced to the box by CI.
 deploy/          Dashboard Caddy config + onboarding notes.
@@ -38,3 +37,6 @@ plans/           Active technical plans; plans/archive/ holds shipped ones.
 Branch off `experimental`, one branch per task (`claude/gf-<N>-<slug>`), work in a
 git worktree, then merge to `experimental` — never commit directly to it.
 Production ships by promoting `experimental` → `main`.
+
+The v1 HTML/JS framework that preceded `app-v2` was removed on 2026-08-20; it is
+recoverable from git history at the `chore: archive v1 framework into app/` commit.
