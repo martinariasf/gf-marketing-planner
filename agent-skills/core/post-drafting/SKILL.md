@@ -185,6 +185,43 @@ When the user describes an existing calendar item loosely, search broadly before
 
 If there is still no exact match, return the closest candidates and ask for the post ID or exact text. Do not guess the target file.
 
+## Scheduling to Postiz (traps)
+
+- **RESCHEDULING an already-queued post: there is NO reschedule verb.** The
+  `postiz` CLI can only create / list / delete / status. To move a QUEUED post to
+  a new time you MUST: (1) `postiz posts:delete <postizJobId>` for each queued
+  entry (get the job IDs from `postiz_list_posts`, `state: QUEUE`), (2) PATCH the
+  dashboard post's `date`, then (3) re-run `postiz_schedule_post` with the new
+  `scheduled_for`. Skipping the delete leaves the OLD queued copy live and **the
+  post publishes twice**. Always delete-then-recreate; never schedule on top.
+- **Batch-schedule false positive.** Scheduling 3–4 posts in one turn trips a
+  `same_tool_failure_warning` loop warning even though every call returned
+  `ok: true`. Ignore it when the results show `ok: true` — re-sending duplicates
+  the queue.
+- **`scheduled_for` is UTC.** Convert every local time the user gives you before
+  passing it, and state the local time back to them so they can confirm. The
+  client's audience timezone and preferred slots are client-specific — read
+  `skills/client/post-drafting-refs/` for them; never assume the server's zone.
+
+## Reviewing videos produced outside video_generate
+
+When asked to review a video someone else made (found in the assets manifest or
+folder):
+
+1. `ffprobe` it for duration, resolution, and codecs. Our own generation cap does
+   not apply — externally-produced longer pieces are legitimate for boosted or
+   commercial placements. Judge them on their goal, not on our cap.
+2. Extract frames with `ffmpeg` at several timestamps (e.g. 2s, 10s, 20s, 30s,
+   last second) and inspect them with vision.
+3. Send the video to the chat as MEDIA so the user sees it inline, then give the
+   analysis.
+4. Checklist: on-screen text quality and language mix; brand correctness (**the
+   logo MUST be the official asset — a generated or invented monogram is a hard
+   fail, and critical in paid impressions**); hook strength in the first 3s; CTA
+   quality ("link in bio" is weak for paid — platform buttons carry the ad CTA);
+   length fit for the placement (45s is long for cold paid, suggest a 15–20s
+   cut); and whether the concept supports the client's commercial strategy.
+
 ## Support files
 
 - `references/ambiguous-calendar-edits.md` — lookup checklist for vague post/calendar references.

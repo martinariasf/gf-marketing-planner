@@ -18,10 +18,10 @@ if [ "$PULL" = 1 ]; then
   rsync -az "$HOST:$BOX_SKILLS/core/" "$TMP/core/"
   rsync -az "$HOST:$BOX_SKILLS/client/" "$TMP/client/" 2>/dev/null || true
   echo "== diff repo core/ vs box core/ =="
-  diff -ru "$REPO_DIR/core" "$TMP/core" || true
+  diff -ru --strip-trailing-cr "$REPO_DIR/core" "$TMP/core" || true
   if [ -d "$TMP/client" ]; then
     echo "== diff repo clients/$SLUG/ vs box client/ =="
-    diff -ru "$REPO_DIR/clients/$SLUG" "$TMP/client" || true
+    diff -ru --strip-trailing-cr "$REPO_DIR/clients/$SLUG" "$TMP/client" || true
   fi
   echo "pulled copy left at: $TMP"
   exit 0

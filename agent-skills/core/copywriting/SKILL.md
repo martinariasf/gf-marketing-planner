@@ -157,10 +157,27 @@ One sentence, literal, concrete. Mood words on their own ("modern", "clean",
 On a carousel each slide caption must differ; "slide 3" or a repeat of the cover
 caption is not a caption.
 
+### Corpus-level AI tell: the same skeleton across posts
+
+The rules above all work WITHIN one text. The other half of the problem is
+ACROSS texts. If every post in a batch shares the same structure — hook title,
+anecdote, twist, tidy lesson, same length — readers detect the pattern and
+conclude "AI" even when each post is individually clean.
+
+This is not hypothetical: in August 2026 a batch of four well-written personal
+LinkedIn posts had to be scrapped for exactly this reason. Nothing was wrong with
+any single post.
+
+So when you draft a BATCH, check skeleton variety across it: rotate formats, vary
+length, and do not let every post close the same way. This matters most on
+personal-profile LinkedIn, where the reader sees the posts consecutively.
+
 ## STEP 2 — Write the change back via the API (not the JSON file)
 
 - New post:   `POST  /clients/$CLIENT_SLUG/posts`  (date + title required)
 - Edit copy:  `PATCH /clients/$CLIENT_SLUG/posts/:id  {"copy": "...", "title": "..."}`
+- Delete:     `DELETE /clients/$CLIENT_SLUG/posts/:id`  (verified; use for a full
+  reset of wrong-direction drafts, then re-list to confirm)
 - Captions:   `PATCH ... {"slides": [{"image": "...", "caption": "..."}, ...]}`
   for a carousel, or `{"media": [{"type": "image", "url": "...", "caption": "..."}]}`
   otherwise. `slides` and `media` PATCH as whole arrays — send every entry, not
