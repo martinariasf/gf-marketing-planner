@@ -651,6 +651,58 @@ function StrategyRow({
 
 type MonthBucket = { key: string; list: PublicReviewPost[] }
 
+/**
+ * The plan résumé: one calendar grid + volume summary per shared month.
+ *
+ * In deck mode this sits at the TOP — above the first card and above the
+ * end-of-deck recap — so the reviewer sees how the month is laid out before
+ * judging any single post, instead of discovering it only after the last card.
+ * It is collapsible because the grids are tall on a phone; `open` is owned by
+ * the deck, so collapsing it once holds for every card AND for the summary
+ * screen rather than springing back open on each render.
+ *
+ * List mode keeps its own overview at the end — there the whole plan is already
+ * on screen above it, so the grids read as a closing summary, not as context.
+ */
+function StrategyPlanOverview({
+  t,
+  months,
+  colors,
+  open,
+  onToggle,
+}: {
+  t: T
+  months: MonthBucket[]
+  colors: Record<string, string>
+  open: boolean
+  onToggle: () => void
+}) {
+  if (months.length === 0) return null
+  return (
+    <section className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-semibold">{t('review.strategy.overviewTitle')}</h2>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-brand-blue hover:underline"
+        >
+          <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+          {t(open ? 'review.strategy.overviewHide' : 'review.strategy.overviewShow')}
+        </button>
+      </div>
+      {open && (
+        <div className="space-y-3">
+          {months.map((m) => (
+            <StrategyMonthGrid key={m.key} monthKey={m.key} posts={m.list} pillarColorMap={colors} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function StrategyDeckView({
   t,
   publicId,
@@ -685,6 +737,10 @@ function StrategyDeckView({
   const [exitDir, setExitDir] = useState(0)
   const [busy, setBusy] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // Owned here, not by StrategyPlanOverview, so the reviewer's choice survives
+  // every card change and carries into the end-of-deck summary screen.
+  const [overviewOpen, setOverviewOpen] = useState(true)
+  const toggleOverview = useCallback(() => setOverviewOpen((v) => !v), [])
 
   const post = posts[index]
   const done = index >= posts.length
@@ -769,12 +825,23 @@ function StrategyDeckView({
           setIndex(i)
         }}
         onSwitchToList={onSwitchToList}
+        overviewOpen={overviewOpen}
+        onToggleOverview={toggleOverview}
       />
     )
   }
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6">
+      {/* Plan résumé first: the month at a glance, before any single card. */}
+      <StrategyPlanOverview
+        t={t}
+        months={months}
+        colors={colors}
+        open={overviewOpen}
+        onToggle={toggleOverview}
+      />
+
       {/* Progress */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-ink-muted">
@@ -973,6 +1040,8 @@ function StrategySummaryScreen({
   onRefreshed,
   onRevisit,
   onSwitchToList,
+  overviewOpen,
+  onToggleOverview,
 }: {
   t: T
   publicId: string
@@ -986,6 +1055,8 @@ function StrategySummaryScreen({
   onRefreshed: (p: PublicReviewPayload) => void
   onRevisit: (index: number) => void
   onSwitchToList: () => void
+  overviewOpen: boolean
+  onToggleOverview: () => void
 }) {
   const counts = useMemo(() => {
     let approved = 0
@@ -1023,6 +1094,16 @@ function StrategySummaryScreen({
         <p className="text-xs text-ink-muted">{t('review.ext.summaryRevisit')}</p>
       </motion.div>
 
+      {/* Plan résumé, above the per-post recap: the reviewer reads how the plan
+          is spread across each month first, then the post-by-post outcome. */}
+      <StrategyPlanOverview
+        t={t}
+        months={months}
+        colors={colors}
+        open={overviewOpen}
+        onToggle={onToggleOverview}
+      />
+
       {/* Recap — text only, no cover thumbnails: this page never shows images. */}
       <div className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border-subtle bg-paper">
         {posts.map((p, i) => {
@@ -1048,14 +1129,6 @@ function StrategySummaryScreen({
           )
         })}
       </div>
-
-      {/* Plan overview — the same month grids the list mode ends with. */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">{t('review.strategy.overviewTitle')}</h2>
-        {months.map((m) => (
-          <StrategyMonthGrid key={m.key} monthKey={m.key} posts={m.list} pillarColorMap={colors} />
-        ))}
-      </section>
 
       <OverallVerdict
         t={t}
