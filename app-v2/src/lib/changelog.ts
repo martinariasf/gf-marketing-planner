@@ -21,6 +21,18 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-20',
+    title: 'Strategy links now review like the content link, and feedback is split by kind',
+    items: [
+      'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
+      'The Strategy link opens as a card deck by default — one post at a time, swipe right to approve and left to request changes — the same way the content review link works. The old list is still there behind the toggle in the header.',
+      'Requesting changes now asks for a reason: the send button stays disabled until your client writes one, so a change request never arrives without an explanation. Approving is still one click. This applies to content links too.',
+      'The post copy is now clearly labelled as the copy, and opening it continues the few lines already on screen instead of restarting the text from the beginning.',
+      'In the calendar, the "External feedback" box under a post now separates what the client said about the posts from what they said about the strategy, so you can tell which one they were reacting to.',
+      'Existing share links and all previous feedback are unchanged and keep working.',
+    ],
+  },
+  {
     date: '2026-08-19',
     title: 'New: share the plan for sign-off, without the artwork',
     items: [
