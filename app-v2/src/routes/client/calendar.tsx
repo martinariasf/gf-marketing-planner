@@ -351,7 +351,7 @@ export default function CalendarView() {
       setCalendarRange(next)
       setRangeOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save calendar range')
+      toast.error(err instanceof Error ? err.message : t('calendar.saveRangeFailed'))
     } finally {
       setSavingRange(false)
     }
@@ -596,7 +596,7 @@ export default function CalendarView() {
           {t('calendar.eyebrow')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue tracking-tight">
-          {plan.quarter.theme || 'Content calendar'}
+          {plan.quarter.theme || t('calendar.eyebrow')}
         </h1>
       </div>
 
@@ -716,7 +716,7 @@ export default function CalendarView() {
               )}
               <span className="relative flex items-center gap-2">
                 {m.name}
-                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">Today</span>}
+                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">{t('common.today')}</span>}
                 <span
                   className={cn(
                     'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-[10px] font-bold',
@@ -742,7 +742,7 @@ export default function CalendarView() {
                 <div className="flex items-center justify-between border-b border-border-subtle pb-2">
                   <h3 className="text-sm font-semibold text-brand-blue">
                     {m.name}
-                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
+                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">{t('calendar.currentMonth')}</span>}
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-ink-muted">
@@ -1231,13 +1231,13 @@ export default function CalendarView() {
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
-          <DialogTitle>Calendar range</DialogTitle>
+          <DialogTitle>{t('calendar.rangeTitle')}</DialogTitle>
           <DialogDescription>
-            Select a start and end month. The planning window can span up to 6 months.
+            {t('calendar.rangeDesc')}
           </DialogDescription>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">Start month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.startMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.startMonth}
@@ -1246,7 +1246,7 @@ export default function CalendarView() {
               />
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">End month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.endMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.endMonth}
@@ -1257,7 +1257,7 @@ export default function CalendarView() {
           </div>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setRangeOpen(false)} disabled={savingRange}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={saveRange} disabled={savingRange}>
               {savingRange && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
@@ -2200,7 +2200,7 @@ function PicturePane({
           />
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 text-white text-[10px] font-medium px-2 py-0.5">
             <Film className="h-3 w-3" />
-            Video
+            {t('common.video')}
           </span>
           <span className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <Maximize2 className="h-3.5 w-3.5" />
