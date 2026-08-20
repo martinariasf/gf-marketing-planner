@@ -53,6 +53,10 @@ DEFAULT_VIDEO_MAX_POLLS = 60
 # Channel-aware output sizes. Instagram feed images must be VERTICAL 4:5
 # (1080x1350) per GF-33; LinkedIn stays horizontal. `portrait_4_5` is the
 # explicit Instagram size; plain `portrait` remains the generic tall ratio.
+# GF-69 — an Instagram STORY is full-screen 9:16 (1080x1920), a different
+# shape from the 4:5 feed image. `story` is the canonical key; `portrait_9_16`
+# and `9:16` are accepted aliases (an explicit story request always wins over
+# the channel default — see _resolve_image_aspect below).
 _ASPECT_TO_SIZE = {
     "landscape": "1536x1024",
     "square": "1024x1024",
@@ -60,7 +64,16 @@ _ASPECT_TO_SIZE = {
     "portrait_4_5": "1080x1350",  # Instagram feed (4:5)
     "4:5": "1080x1350",
     "instagram": "1080x1350",
+    "story": "1080x1920",  # Instagram story (9:16, full screen)
+    "portrait_9_16": "1080x1920",
+    "9:16": "1080x1920",
 }
+
+# GF-69 — aliases that mean "this is an explicit Instagram STORY request".
+# Checked BEFORE the channel lookup in _resolve_image_aspect so a story
+# request is never silently downgraded to the 4:5 feed shape just because
+# channel="instagram" was also passed.
+_STORY_ASPECT_ALIASES = {"story", "portrait_9_16", "9:16"}
 
 # Map the friendly target-channel name to the aspect the model should render.
 # Instagram → vertical 4:5; LinkedIn/X/Facebook → horizontal. Format follows
@@ -77,16 +90,25 @@ _CHANNEL_TO_ASPECT = {
 
 
 def _resolve_image_aspect(aspect_ratio: Any, channel: Any) -> str:
-    """Pick the render aspect from an explicit channel first, then aspect_ratio.
+    """Pick the render aspect from an explicit STORY request first, then the
+    channel, then any other explicit aspect_ratio.
 
-    The target CHANNEL wins: Instagram is always vertical 4:5 (1080x1350),
-    LinkedIn/X/Facebook horizontal. Only if no channel is given do we honor an
-    explicit aspect_ratio. Falls back to the framework default otherwise.
+    GF-69: an EXPLICIT story aspect (aspect_ratio in {"story", "portrait_9_16",
+    "9:16"}) always wins, even when channel="instagram" is also passed — a
+    story is 9:16 (1080x1920), never the 4:5 feed shape. This is the one case
+    where aspect_ratio is checked BEFORE the channel.
+
+    Otherwise the target CHANNEL wins (GF-33, unchanged): Instagram is vertical
+    4:5 (1080x1350), LinkedIn/X/Facebook horizontal. Only if no channel is
+    given do we honor any other explicit aspect_ratio. Falls back to the
+    framework default otherwise.
     """
+    ar = str(aspect_ratio or "").strip().lower()
+    if ar in _STORY_ASPECT_ALIASES:
+        return "story"
     ch = str(channel or "").strip().lower()
     if ch in _CHANNEL_TO_ASPECT:
         return _CHANNEL_TO_ASPECT[ch]
-    ar = str(aspect_ratio or "").strip().lower()
     if ar in _ASPECT_TO_SIZE:
         return ar
     # Unknown/blank → defer to the framework's resolver for the legacy default.
@@ -1430,11 +1452,30 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     # explicit `channel` arg, fall back to the linked post's channel, then to
     # any explicit aspect_ratio the agent passed.
     channel = (args.get("channel") or "").strip().lower()
-    if not channel and post_id:
-        channel = str(_fetch_post(post_id).get("channel") or "").strip().lower()
-    aspect_ratio = _resolve_image_aspect(
-        args.get("aspect_ratio", DEFAULT_ASPECT_RATIO), channel
-    )
+    # Only used to DECIDE whether to fetch the post / inject an implicit story
+    # (below) — never used in place of the caller's raw aspect_ratio value, so
+    # an explicitly empty aspect_ratio="" still means what it always meant.
+    explicit_aspect = str(args.get("aspect_ratio") or "").strip().lower()
+    # GF-69: if the caller didn't pass an explicit aspect_ratio, but the linked
+    # post's own format is "story", treat that as an implicit story request —
+    # it resolves to 1080x1920 (not the 1080x1350 channel default) with the
+    # agent never having to pass aspect_ratio itself. One shared post fetch
+    # covers both the channel fallback and the format lookup.
+    implicit_story = False
+    if post_id and (not channel or not explicit_aspect):
+        linked_post = _fetch_post(post_id)
+        if not channel:
+            channel = str(linked_post.get("channel") or "").strip().lower()
+        if not explicit_aspect and str(linked_post.get("format") or "").strip().lower() == "story":
+            implicit_story = True
+    if implicit_story:
+        aspect_ratio = _resolve_image_aspect("story", channel)
+    else:
+        # Unchanged from before GF-69: default to DEFAULT_ASPECT_RATIO only
+        # when the `aspect_ratio` KEY IS ABSENT (dict.get's default arg). An
+        # explicit aspect_ratio — including an explicit "" — is passed through
+        # exactly as the caller gave it, same as the original behaviour.
+        aspect_ratio = _resolve_image_aspect(args.get("aspect_ratio", DEFAULT_ASPECT_RATIO), channel)
     # Accept reference_images as a list, or a single string for convenience.
     refs = args.get("reference_images") or args.get("reference_image") or []
     if isinstance(refs, str):

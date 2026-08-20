@@ -18,6 +18,7 @@ const PerformanceView = lazy(() => import('@/routes/client/performance'))
 const LearningsView   = lazy(() => import('@/routes/client/learnings'))
 const SuggestionsView = lazy(() => import('@/routes/client/suggestions'))
 const IntegrationView = lazy(() => import('@/routes/client/integration'))
+const ConfigurationView = lazy(() => import('@/routes/client/configuration'))
 const VideosView      = lazy(() => import('@/routes/client/videos'))
 // GF-4 — external reviewer page. Standalone, code-gated, OUTSIDE client layout.
 const ExternalReview  = lazy(() => import('@/routes/review/external'))
@@ -139,6 +140,7 @@ export default function App() {
               <Route path="learnings"   element={<LearningsView />} />
               <Route path="suggestions" element={<SuggestionsView />} />
               <Route path="integration" element={<IntegrationView />} />
+              <Route path="configuration" element={<ConfigurationView />} />
               <Route path="videos"      element={<VideosView />} />
               <Route path="brand-kit"   element={<Navigate to="../context" replace />} />
               <Route path="references"  element={<Navigate to="../assets" replace />} />

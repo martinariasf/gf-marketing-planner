@@ -21,6 +21,7 @@ import {
   defaultExpiry,
   linkState,
   parseMonthSelection,
+  parseLinkView,
   DEFAULT_TTL_DAYS,
   type ReviewLinkRecord,
 } from '../reviewLib.js'
@@ -35,6 +36,9 @@ const createSchema = z
     // GF-42 — optional subset of months within [rangeStart, rangeEnd] to share.
     // Omit or pass [] to share every month in the range (legacy behavior).
     months: z.array(MONTH_KEY).max(60).optional(),
+    // GF-105 — which kind of review this link is for. The sharer picks it at
+    // creation; it is not a toggle the recipient can flip. Omit for 'content'.
+    view: z.enum(['content', 'strategy']).optional(),
     ttlDays: z.number().int().min(1).max(90).optional(),
   })
   .strict()
@@ -68,6 +72,7 @@ function publicLink(rec: ReviewLinkRecord) {
     rangeStart: rec.rangeStart,
     rangeEnd: rec.rangeEnd,
     months: parseMonthSelection(rec.months),
+    view: parseLinkView(rec.view),
     status: rec.status,
     state: linkState(rec),
     expiresAt: rec.expiresAt ?? null,
@@ -126,6 +131,7 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
       rangeEnd: body.rangeEnd,
       // Persist a clean, de-duplicated selection; [] means "all months".
       months: parseMonthSelection(body.months),
+      view: parseLinkView(body.view),
       codeHash: hashCode(publicId, code),
       status: 'active',
       expiresAt: body.ttlDays
@@ -144,6 +150,7 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
       rangeStart: body.rangeStart,
       rangeEnd: body.rangeEnd,
       months: parseMonthSelection(body.months),
+      view: parseLinkView(body.view),
       ttlDays: body.ttlDays ?? DEFAULT_TTL_DAYS,
     },
   })

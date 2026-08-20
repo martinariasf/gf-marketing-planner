@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { fallbackFor } from './agentJobs.js'
 import { message, friendlyError } from './agentMessages.js'
 
@@ -36,4 +38,13 @@ test('fallbackFor: never leaks the raw English detail to the user', () => {
   const raw = 'TypeError: cannot read properties of undefined (reading "foo")'
   const out = fallbackFor('failed', false, raw, 'es')
   assert.doesNotMatch(out, /TypeError|undefined|properties/)
+})
+
+// GF-100: finalizeAgentJob must never overwrite a non-empty agent reply with
+// the generic fallbackFor() copy. Source-level guard (finalizeAgentJob talks
+// to PocketBase, so it can't be unit-invoked here) — asserts the `||` short-
+// circuit stays in place: fallbackFor only runs when args.output is empty.
+test('finalizeAgentJob only falls back to catalog copy when output is empty', () => {
+  const src = readFileSync(fileURLToPath(new URL('./agentJobs.ts', import.meta.url)), 'utf8')
+  assert.match(src, /args\.output\?\.trim\(\)\s*\|\|\s*\n?\s*fallbackFor\(/)
 })

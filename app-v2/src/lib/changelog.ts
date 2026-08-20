@@ -21,6 +21,64 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-19',
+    title: 'New: share the plan for sign-off, without the artwork',
+    items: [
+      'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
+      'A Strategy link shows the plan as text only — for each post the topic, the post type, the networks it goes to, a description of how the visual will look, and the date. No images and no mockups, so a client can sign off the plan before anything is produced.',
+      'The post copy is still there on every row, tucked behind a "show copy" toggle.',
+      'At the bottom, a calendar grid per month shows how the posts are spread across the days, plus a count of posts by topic, network and post type.',
+      'Your client can comment, approve and request changes exactly as on a content link, and it all lands in the same Activity tab.',
+      'Existing share links are unchanged and keep working as content reviews.',
+    ],
+  },
+  {
+    date: '2026-08-15',
+    title: 'New: Instagram Story as a post type',
+    items: [
+      'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',
+      'A Story post previews as a real vertical, full-screen phone frame with a "Story" badge, instead of the square feed layout.',
+      'When Viktor generates the picture for a Story, he now makes it full-screen vertical (1080x1920) instead of the feed shape.',
+    ],
+  },
+  {
+    date: '2026-08-06',
+    title: 'New: a Configuration page with two per-client dashboard switches',
+    items: [
+      'A new "Configuration" tab lets you turn the "AI generated" label on posts on or off, and turn on auto-programming so an approved post is sent straight to your publishing tool instead of waiting for a separate "Programmed" step.',
+      'If auto-programming a post fails (for example a past date, or no publishing tool connected), the approval still goes through — you just get a heads-up instead of the approval failing outright.',
+    ],
+  },
+  {
+    date: '2026-08-06',
+    title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
+    items: [
+      'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
+      'A Programmed post now shows whether it was actually scheduled with the provider (with the date and provider name), and flags it clearly when the schedule could not be confirmed or failed.',
+    ],
+  },
+  {
+    date: '2026-08-06',
+    title: 'Fixed garbled dashes and ellipses in the calendar export and placeholders',
+    items: [
+      'The export date-range label and the hashtag/CTA placeholder text in the calendar could show a garbled character sequence (mojibake) instead of a dash or ellipsis — those now render correctly.',
+    ],
+  },
+  {
+    date: '2026-08-06',
+    title: 'Attach images and documents in chat',
+    items: [
+      'You can now attach images and text documents when chatting with Viktor — drag and drop them onto the chat composer or use the new paperclip button. Attached images can be used directly as a reference for image generation; attached documents (notes, transcripts, CSV, etc.) are read and used as context for the reply.',
+    ],
+  },
+  {
+    date: '2026-08-06',
+    title: "You'll now be told when a limit is hit, instead of silence",
+    items: [
+      "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
+    ],
+  },
+  {
     date: '2026-07-08',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

@@ -36,7 +36,7 @@ import {
   Sparkles,
   HardDrive,
 } from 'lucide-react'
-import { toast, Toaster } from 'sonner'
+import { toast } from 'sonner'
 import {
   apiLoadIntegration,
   apiSavePostizKey,
@@ -84,8 +84,6 @@ export default function IntegrationView() {
 
   return (
     <div className="space-y-6">
-      <Toaster position="bottom-right" />
-
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
           {t('integration.eyebrow')}

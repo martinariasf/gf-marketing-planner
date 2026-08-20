@@ -240,18 +240,42 @@ unverified.
   `patches/_gf_messages.py`.
 - **6** Wire both into `deploy-prod/gf-innov-agent/Dockerfile` inside the
   existing `USER root` block, after `patch_api_server.py`, before `USER 10000`.
-  The staging stack's Dockerfile lives only on the box (deliberate drift) —
-  apply the same lines there in place, never scp over it.
-  **DEPLOY-TIME REMINDER (Layer-5 review, round 1, 2026-08-06):** this
+  **UPDATE (2026-08-10, GF-100 staging-base follow-up):** the round-1 worry
+  below — that the staging box needs a hand-edited Dockerfile variant,
+  applied out-of-band and invisible in this branch's diff — turned out to be
+  avoidable. `patch_truncation_reply.py` now detects which of the two known
+  `hermes-agent` base shapes it's running against and patches accordingly, so
+  the **same** `COPY`/`RUN` lines added to `deploy-prod/gf-innov-agent/
+  Dockerfile` in this commit can be applied to the staging box's Dockerfile
+  unmodified — no hand-edited variant, no box drift. `patch_localized_errors.py`
+  already worked on both bases unmodified; now both of GF-100's patch scripts
+  do.
+
+  Base images and shapes, verified 2026-08-10 by extracting
+  `agent/conversation_loop.py` directly from both images on the box
+  (`docker run --rm --entrypoint python3 <image> -c "print(open('/opt/hermes/agent/conversation_loop.py').read())"`):
+
+  | Base image | Digest | Shape | Sites |
+  |---|---|---|---|
+  | `hermes-agent:base` (prod) | `sha256:7912de37a2ad4bca0a10cec0d61060b4a3287ac010ffe1992004cad9c5dac538` | none-form — all 4 truncation returns use `"final_response": None` | 4 sites, each paired with a literal `"error"` string |
+  | `hermes-agent:base-v2026.7.1` (staging) | `sha256:b43257d3de7a8a363431a7fa1ab8d5e5b7b7b910218d65e581f693413ca8f73d` | literal-form — `"final_response": None` occurs 0 times; upstream already partially fixed this by putting the raw English literal directly into `final_response` | 4 sites: 1 ternary (only the truncated branch is a target; the stall-message branch is a different string and stays untouched) + 3 paired `final_response`/`error` literal sites (only `final_response` is localized; all 3 sibling `error` literals are internal diagnostics and stay untouched) |
+
+  `patch_truncation_reply.py` tries the none-form anchor first (exactly 4
+  matches expected); if that doesn't match, it tries the literal-form anchors
+  (exactly 1 ternary + 3 paired matches expected); if neither shape matches
+  its expected count, it hard-fails with `sys.exit(1)` rather than silently
+  no-op'ing or patching the wrong number of sites. Both shapes are covered by
+  `patches/test_patch_truncation_reply.py`, including against the real
+  extracted sources from both images.
+
+  Original round-1 concern (now resolved, kept for history): "this
   staging-box hand-edit is NOT visible in this branch's diff — the prod
-  Dockerfile change (`deploy-prod/gf-innov-agent/Dockerfile`) ships in this
-  commit, but the equivalent lines on the staging box's
-  `/opt/agents/staging-demo/Dockerfile` (or wherever the staging stack's
-  Dockerfile actually lives — confirm path on box) must be hand-added
-  separately when this deploys, mirroring the same `COPY`/`RUN` block added
-  here. If that hand-edit is skipped, staging silently keeps failing
-  silently while prod is fixed. Whoever runs the deploy: apply it, then
-  record the box path + date here.
+  Dockerfile change ships in this commit, but the equivalent lines on the
+  staging box's Dockerfile must be hand-added separately when this deploys...
+  if that hand-edit is skipped, staging silently keeps failing while prod is
+  fixed." That workaround is no longer needed: apply the identical
+  `COPY`/`RUN` block to the staging box's Dockerfile, same as prod — no
+  divergent script, no divergent Dockerfile content, no drift to hand-track.
 - **7** Verify both paths on staging: temporarily set `max_tokens: 64`, force a
   tool call from Telegram **and** from the dashboard chat; evaluate the patched
   fns in-container against a synthetic `403 Key limit exceeded`. Leak-check the

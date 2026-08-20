@@ -22,8 +22,9 @@ import {
   zodDetail,
 } from '../schemas/post.js'
 import { approvalDecisionForPatch } from '../approvalFromPatch.js'
-import { applyStatusToSchedule, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
+import { applyStatusToSchedule, laneOf, refreshPublishStatus, ScheduleRejected } from '../scheduling/sync.js'
 import { SchedulingError } from '../scheduling/provider.js'
+import { loadOrgSettings } from '../orgSettings.js'
 
 type AssetManifest = {
   items?: Array<{ id?: unknown } & Record<string, unknown>>
@@ -531,16 +532,82 @@ viktorOwned.post(
     // error and DO NOT write the approval row, so the post is never shown as
     // Programmed without a live job (TASK-014/016).
     let schedulingPatch: Record<string, unknown> | null = null
+    let schedulingStatus: string | undefined
+    // GF-92 (B) — auto-schedule on approve. This route is the HUMAN dashboard
+    // approval path (POST /approvals with a decision, driven by the kanban /
+    // calendar status controls). It is deliberately NOT wired into the PATCH
+    // /posts/:id path Viktor's agent role uses to set status directly, so the
+    // agent is excluded from auto-scheduling even when the toggle is ON.
+    let finalDecision: string = body.decision
+    let scheduleWarning: string | undefined
     {
       const current = await buildPost(slug, body.postId)
       if (current) {
         try {
           const result = await applyStatusToSchedule(slug, current, body.decision)
-          if (result) schedulingPatch = result.publishing
+          if (result) {
+            schedulingPatch = result.publishing
+            // Never overwrite a post that's already published — the provider is
+            // the source of truth for that transition, not the approval decision.
+            // Use the same lane resolution as applyStatusToSchedule (laneOf), so
+            // this guard and the scheduling decision can never disagree (GF-92
+            // Layer-5 review, finding 1): a legacy row with status:'approved' and
+            // approval.status:'published' must be caught here too.
+            if (result.status && laneOf(current) !== 'published') {
+              schedulingStatus = result.status
+            }
+          }
         } catch (err) {
           const resp = schedulingProblem(c, err)
           if (resp) return resp
           throw err
+        }
+
+        if (body.decision === 'approved') {
+          const settings = await loadOrgSettings(slug)
+          if (settings.autoScheduleOnApprove) {
+            const postForSchedule = schedulingPatch
+              ? ({
+                  ...current,
+                  publishing: { ...((current.publishing as object) ?? {}), ...schedulingPatch },
+                } as Record<string, unknown>)
+              : (current as Record<string, unknown>)
+            // applyStatusToSchedule returns null (rather than throwing) in
+            // exactly two cases: (a) the post is already published — laneOf()
+            // resolves 'published' and the function bails before doing
+            // anything, which is a correct silent no-op, not a scheduling
+            // failure; or (b) the transition isn't a scheduling transition at
+            // all. Since we always pass nextStatus='scheduled' here, (b) can't
+            // happen on this call — the only realistic null is (a). Guard on
+            // that explicitly so we never emit a misleading "no provider
+            // configured" warning for an already-published post, while still
+            // warning if some other, currently-unforeseen null case appears.
+            const alreadyPublished = laneOf(postForSchedule) === 'published'
+            try {
+              const result = await applyStatusToSchedule(slug, postForSchedule, 'scheduled')
+              if (result) {
+                schedulingPatch = result.publishing
+                if (result.status) schedulingStatus = result.status
+                finalDecision = 'scheduled'
+              } else if (!alreadyPublished) {
+                scheduleWarning =
+                  'Auto-schedule could not be applied to this post; it was approved but not scheduled.'
+              }
+            } catch (err) {
+              // Auto-schedule must NEVER fail the approval (past date, no
+              // provider key, provider down, a raw network/provider error,
+              // etc). Record the approval as 'approved' and surface a
+              // non-fatal, user-safe warning instead — never rethrow, and
+              // never leak a raw provider error body or stack trace to the
+              // client.
+              if (err instanceof ScheduleRejected || err instanceof SchedulingError) {
+                scheduleWarning = err.message
+              } else {
+                scheduleWarning =
+                  'Auto-schedule failed unexpectedly; the post was approved but not scheduled. Check the scheduling provider configuration and try scheduling it manually.'
+              }
+            }
+          }
         }
       }
     }
@@ -548,21 +615,23 @@ viktorOwned.post(
     const row = {
       slug,
       postId: body.postId,
-      decision: body.decision,
+      decision: finalDecision,
       note: body.note ?? '',
       actor,
       ts: new Date().toISOString(),
     }
     await withPb((pb) => pb.collection('approvals_v2').create(row))
     if (schedulingPatch) {
-      await persistSchedulingPatch(slug, body.postId, { publishing: schedulingPatch }, actor)
+      const patch: Record<string, unknown> = { publishing: schedulingPatch }
+      if (schedulingStatus) patch.status = schedulingStatus
+      await persistSchedulingPatch(slug, body.postId, patch, actor)
     }
     await audit(principal, {
       action: 'approval.decide',
       slug,
       resourceId: body.postId,
-      after: { decision: body.decision, note: body.note },
+      after: { decision: finalDecision, note: body.note, scheduleWarning },
     })
-    return c.json({ ok: true, ...row }, 201)
+    return c.json({ ok: true, ...row, ...(scheduleWarning ? { scheduleWarning } : {}) }, 201)
   },
 )

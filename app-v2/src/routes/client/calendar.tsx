@@ -37,7 +37,7 @@ import {
   type ReviewFeedback,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap } from '@/lib/post-status'
+import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap, scheduleConfirmationFor } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -74,6 +74,7 @@ import {
   Send,
   Trash2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useI18n } from '@/lib/i18n'
@@ -90,6 +91,7 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
+import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey, isCanonicalFormat } from '@/lib/post-format'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
@@ -136,7 +138,7 @@ function requestPictureChange(message: string) {
 
 export default function CalendarView() {
   const { t, lang } = useI18n()
-  const { plan, posts, brief, refetch } = useOutletContext<
+  const { plan, posts, brief, settings, refetch } = useOutletContext<
     ClientBundle & { refetch: () => void }
   >()
   const { slug = '' } = useParams<{ slug: string }>()
@@ -296,7 +298,7 @@ export default function CalendarView() {
     return { data, total }
   }, [posts, monthKeys, plan.pillars, t])
 
-  // CAL1 â€” overview mode. 'month' = the original single-post carousel viewer.
+  // CAL1 — overview mode. 'month' = the original single-post carousel viewer.
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'quarter'>('month')
   // GF-31 — default to the current month (if in range) so a manually created
   // post lands where the user is, not on the range's first month.
@@ -312,7 +314,7 @@ export default function CalendarView() {
   const [zoomOpen, setZoomOpen] = useState(false)
   // Image-slide index (carousel posts only); shared between PicturePane + lightbox.
   const [imageSlide, setImageSlide] = useState(0)
-  // CAL2 â€” direct user image upload on a post.
+  // CAL2 — direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
   // GF-35 — collapsed by default; expands the recoverable rejected list.
   const [showRejected, setShowRejected] = useState(false)
@@ -349,7 +351,7 @@ export default function CalendarView() {
       setCalendarRange(next)
       setRangeOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save calendar range')
+      toast.error(err instanceof Error ? err.message : t('calendar.saveRangeFailed'))
     } finally {
       setSavingRange(false)
     }
@@ -365,8 +367,18 @@ export default function CalendarView() {
     }
     setApprovingId(post.id)
     try {
-      await apiSetApproval(slug, post.id, decision)
-      toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${decision}`) }), { duration: 1600 })
+      const result = await apiSetApproval(slug, post.id, decision)
+      // GF-92 Layer-5 review, finding 3 — auto-schedule-on-approve can
+      // promote the server's final decision to 'scheduled' even though we
+      // asked for 'approved'. Use the server's decision for the toast.
+      const finalDecision = result.decision ?? decision
+      if (result.scheduleWarning) {
+        toast.warning(result.scheduleWarning, { duration: 4000 })
+      } else {
+        toast(t('calendar.statusSet', { id: nameOf(post), status: t(`status.${finalDecision}`) }), {
+          duration: 1600,
+        })
+      }
       refetch()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('calendar.statusFailed'))
@@ -428,7 +440,7 @@ export default function CalendarView() {
     }
   }, [pendingSelectId, postsByMonth, activeMonth])
 
-  // GF-17 â€” export the currently visible calendar range as PDF or Word.
+  // GF-17 — export the currently visible calendar range as PDF or Word.
   const runExport = useCallback(
     async (kind: 'pdf' | 'word') => {
       try {
@@ -438,7 +450,7 @@ export default function CalendarView() {
           posts,
           labels: {
             title: t('calendar.eyebrow'),
-            rangeLabel: `${rangeMonths[0]?.label ?? ''} â€“ ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
+            rangeLabel: `${rangeMonths[0]?.label ?? ''} – ${rangeMonths[rangeMonths.length - 1]?.label ?? ''}`,
             date: t('export.date'),
             channel: t('export.channel'),
             format: t('export.format'),
@@ -459,7 +471,7 @@ export default function CalendarView() {
     [plan.client.name, calendarRange, posts, rangeMonths, t],
   )
 
-  // CAL2 â€” upload an image straight onto the active post (no Viktor needed).
+  // CAL2 — upload an image straight onto the active post (no Viktor needed).
   // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
   // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
   const onUploadImage = useCallback(
@@ -500,7 +512,7 @@ export default function CalendarView() {
   const next = useCallback(() => goTo(slideIndex + 1), [goTo, slideIndex])
   const prev = useCallback(() => goTo(slideIndex - 1), [goTo, slideIndex])
 
-  // Keyboard arrows â€” but never while typing in a field.
+  // Keyboard arrows — but never while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -518,7 +530,7 @@ export default function CalendarView() {
     setDirection(0)
   }
 
-  // CAL1 â€” from a compact card (Week/Quarter) jump into the Month viewer
+  // CAL1 — from a compact card (Week/Quarter) jump into the Month viewer
   // focused on that exact post.
   const jumpToPost = useCallback(
     (post: Post) => {
@@ -584,7 +596,7 @@ export default function CalendarView() {
           {t('calendar.eyebrow')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue tracking-tight">
-          {plan.quarter.theme || 'Content calendar'}
+          {plan.quarter.theme || t('calendar.eyebrow')}
         </h1>
       </div>
 
@@ -676,7 +688,7 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* Month tabs â€” shown in Week + Month modes (Quarter shows all months). */}
+      {/* Month tabs — shown in Week + Month modes (Quarter shows all months). */}
       {viewMode !== 'quarter' && (
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
         {rangeMonths.map((m) => {
@@ -704,7 +716,7 @@ export default function CalendarView() {
               )}
               <span className="relative flex items-center gap-2">
                 {m.name}
-                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">Today</span>}
+                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">{t('common.today')}</span>}
                 <span
                   className={cn(
                     'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-[10px] font-bold',
@@ -720,7 +732,7 @@ export default function CalendarView() {
       </div>
       )}
 
-      {/* CAL1 â€” Quarter overview: one column per month, compact cards. */}
+      {/* CAL1 — Quarter overview: one column per month, compact cards. */}
       {viewMode === 'quarter' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {rangeMonths.map((m) => {
@@ -730,7 +742,7 @@ export default function CalendarView() {
                 <div className="flex items-center justify-between border-b border-border-subtle pb-2">
                   <h3 className="text-sm font-semibold text-brand-blue">
                     {m.name}
-                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
+                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">{t('calendar.currentMonth')}</span>}
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-ink-muted">
@@ -776,7 +788,7 @@ export default function CalendarView() {
         </div>
       )}
 
-      {/* CAL1 â€” Week overview: active month's posts grouped by week-of-month. */}
+      {/* CAL1 — Week overview: active month's posts grouped by week-of-month. */}
       {viewMode === 'week' && (
         monthPosts.length === 0 ? (
           <Card>
@@ -841,8 +853,8 @@ export default function CalendarView() {
                 {t('calendar.postOf', { n: slideIndex + 1, total: monthPosts.length, month: activeMonthLabel })}
               </span>
               <span className="hidden sm:inline">
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†</kbd>{' '}
-                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">â†’</kbd> {t('calendar.useArrows').replace('â† â†’ ', '')}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">←</kbd>{' '}
+                <kbd className="rounded border border-border-subtle bg-paper-muted px-1.5 py-0.5 font-mono text-[10px]">→</kbd> {t('calendar.useArrows').replace('← → ', '')}
               </span>
             </div>
 
@@ -936,7 +948,8 @@ export default function CalendarView() {
                               handle={plan.client.handle}
                               logoInitials={plan.client.logoInitials}
                               subtitle={brief.company.industry}
-                              aiLabel={t('common.aiGenerated')}
+                              aiLabel={settings.showAiGeneratedLabel ? t('common.aiGenerated') : undefined}
+                              storyLabel={t('mockup.storyBadge')}
                             />
                           ) : (
                             <PicturePane
@@ -961,7 +974,7 @@ export default function CalendarView() {
                           <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
                           {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
                         </Button>
-                        {/* CAL2 â€” direct upload (single-image posts only; carousels
+                        {/* CAL2 — direct upload (single-image posts only; carousels
                             are preview-only in V3 so the cover isn't replaced here). */}
                         {isApiEnabled && !isCarousel(activePost) && (
                           <>
@@ -1218,13 +1231,13 @@ export default function CalendarView() {
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
-          <DialogTitle>Calendar range</DialogTitle>
+          <DialogTitle>{t('calendar.rangeTitle')}</DialogTitle>
           <DialogDescription>
-            Select a start and end month. The planning window can span up to 6 months.
+            {t('calendar.rangeDesc')}
           </DialogDescription>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">Start month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.startMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.startMonth}
@@ -1233,7 +1246,7 @@ export default function CalendarView() {
               />
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">End month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.endMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.endMonth}
@@ -1244,7 +1257,7 @@ export default function CalendarView() {
           </div>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setRangeOpen(false)} disabled={savingRange}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={saveRange} disabled={savingRange}>
               {savingRange && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
@@ -1277,7 +1290,7 @@ export default function CalendarView() {
         </DialogContent>
       </Dialog>
 
-      {/* GF-4 â€” share-for-review + external-review activity. */}
+      {/* GF-4 — share-for-review + external-review activity. */}
       {isApiEnabled && (
         <ReviewShareDialog
           slug={slug}
@@ -1417,49 +1430,84 @@ function StatusSelect({
   const current = laneFor(post) as ApprovalDecision
   const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
   const StepIcon = step.Icon
+  // GF-92 — the "scheduled" label doesn't mean a provider job actually exists;
+  // surface the real confirmation (or its absence) next to the control.
+  const scheduleConfirmation = current === 'scheduled' ? scheduleConfirmationFor(post) : null
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
-        >
-          {busy ? (
-            <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
-          ) : (
-            <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
+          >
+            {busy ? (
+              <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
+            ) : (
+              <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+            )}
+            {t(step.labelKey)}
+            <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {WORKFLOW.map((s) => {
+            const Icon = s.Icon
+            // GF-37 — block scheduling (Programmed) a post dated in the past.
+            const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
+            return (
+              <DropdownMenuItem
+                key={s.key}
+                disabled={s.key === current || pastSchedule}
+                onClick={() => onSetStatus(s.key)}
+                title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
+              >
+                <Icon className="h-3.5 w-3.5 mr-2" />
+                {t(s.labelKey)}
+                {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {scheduleConfirmation?.kind === 'confirmed' && (
+        <span className={cn('text-ink-muted', size === 'xs' ? 'text-[9px]' : 'text-[10px]')}>
+          {t('schedule.confirmedAt', {
+            date: scheduleConfirmation.scheduledFor ? fmtDate(scheduleConfirmation.scheduledFor) : '—',
+            provider: scheduleConfirmation.provider ?? '—',
+          })}
+        </span>
+      )}
+      {scheduleConfirmation?.kind === 'failed' && (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 text-rose-700',
+            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
           )}
-          {t(step.labelKey)}
-          <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {WORKFLOW.map((s) => {
-          const Icon = s.Icon
-          // GF-37 — block scheduling (Programmed) a post dated in the past.
-          const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
-          return (
-            <DropdownMenuItem
-              key={s.key}
-              disabled={s.key === current || pastSchedule}
-              onClick={() => onSetStatus(s.key)}
-              title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
-            >
-              <Icon className="h-3.5 w-3.5 mr-2" />
-              {t(s.labelKey)}
-              {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        >
+          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+          {t('schedule.failed', { error: scheduleConfirmation.lastError })}
+        </span>
+      )}
+      {scheduleConfirmation?.kind === 'missingJob' && (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 text-amber-700',
+            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
+          )}
+        >
+          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+          {t('schedule.notConfirmed')}
+        </span>
+      )}
+    </span>
   )
 }
 
 /**
- * CAL1 â€” compact post card reused by Week + Quarter overviews. Small thumbnail,
+ * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
  * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
 function CompactPostCard({
@@ -1774,15 +1822,22 @@ function CopyPane({
   const [channels, setChannels] = useState<Channel[]>(initialChannels)
   const [channelOpen, setChannelOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  // GF-69 — editable post type (Single image / Carousel / Story). `post.format`
+  // is always a non-empty string by the time it reaches the SPA (coalescePost
+  // fills it structurally on the API side), so this just mirrors the server value.
+  const initialFormat = post.format || (isCarousel(post) ? 'carousel' : 'single image')
+  const [format, setFormat] = useState(initialFormat)
 
   const channelsChanged = channels.join(',') !== initialChannels.join(',')
+  const formatChanged = format !== initialFormat
   const dirty =
     title !== (post.title ?? '') ||
     copy !== (post.copy ?? '') ||
     hashtags !== initialHashtags ||
     cta !== (post.cta ?? '') ||
     date !== initialDate ||
-    channelsChanged
+    channelsChanged ||
+    formatChanged
 
   const save = async () => {
     if (locked) {
@@ -1794,7 +1849,7 @@ function CopyPane({
     if (title !== post.title) patch.title = title
     if (copy !== post.copy) patch.copy = copy
     if (hashtags !== initialHashtags) {
-      // Space- or newline-separated tokens â†’ string[]; drop empties, keep as typed.
+      // Space- or newline-separated tokens → string[]; drop empties, keep as typed.
       patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
     }
     if (cta !== (post.cta ?? '')) patch.cta = cta
@@ -1804,6 +1859,8 @@ function CopyPane({
       patch.channels = channels
       patch.channel = channels[0]
     }
+    // GF-69 — the picker sets metadata only; it never touches slides/media.
+    if (formatChanged) patch.format = format
     // GF-16 — only send the date when it actually changed and is non-empty
     // (the API rejects an empty date with a 422).
     if (date !== initialDate) {
@@ -1833,6 +1890,7 @@ function CopyPane({
     setDate(initialDate)
     setChannels(initialChannels)
     setChannelOpen(false)
+    setFormat(initialFormat)
   }
 
   // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
@@ -1956,6 +2014,49 @@ function CopyPane({
         </div>
       )}
 
+      {/* GF-69 — editable post type. Metadata only: never creates/deletes/
+          reorders slides or media, even when Carousel is picked on a post
+          with fewer than 2 slides — the preview keeps rendering whatever the
+          post actually has. `format` stays free-form on the wire (GF-69
+          TASK-001), so a legacy/non-canonical value (e.g. "reel") is shown as
+          its own extra option instead of leaving the select with nothing
+          selected — the user can still switch it to a canonical value. */}
+      {isApiEnabled ? (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.postTypeLabel')}
+          </p>
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          >
+            {!isCanonicalFormat(format) && format && (
+              <option value={format}>{format}</option>
+            )}
+            {POST_FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {t(POST_FORMAT_LABEL_KEY[f])}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
+            {t('calendar.postTypeLabel')}
+          </p>
+          <span className="text-sm text-ink-muted">
+            {(() => {
+              const key = postFormatLabelKey(initialFormat)
+              // A legacy/non-canonical format (e.g. "reel") has no i18n key —
+              // show the raw stored value rather than mislabeling it.
+              return key ? t(key) : initialFormat
+            })()}
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         <Pillar name={post.pillar} color={pillarColor} />
         {post.campaign && (
@@ -1988,7 +2089,7 @@ function CopyPane({
             value={hashtags}
             onChange={(e) => setHashtags(e.target.value)}
             rows={2}
-            placeholder="#hashtag1 #hashtag2 â€¦"
+            placeholder="#hashtag1 #hashtag2 …"
             className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
           />
         </div>
@@ -2007,7 +2108,7 @@ function CopyPane({
           <input
             value={cta}
             onChange={(e) => setCta(e.target.value)}
-            placeholder="Call to actionâ€¦"
+            placeholder="Call to action…"
             className="w-full text-sm font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
           />
         </div>
@@ -2099,7 +2200,7 @@ function PicturePane({
           />
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 text-white text-[10px] font-medium px-2 py-0.5">
             <Film className="h-3 w-3" />
-            Video
+            {t('common.video')}
           </span>
           <span className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <Maximize2 className="h-3.5 w-3.5" />
@@ -2203,7 +2304,7 @@ function PicturePane({
     )
   }
 
-  // Single-image (or no image) â€” unchanged behaviour.
+  // Single-image (or no image) — unchanged behaviour.
   if (!post.image) {
     return (
       <div className="w-full max-w-sm aspect-square rounded-xl border-2 border-dashed border-border-subtle flex flex-col items-center justify-center text-ink-muted gap-2">

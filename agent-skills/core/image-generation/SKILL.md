@@ -40,7 +40,7 @@ Put the brand **colors, fonts, layout and Visual-Guidelines style into the image
 prompt**. An image that ignores the brand palette is wrong even if it looks nice
 — fix it without asking.
 
-## STEP 0.5 — PICK THE FORMAT FROM THE CHANNEL (GF-33)
+## STEP 0.5 — PICK THE FORMAT FROM THE CHANNEL (GF-33) — AND FROM THE POST FORMAT WHEN IT'S A STORY (GF-69)
 
 The **target channel decides the format**, never a global default:
 - **Instagram → VERTICAL 4:5, 1080x1350.** Pass `channel="instagram"` (or
@@ -50,6 +50,17 @@ The **target channel decides the format**, never a global default:
 
 Always pass `channel` (or a `post_id` whose channel is known — the tool reads it
 and sizes automatically). Do NOT hard-code one shape for everything.
+
+**Exception — an Instagram STORY is a different shape (GF-69).** A Story is
+**full-screen 9:16, 1080x1920** — NOT the 4:5 1080x1350 feed image. The POST
+FORMAT overrides the channel default whenever the post is a story:
+- If `post_id` points to a post whose format is `"story"`, the tool detects
+  that automatically and renders 9:16 — no extra argument needed.
+- Generating a story stand-alone (no post yet)? Pass `aspect_ratio="story"`
+  explicitly; it wins even if you also pass `channel="instagram"`.
+- Every other Instagram case (feed single image, carousel slide) still follows
+  the GF-33 channel rule above — this exception is story-only and leaves
+  feed/LinkedIn/X/Facebook sizing untouched.
 
 ## STEP 1 — Generate
 
@@ -77,10 +88,21 @@ image_generate(prompt="<scene + brand + Visual Guidelines>",
 
 The `image_gen_openrouter` plugin then copies the file into the client assets
 dir, appends the manifest entry, PATCHes the post's `image`, and confirms. You
-MUST NOT copy the file, edit the manifest, or PATCH the post yourself — passing
-`post_id` already did it. Just confirm to the user (in their language), citing
-the url. Only fall back to manual wiring if the result shows
+MUST NOT copy the file, edit the manifest, or PATCH the **asset wiring** —
+`image`, `slides[].image`, `media[].url`, `thumbnail`, `assetId` — yourself;
+passing `post_id` already did it. Just confirm to the user (in their language),
+citing the url. Only fall back to manual wiring if the result shows
 `post_link.linked: false` or an `error`.
+
+**The one exception is the caption.** The plugin never writes
+`slides[].caption` or `media[].caption`, so the prohibition above does not cover
+them: you MUST make sure a caption is on the post. Normally it is already there,
+because `post-drafting` writes the visual caption at draft time and you generate
+*against* it — the caption is the design brief for this image, so read it before
+you write the prompt. Only if the post arrives with no caption do you PATCH one
+on after generating, describing what the finished image actually shows. When you
+do, send `slides` / `media` as WHOLE arrays including every existing entry and
+its current `image`/`url`; a partial array drops the other entries.
 
 For a **reserve / stand-alone** image (no target post), omit `post_id` — the
 plugin publishes it to a public URL and adds a reserve manifest entry.

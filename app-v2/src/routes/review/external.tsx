@@ -48,9 +48,12 @@ import {
   type PublicReviewPayload,
   type PublicReviewPost,
   type PublicReviewBrand,
+  type PublicReviewMedia,
   type PublicPostDecision,
   type ReviewComment,
 } from '@/lib/api-client'
+import type { PostMedia } from '@/types'
+import { StrategyReviewShell } from '@/routes/review/strategy-view'
 
 // Channels with a platform-accurate mockup. Anything else (or no channel)
 // falls back to the plain details card.
@@ -116,6 +119,21 @@ export default function ExternalReviewPage() {
         onName={setName}
         onCode={setCode}
         onSubmit={open}
+      />
+    )
+  }
+
+  // GF-105 — the gate, the session and the decision endpoints are shared; only
+  // what the reviewer then sees differs. An un-upgraded API response has no
+  // `view` at all, which must keep meaning 'content'.
+  if (payload.link.view === 'strategy') {
+    return (
+      <StrategyReviewShell
+        publicId={publicId}
+        token={token}
+        payload={payload}
+        reviewerName={payload.reviewerName}
+        onRefreshed={setPayload}
       />
     )
   }
@@ -213,8 +231,24 @@ interface LightboxTarget {
   slide: number
 }
 
+// GF-105 — `slides[].image` is optional on the wire now (a strategy link keeps
+// the slide entries but strips their URLs). This is the CONTENT view, which is
+// image-first: narrow to the entries that actually carry an image instead of
+// asserting, so a captions-only entry can never reach the lightbox or the mockup
+// and render a broken frame.
+function withImage(
+  slides: Array<{ image?: string; caption?: string }> | undefined,
+): Array<{ image: string; caption?: string }> {
+  return (slides ?? []).filter((s): s is { image: string; caption?: string } => !!s.image)
+}
+
+function mediaWithUrl(media: PublicReviewMedia[] | undefined): PostMedia[] {
+  return (media ?? []).filter((m): m is PostMedia => !!m.url)
+}
+
 function slidesOf(post: PublicReviewPost): Array<{ image: string; caption?: string }> {
-  if (post.slides && post.slides.length > 0) return post.slides
+  const slides = withImage(post.slides)
+  if (slides.length > 0) return slides
   if (post.image) return [{ image: post.image }]
   return []
 }
@@ -328,12 +362,16 @@ function PostContent({
   t,
   post,
   brand,
+  showAiLabel,
   tab,
   onZoom,
 }: {
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  // GF-92 (E) — defaults to true so an older/un-upgraded API response (no
+  // `settings` block at all) never blanks the badge for external reviewers.
+  showAiLabel?: boolean
   tab: 'preview' | 'details'
   onZoom: () => void
 }) {
@@ -349,16 +387,20 @@ function PostContent({
             copy: post.copy ?? '',
             hashtags: post.hashtags ?? [],
             image: post.image,
-            slides: post.slides,
+            slides: withImage(post.slides),
             // GF-65 — pass media so video posts render (and carry the AI badge)
             // in the external review, not just images.
-            media: post.media,
+            media: mediaWithUrl(post.media),
             channel: post.channel ?? '',
+            // GF-69 — pass format through so a story post renders its 9:16
+            // frame + badge here too, not just in the internal dashboard.
+            format: post.format,
           }}
           clientName={brand?.name ?? ''}
           handle={brand?.handle ?? ''}
           logoInitials={brand?.logoInitials ?? ''}
-          aiLabel={t('common.aiGenerated')}
+          aiLabel={(showAiLabel ?? true) ? t('common.aiGenerated') : undefined}
+          storyLabel={t('mockup.storyBadge')}
         />
         {cover && (
           <button
@@ -687,6 +729,7 @@ function DeckView({
             t={t}
             post={post}
             brand={payload.brand}
+            showAiLabel={payload.settings?.showAiGeneratedLabel ?? true}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
             generalComments={generalComments}
@@ -740,6 +783,7 @@ function DeckCard({
   t,
   post,
   brand,
+  showAiLabel,
   decision,
   comments,
   generalComments,
@@ -752,6 +796,7 @@ function DeckCard({
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  showAiLabel?: boolean
   decision?: PublicPostDecision
   comments: ReviewComment[]
   generalComments: ReviewComment[]
@@ -855,7 +900,7 @@ function DeckCard({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <PostContent t={t} post={post} brand={brand} tab={tab} onZoom={onZoom} />
+        <PostContent t={t} post={post} brand={brand} showAiLabel={showAiLabel} tab={tab} onZoom={onZoom} />
         {(decision || comments.length > 0 || generalComments.length > 0) && (
           <div className="px-4 py-3 space-y-2 border-t border-border-subtle">
             <DecisionBadge t={t} decision={decision} />
@@ -1205,6 +1250,7 @@ function ListView({
             t={t}
             post={post}
             brand={payload.brand}
+            showAiLabel={payload.settings?.showAiGeneratedLabel ?? true}
             decision={decisionFor(post.id)}
             comments={payload.comments.filter((c) => c.postId === post.id)}
             generalComments={generalComments}
@@ -1278,6 +1324,7 @@ function ListPostCard({
   t,
   post,
   brand,
+  showAiLabel,
   decision,
   comments,
   generalComments,
@@ -1291,6 +1338,7 @@ function ListPostCard({
   t: T
   post: PublicReviewPost
   brand?: PublicReviewBrand
+  showAiLabel?: boolean
   decision?: PublicPostDecision
   comments: ReviewComment[]
   generalComments: ReviewComment[]
@@ -1366,7 +1414,7 @@ function ListPostCard({
         )}
       </div>
 
-      <PostContent t={t} post={post} brand={brand} tab={tab} onZoom={onZoom} />
+      <PostContent t={t} post={post} brand={brand} showAiLabel={showAiLabel} tab={tab} onZoom={onZoom} />
 
       <div className="p-4 pt-3 space-y-2 border-t border-border-subtle">
         <DecisionBadge t={t} decision={decision} />

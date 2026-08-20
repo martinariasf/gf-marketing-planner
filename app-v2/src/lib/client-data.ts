@@ -47,6 +47,9 @@ import {
   apiLoadSuggestions,
   apiLoadAssetsManifest,
   apiLoadApprovals,
+  apiLoadOrgSettings,
+  ORG_SETTINGS_DEFAULTS,
+  type OrgSettings,
 } from '@/lib/api-client'
 
 const DATA_ROOT = '/data'
@@ -173,6 +176,13 @@ export interface ClientBundle {
   approvalsLog: ApprovalLogEntry[]
   assets: AssetsManifest | null
   suggestions: Suggestions | null
+  // GF-92 (B/C) — per-client Configuration page toggles.
+  settings: OrgSettings
+}
+
+/** File mode (no API) always uses the defaults — there's no store to read from. */
+export function loadOrgSettings(slug: string): Promise<OrgSettings> {
+  return isApiEnabled ? apiLoadOrgSettings(slug) : Promise.resolve({ ...ORG_SETTINGS_DEFAULTS })
 }
 
 /**
@@ -222,6 +232,7 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     approvalsLog,
     assets,
     suggestions,
+    settings,
   ] = await Promise.all([
     loadBrief(slug),
     loadPlan(slug),
@@ -232,6 +243,7 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     loadApprovalsLog(slug),
     loadAssetsManifest(slug),
     loadSuggestions(slug),
+    loadOrgSettings(slug),
   ])
   return {
     slug,
@@ -244,5 +256,6 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     approvalsLog,
     assets,
     suggestions,
+    settings,
   }
 }

@@ -58,6 +58,8 @@ function toSchedulable(slug: string, post: Record<string, unknown>): Schedulable
     channels,
     image: typeof post.image === 'string' ? post.image : undefined,
     mediaUrls,
+    // GF-69: carried through so toPostizPayload can tell a story from a feed post.
+    format: typeof post.format === 'string' ? post.format : undefined,
   }
 }
 
@@ -71,6 +73,18 @@ function existingJobId(post: Record<string, unknown>): string | null {
   const generic = typeof pub.providerJobId === 'string' ? pub.providerJobId : null
   const legacy = typeof pub.postizJobId === 'string' ? pub.postizJobId : null
   return generic ?? legacy
+}
+
+// GF-92 (A3) — legacy rows can have `approval.status` ahead of top-level
+// `status` (e.g. written before A1's status-mirroring fix). Mirrors the SPA's
+// laneFor(): prefer the approval lane, fall back to status.
+export function laneOf(post: Record<string, unknown>): string {
+  const approval = post.approval
+  if (approval && typeof approval === 'object') {
+    const approvalStatus = (approval as Record<string, unknown>).status
+    if (typeof approvalStatus === 'string' && approvalStatus) return approvalStatus
+  }
+  return String(post.status ?? '')
 }
 
 /**
@@ -89,7 +103,13 @@ export async function applyStatusToSchedule(
   current: Record<string, unknown>,
   nextStatus: string | undefined,
 ): Promise<ScheduleSyncResult | null> {
-  const prevStatus = String(current.status ?? '')
+  const prevStatus = laneOf(current)
+  // GF-92 Layer-5 review, finding 1 — never drive the provider for a post
+  // that's already published, no matter what the caller asks for. This is
+  // the single enforcement point for that rule (callers must not duplicate
+  // it against a raw `status` field, which can lag `approval.status` on
+  // legacy rows — see laneOf() above).
+  if (prevStatus === PUBLISHED) return null
   // A post is "going to be scheduled" if it's being moved into the lane, or it's
   // already in the lane and we're re-driving it (e.g. a date change = reschedule).
   const willBeScheduled = nextStatus === SCHEDULED || (nextStatus === undefined && prevStatus === SCHEDULED)
@@ -148,6 +168,16 @@ export async function applyStatusToSchedule(
       if (provider) await provider.cancel(priorJob)
     }
     return {
+      // GF-92 Layer-5 round-2 review, MINOR — mirror the top-level status here
+      // too, not just on the movingIn path above. `movingOut` only holds when
+      // `nextStatus !== undefined`, so this is always a concrete target status
+      // (e.g. 'approved'). Without it, callers that gate the status write on
+      // `result.status` being truthy (viktorOwned.ts's /approvals handler)
+      // cancel the provider job but never update the post's top-level status,
+      // leaving it stale at 'scheduled' while approval.status moves on —
+      // exactly the top-level/approval divergence this whole sync module
+      // exists to eliminate.
+      status: nextStatus,
       publishing: {
         ...existingPublishing(current),
         providerJobId: null,
@@ -171,7 +201,7 @@ export async function refreshPublishStatus(
   slug: string,
   post: Record<string, unknown>,
 ): Promise<ScheduleSyncResult | null> {
-  if (String(post.status ?? '') !== SCHEDULED) return null
+  if (laneOf(post) !== SCHEDULED) return null
   const jobId = existingJobId(post)
   if (!jobId) return null
   try {

@@ -1,6 +1,6 @@
 ---
 name: copywriting
-description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés) plus the craft bar the copy must clear to be worth posting. Covers where the voice lives and how to write changes back via the API.
+description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés) plus the craft bar the copy must clear to be worth posting. Every post also needs a one-line visual caption describing what the viewer will see. Covers where the voice lives and how to write changes back via the API.
 tags: [marketing, copy, voice]
 ---
 
@@ -123,10 +123,48 @@ batched pass, not a rule-by-rule loop. Fix everything that pass surfaces in a
 single rewrite. Then stop and show the user. Do not re-polish copy that already
 clears the bar; open-ended self-editing burns tokens and drifts the voice.
 
+## STEP 1.7 — Write the visual caption (required, every post)
+
+Copy is not finished until the visual is described in words. Every post you write
+carries a one-line caption saying what the viewer will SEE, so a client can sign
+off the plan before any image or video is produced. A post with no caption is an
+incomplete draft — go back and add it before you show anything.
+
+Where it goes depends on the format:
+
+| Post format | Field | How many |
+|---|---|---|
+| carousel | `slides[].caption` | one per slide, cover included |
+| single image / story | `media[].caption` | one, on the image entry |
+| video / reel | `media[].caption` | one, on the video entry |
+
+Both are plain strings. Do not invent a different key: the API is strict and a
+typo'd field 422s the whole write.
+
+**Describe the picture, not the copy.** The caption names the subject, the shot,
+and what is on screen. It is a design brief for the visual, not a second
+headline, and it never restates the post text.
+
+- Good: "Split screen: the old six-tab spreadsheet on the left, the single
+  planner view on the right, brand green line down the middle."
+- Good: "Close crop of the shop-floor terminal mid-scan, hands in frame, logo
+  bottom right."
+- Bad: "An image about saving time with automation." (nothing checkable)
+- Bad: "Stop losing hours to spreadsheets." (that is the copy, not the visual)
+
+One sentence, literal, concrete. Mood words on their own ("modern", "clean",
+"professional") do not count as a description unless a real subject carries them.
+On a carousel each slide caption must differ; "slide 3" or a repeat of the cover
+caption is not a caption.
+
 ## STEP 2 — Write the change back via the API (not the JSON file)
 
 - New post:   `POST  /clients/$CLIENT_SLUG/posts`  (date + title required)
 - Edit copy:  `PATCH /clients/$CLIENT_SLUG/posts/:id  {"copy": "...", "title": "..."}`
+- Captions:   `PATCH ... {"slides": [{"image": "...", "caption": "..."}, ...]}`
+  for a carousel, or `{"media": [{"type": "image", "url": "...", "caption": "..."}]}`
+  otherwise. `slides` and `media` PATCH as whole arrays — send every entry, not
+  just the one you changed, or the others are dropped.
 - Send only the fields that change; each must keep the correct type. `hashtags`
   is an array of strings, not a string.
 
