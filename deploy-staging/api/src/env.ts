@@ -135,6 +135,15 @@ export const env = {
   // un-encrypted (with a loud warning) — set this on every real deploy.
   integrationSecretKey: process.env.INTEGRATION_SECRET_KEY ?? '',
 
+  // GF-68: absolute external base URL for this API, e.g.
+  // "https://staging.marketing.gfinnov.com/api/v1". Needed because the chat
+  // relay hands the Hermes agent container an absolute URL to fetch an
+  // uploaded image's bytes from (for reference_images) — a relative
+  // "/api/v1/..." path only resolves inside a browser, not from the agent
+  // container's own network namespace. Falls back to the same default the SPA
+  // uses in dev; set explicitly on every real deploy.
+  publicApiBase: (process.env.PUBLIC_API_BASE ?? 'http://localhost:8080/api/v1').replace(/\/+$/, ''),
+
   // Misc
   logLevel: process.env.LOG_LEVEL ?? 'info',
   release: process.env.RELEASE ?? 'dev',

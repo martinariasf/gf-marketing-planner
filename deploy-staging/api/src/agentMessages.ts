@@ -33,20 +33,47 @@ export type MessageKey =
   | 'no_final_text' // run completed but the agent sent no final text
   | 'completed_with_writes' // completed, dashboard updated, but no final text
   | 'stream_ended' // event stream ended after tool activity, before a reply
+  | 'output_truncated' // response hit the model's output-length limit mid-reply (GF-100)
 
 // Pattern → key. Order matters: quota/billing is checked before generic rate
 // limits because some 402s read as both. Lower-cased haystack is matched.
-const QUOTA_PATTERNS = [
-  '402',
-  'payment required',
-  'insufficient credit', // matches "insufficient credits"
-  'insufficient_quota',
-  'insufficient balance',
-  'daily limit',
-  'exceeded your current quota',
-  'credits have been exhausted',
-  'billing',
-  'quota', // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+//
+// [GF-100 Layer-5 round-2] These used to be plain substrings matched via
+// `.includes()` — worse than the Python side's regex, because `.includes()`
+// has *no* word-boundary option at all. That let unrelated words swallow a
+// pattern as a substring: 'quota' matched inside "quotation", 'billing'
+// matched inside "Billington", 'key limit' matched inside "monkey limit" /
+// "turkey limit", 'payment required' matched inside "overpayment required".
+// Converted to \b-bounded regexes so this classifier makes the same call as
+// the Telegram-side one in
+// deploy-prod/gf-innov-agent/patches/patch_localized_errors.py
+// (_GF_QUOTA_ERROR_PATTERN) — same provider error must not read one way on
+// the dashboard and another way on Telegram (GF-100 acceptance criterion 4).
+// Keep the two lists in sync if either changes.
+const QUOTA_PATTERNS: RegExp[] = [
+  /\b402\b/,
+  /\bpayment\s+required\b/,
+  /\binsufficient\s+credits?\b/, // matches "insufficient credit(s)"
+  /\binsufficient_quota\b/,
+  /\binsufficient\s+balances?\b/,
+  /\bdaily\s+limit\b/,
+  /\bexceeded\s+your\s+current\s+quota\b/,
+  /\bcredits?\s+have\s+been\s+exhausted\b/,
+  /\bbilling\b/,
+  /\bquota\b/, // any "quota exceeded/reached" → daily-limit copy (GF-59 intent).
+  // [GF-100 Layer-5 round-3] `\bquota\b` does NOT match "quota_exceeded" —
+  // `\b` never fires between two \w chars, and `_` is \w. Verified 2026-08-07
+  // via read-only SSH that this underscore form is a real provider string:
+  // /opt/hermes/agent/auxiliary_client.py's `_is_payment_error` keyword list
+  // includes the literal "quota_exceeded" substring (next to "quota
+  // exceeded") to catch Vertex AI/Bedrock daily-quota error text. No
+  // near-miss risk: both boundaries land on non-\w chars.
+  /\bquota_exceeded\b/,
+  // OpenRouter's 403 "Key limit exceeded" (GF-100) is billing, not auth — see
+  // agent/error_classifier.py on the box, which buckets it as FailoverReason.billing
+  // for the same reason. Deliberately NOT a bare '403': that would swallow
+  // unrelated auth failures that also carry a 403 status.
+  /\bkey\s+limit\b/,
   // Checked before RATE_LIMIT, so a quota-flavoured error gets the "come back
   // tomorrow" message rather than the transient "try again shortly" one.
 ]
@@ -67,7 +94,7 @@ const RATE_LIMIT_PATTERNS = [
 export function classify(rawError: string | null | undefined): MessageKey {
   const hay = (rawError ?? '').toLowerCase()
   if (!hay.trim()) return 'run_failed'
-  if (QUOTA_PATTERNS.some((p) => hay.includes(p))) return 'quota_exhausted'
+  if (QUOTA_PATTERNS.some((p) => p.test(hay))) return 'quota_exhausted'
   if (RATE_LIMIT_PATTERNS.some((p) => hay.includes(p))) return 'rate_limited'
   return 'run_failed'
 }
@@ -108,6 +135,11 @@ const CATALOG: Record<MessageKey, Record<Lang, string>> = {
     es: 'Estuve trabajando en tu pedido, pero se cortó la conexión antes de responder. Si no ves el cambio, recarga el panel.',
     de: 'Ich habe an deiner Anfrage gearbeitet, aber die Verbindung brach vor der Antwort ab. Falls du die Änderung nicht siehst, lade das Dashboard neu.',
     en: 'I was working on your request, but the connection dropped before I replied. If you don’t see the change, refresh the dashboard.',
+  },
+  output_truncated: {
+    es: 'La respuesta se hizo demasiado larga y no pude terminarla. Pídemelo por partes más pequeñas.',
+    de: 'Die Antwort wurde zu lang und ich konnte sie nicht fertigstellen. Bitte frag mich in kleineren Teilen.',
+    en: 'The response got too long and I couldn’t finish it. Try asking me in smaller parts.',
   },
 }
 

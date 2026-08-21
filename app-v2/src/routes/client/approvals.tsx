@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { Pillar } from '@/components/pillar'
 import { MessageSquare, Copy, Check, Send, Ban, ShieldCheck, Clock, Calendar, Circle, CalendarSearch } from 'lucide-react'
 import { fmtDateTime, fmtDateShort } from '@/lib/format'
-import { toast, Toaster } from 'sonner'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
 import type { Post, ApprovalLogEntry } from '@/types'
@@ -79,8 +79,6 @@ export default function ApprovalsView() {
 
   return (
     <div className="space-y-6">
-      <Toaster position="bottom-right" />
-
       <div>
         <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
           {t('approvals.eyebrow')}

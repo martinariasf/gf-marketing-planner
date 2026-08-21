@@ -17,7 +17,7 @@
 import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, ExternalLink } from 'lucide-react'
+import { Loader2, ExternalLink, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fmtDateShort } from '@/lib/format'
@@ -30,6 +30,7 @@ import {
   laneFor,
   publishedUrl,
   postSeqMap,
+  scheduleConfirmationFor,
   type Lane,
 } from '@/lib/post-status'
 import type { Post } from '@/types'
@@ -93,8 +94,21 @@ export function ApprovalKanban({
     setOverrides((o) => ({ ...o, [post.id]: decision }))
     setPending((p) => new Set(p).add(post.id))
     try {
-      await apiSetApproval(slug, post.id, decision)
-      toast(`${nameOf(post)} → ${t(`status.${decision}`)}`, { duration: 1800 })
+      const result = await apiSetApproval(slug, post.id, decision)
+      // GF-92 Layer-5 review, finding 3 — the server's final decision can
+      // differ from what we asked for (auto-schedule-on-approve promotes
+      // 'approved' to 'scheduled'). Use it for the toast and the optimistic
+      // override so the UI never claims "Approved" while the board shows it
+      // as Scheduled.
+      const finalDecision = result.decision ?? decision
+      if (finalDecision !== decision) {
+        setOverrides((o) => ({ ...o, [post.id]: finalDecision }))
+      }
+      if (result.scheduleWarning) {
+        toast.warning(result.scheduleWarning, { duration: 4000 })
+      } else {
+        toast(`${nameOf(post)} → ${t(`status.${finalDecision}`)}`, { duration: 1800 })
+      }
       onChanged()
     } catch (err) {
       setOverrides((o) => {
@@ -220,6 +234,36 @@ export function ApprovalKanban({
                           {post.pillar}
                         </span>
                       )}
+                      {/* GF-92 — a "scheduled" label doesn't mean a provider job
+                          actually exists; surface the real confirmation (or its
+                          absence) so a silently-unscheduled post is visible. */}
+                      {col.key === 'scheduled' && (() => {
+                        const conf = scheduleConfirmationFor(post)
+                        if (conf.kind === 'confirmed') {
+                          return (
+                            <p className="text-[10px] text-ink-muted">
+                              {t('schedule.confirmedAt', {
+                                date: conf.scheduledFor ? fmtDateShort(conf.scheduledFor) : '—',
+                                provider: conf.provider ?? '—',
+                              })}
+                            </p>
+                          )
+                        }
+                        if (conf.kind === 'failed') {
+                          return (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-rose-700">
+                              <AlertTriangle className="h-3 w-3" />
+                              {t('schedule.failed', { error: conf.lastError })}
+                            </span>
+                          )
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            {t('schedule.notConfirmed')}
+                          </span>
+                        )
+                      })()}
                       {/* GF-43 — cards are moved by drag-and-drop, so the per-card
                           "→ Column" buttons were dropped to declutter the card. The
                           Published column keeps its read-only link to the live post. */}

@@ -51,6 +51,10 @@ services:
       # Slugs absent here fall back to HERMES_BASE_URL/HERMES_API_KEY. Value lives
       # in the box-local .env (secret); empty = every client uses the default.
       HERMES_AGENTS_JSON: "${HERMES_AGENTS_JSON:-}"
+      # Absolute external base URL the API uses when building attachment file
+      # URLs sent to the agent (GF-68) — a relative /api/v1/... path won't
+      # resolve from inside the agent container, it needs the public host.
+      PUBLIC_API_BASE: "${PUBLIC_API_BASE:-https://marketing.gfinnov.com/api/v1}"
       # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
       # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
       # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.

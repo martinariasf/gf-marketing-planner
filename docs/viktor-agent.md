@@ -1,6 +1,6 @@
 # Viktor — how the agent is created
 
-This document describes what Viktor is, how he is structured, and the exact recipe to create a new instance of him for a client. It is the source of truth that ties together [`SKILL.md`](./SKILL.md), the [`deploy/viktor-skills/`](./deploy/viktor-skills/) skill specs, the dashboard in [`app-v2/`](./app-v2/), and the per-client data in [`clients/`](./clients/).
+This document describes what Viktor is, how he is structured, and the exact recipe to create a new instance of him for a client. It is the source of truth that ties together [`agent-file-contract.md`](./agent-file-contract.md), the [`deploy/viktor-skills/`](../deploy/viktor-skills/) skill specs, the dashboard in [`app-v2/`](../app-v2/), and the per-client data in [`clients/`](../clients/).
 
 ---
 
@@ -50,7 +50,7 @@ Everything Viktor "knows how to do" is a `.md` file in his skills directory. Eac
 - Declares its `trigger`s (regex patterns, schedules, or "after another skill")
 - Documents inputs, outputs, file-write contracts, commit patterns, idempotence rules, and safety invariants
 
-The skills shipped in this repo at [`deploy/viktor-skills/`](./deploy/viktor-skills/):
+The skills shipped in this repo at [`deploy/viktor-skills/`](../deploy/viktor-skills/):
 
 | Skill | What it does | Status |
 |---|---|---|
@@ -78,7 +78,7 @@ Key contracts:
 - **Atomic writes.** Write to a temp file, `mv` into place. A crash mid-write must never leave a JSON file truncated.
 - **Commit per turn.** One commit per Telegram message, even if you touched 5 files. Push immediately. If push fails, do not retry destructively — report and stop.
 
-Read [`SKILL.md`](./SKILL.md) for the per-file write contracts in detail.
+Read [`agent-file-contract.md`](./agent-file-contract.md) for the per-file write contracts in detail.
 
 ---
 
@@ -194,7 +194,7 @@ The repo is the source of truth. Containers are derivable from it. If a containe
 ## Adding a new skill
 
 1. Write a new `.md` in `deploy/viktor-skills/` following the pattern of the existing four. Include YAML frontmatter with `name`, `description`, `trigger`.
-2. Add a brief mention in [`SKILL.md`](./SKILL.md)'s "common workflows" section.
+2. Add a brief mention in [`agent-file-contract.md`](./agent-file-contract.md)'s "common workflows" section.
 3. Update the table in this file under [Skills are the agent](#skills-are-the-agent).
 4. Push to main.
 5. Reload the skill on each running Viktor (see [When skills change](#when-skills-change)).

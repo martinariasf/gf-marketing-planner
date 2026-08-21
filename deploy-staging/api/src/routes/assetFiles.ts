@@ -99,3 +99,47 @@ assetFiles.get('/clients/:slug/inspiration/:id/file', async (c) => {
     return problem(c, { title: 'Not Found', status: 404, detail: 'No such inspiration asset' })
   }
 })
+
+// Public serving for GF-68 chat attachment IMAGES only (stored in PB, same
+// pattern as the inspiration route above). Unauthenticated: an <img> tag and
+// the Hermes agent container (for reference_images) both need to fetch this
+// without a bearer token. Documents are deliberately NOT served here — their
+// extracted text is inlined into the agent's input by routes/chat.ts, so they
+// never need a public URL; a document id here 404s.
+assetFiles.get('/clients/:slug/chat/attachments/:id/file', async (c) => {
+  const slug = c.req.param('slug')
+  const id = c.req.param('id')
+  if (!SLUG_RE.test(slug) || !/^[a-z0-9]{1,40}$/i.test(id)) {
+    return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid slug or id' })
+  }
+  try {
+    const rec = await withPb((p) =>
+      p
+        .collection('chat_attachments')
+        .getOne<{ id: string; slug: string; kind: string; file?: string }>(id),
+    )
+    if (rec.slug !== slug) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'No such attachment' })
+    }
+    if (rec.kind !== 'image' || !rec.file) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'Attachment is not an image' })
+    }
+    // PB serves files at /api/files/<collection>/<id>/<filename>. The collection
+    // is admin-only, so include the superuser token the pb client already holds.
+    const fileUrl = `${env.pbUrl}/api/files/chat_attachments/${rec.id}/${encodeURIComponent(rec.file)}`
+    const res = await fetch(fileUrl, {
+      headers: pb.authStore.token ? { Authorization: pb.authStore.token } : {},
+    })
+    if (!res.ok || !res.body) {
+      return problem(c, { title: 'Not Found', status: 404, detail: 'File bytes unavailable' })
+    }
+    const ext = rec.file.slice(rec.file.lastIndexOf('.') + 1).toLowerCase()
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    return c.body(bytes, 200, {
+      'Content-Type': CONTENT_TYPE[ext] ?? res.headers.get('Content-Type') ?? 'application/octet-stream',
+      'Cache-Control': 'public, max-age=86400',
+    })
+  } catch {
+    return problem(c, { title: 'Not Found', status: 404, detail: 'No such attachment' })
+  }
+})
