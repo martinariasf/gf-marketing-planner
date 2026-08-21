@@ -8,6 +8,7 @@ import {
   Link,
 } from 'react-router'
 import { motion } from 'framer-motion'
+import { Toaster } from 'sonner'
 import {
   Building2,
   Target,
@@ -19,6 +20,7 @@ import {
   Lightbulb,
   Sparkles,
   Plug,
+  Settings2,
   Loader2,
   Menu,
   ChevronLeft,
@@ -81,6 +83,7 @@ const NAV: NavItem[] = [
   { to: 'performance', labelKey: 'nav.performance', icon: TrendingUp,    phase: 'learn'   as WorkflowPhase },
   { to: 'learnings',   labelKey: 'nav.learnings',   icon: Lightbulb,     phase: 'learn'   as WorkflowPhase },
   { to: 'integration', labelKey: 'nav.integration', icon: Plug,          phase: 'learn'   as WorkflowPhase },
+  { to: 'configuration', labelKey: 'nav.configuration', icon: Settings2, phase: 'learn'   as WorkflowPhase },
 ]
 
 export default function ClientLayout() {
@@ -458,6 +461,11 @@ export default function ClientLayout() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* GF-92 round 2: single Toaster for the whole client shell. Calendar
+          (and any other client page) has no Toaster of its own, so its
+          toast.warning()/toast() calls were previously no-ops. */}
+      <Toaster position="bottom-right" />
     </div>
   )
 }

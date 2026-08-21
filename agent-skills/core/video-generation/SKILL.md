@@ -70,6 +70,15 @@ For an existing dashboard post, always pass `post_id`. This is what makes the
 clip appear in the content calendar and the Videos section instead of only being
 a loose asset.
 
+**The `media[]` entry it appends has no `caption`, and every post needs one.**
+The caption is the one-line description of what the viewer will see, and it is
+the brief for this clip: `post-drafting` writes it at draft time, so read the
+post's existing `media[].caption` before you write the video prompt and shoot
+against it. If the post arrives without one, PATCH a caption onto the new
+`media[]` entry right after generating, describing what the finished clip shows.
+`media` PATCHes as a WHOLE array — send every entry with its current `type` and
+`url`, or the others are dropped.
+
 Defaults when the user does not specify:
 - `duration=5`
 - `resolution="720p"`

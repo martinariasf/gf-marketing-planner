@@ -322,13 +322,26 @@ export type ApprovalDecision =
   | 'needs_revision'
   | 'rejected'
 
+export interface SetApprovalResult {
+  // GF-92 (D) — set when auto-schedule-on-approve was ON but scheduling
+  // failed (past date, no provider key, provider down). The approval still
+  // succeeds as 'approved'; this is a non-fatal, human-readable heads-up.
+  scheduleWarning?: string
+  // GF-92 (D) — the FINAL decision the server actually recorded. When
+  // auto-schedule-on-approve succeeds, the server writes 'scheduled' even
+  // though the caller asked for 'approved' — callers must use this (not
+  // their local `decision` variable) for any user-facing confirmation.
+  decision?: ApprovalDecision
+}
+
 export async function apiSetApproval(
   slug: string,
   postId: string,
   decision: ApprovalDecision,
   note?: string,
-): Promise<void> {
-  await apiSend('POST', `/clients/${slug}/approvals`, { postId, decision, note })
+): Promise<SetApprovalResult> {
+  const r = await apiSend<SetApprovalResult>('POST', `/clients/${slug}/approvals`, { postId, decision, note })
+  return { scheduleWarning: r.scheduleWarning, decision: r.decision }
 }
 
 export type SuggestionPatch = {
@@ -408,6 +421,36 @@ export async function apiSaveCalendarRange(
   const r = await apiSend<{ data: CalendarRangeConfig }>('PUT', `/clients/${slug}/config/calendar-range`, {
     data: range,
   })
+  return r.data
+}
+
+// GF-92 (B/C) — per-client Configuration page toggles. Mirrors the server's
+// OrgSettings shape (deploy-staging/api/src/orgSettings.ts) 1:1, including the
+// defaults, so file-mode / API-disabled builds never regress the GF-65 "AI
+// generated" badge (showAiGeneratedLabel defaults to true).
+export type OrgSettings = {
+  showAiGeneratedLabel: boolean
+  autoScheduleOnApprove: boolean
+}
+
+export const ORG_SETTINGS_DEFAULTS: OrgSettings = {
+  showAiGeneratedLabel: true,
+  autoScheduleOnApprove: false,
+}
+
+export async function apiLoadOrgSettings(slug: string): Promise<OrgSettings> {
+  if (!isApiEnabled) return { ...ORG_SETTINGS_DEFAULTS }
+  try {
+    const r = await apiGet<{ data: OrgSettings }>(`/clients/${slug}/config/settings`)
+    return { ...ORG_SETTINGS_DEFAULTS, ...r.data }
+  } catch {
+    return { ...ORG_SETTINGS_DEFAULTS }
+  }
+}
+
+export async function apiSaveOrgSettings(slug: string, settings: OrgSettings): Promise<OrgSettings> {
+  if (!isApiEnabled) return { ...settings }
+  const r = await apiSend<{ data: OrgSettings }>('PUT', `/clients/${slug}/config/settings`, { data: settings })
   return r.data
 }
 
@@ -534,9 +577,56 @@ export async function apiDeleteInspiration(slug: string, id: string): Promise<vo
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
 }
 
+// ── GF-68: chat image/document attachments ──────────────────────────────────
+// Mirror the server-side constants in deploy-staging/api/src/routes/chatAttachments.ts
+// so the composer can pre-validate and show a good error before uploading.
+export const CHAT_ATTACHMENT_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+export const CHAT_ATTACHMENT_MAX_IMAGE_BYTES = 10_000_000
+export const CHAT_ATTACHMENT_MAX_DOC_BYTES = 2_000_000
+export const CHAT_ATTACHMENT_MAX_COUNT = 4
+// Extensions accepted for text-format documents (kept in sync with the
+// server's TEXT_EXT_RE in deploy-staging/api/src/textUpload.ts).
+export const CHAT_ATTACHMENT_DOC_EXTENSIONS = [
+  '.txt', '.md', '.markdown', '.vtt', '.srt', '.csv', '.json', '.log', '.text',
+]
+
+export interface ChatAttachment {
+  id: string
+  kind: 'image' | 'document'
+  filename: string
+  mimeType: string
+  size: number
+  url?: string
+  textLength?: number
+  createdAt?: string
+}
+
+export async function apiUploadChatAttachment(slug: string, file: File): Promise<ChatAttachment> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await authedFetch(`/clients/${slug}/chat/attachments`, { method: 'POST', body: form })
+  if (!res.ok) {
+    let detail = `Upload failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { detail?: string; title?: string }
+      detail = body.detail || body.title || detail
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail)
+  }
+  const parsed = (await res.json()) as { items: ChatAttachment[] }
+  const item = parsed.items[0]
+  return item.url ? { ...item, url: absoluteUrl(item.url) } : item
+}
+
 // The API returns same-origin absolute paths (/api/v1/...). When the SPA runs
 // against a remote API_BASE in dev, prefix it; in prod they're same-origin.
-function absoluteUrl(path: string): string {
+// Exported so the chat history-replay path (chat-sheet.tsx recordToMessage)
+// can apply the same normalization the upload path already does — a
+// persisted relative attachment URL from PB otherwise resolves against the
+// Vite dev server, not the remote API, and 404s.
+export function absoluteUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
   if (!API_BASE) return path
   try {
@@ -591,6 +681,9 @@ export async function* apiChatStream(args: {
   thread: string
   message: string
   history: ChatTurn[]
+  /** GF-68: ids of attachments already uploaded via apiUploadChatAttachment.
+   * NEVER send base64 file data over this path — only ids. */
+  attachments?: Array<{ id: string }>
   signal?: AbortSignal
 }): AsyncGenerator<ChatStreamEvent> {
   if (!API_BASE) throw new Error('VITE_API_BASE not set')
@@ -598,7 +691,12 @@ export async function* apiChatStream(args: {
   const res = await fetch(`${API_BASE}/clients/${args.slug}/chat/stream`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
-    body: JSON.stringify({ thread: args.thread, message: args.message, history: args.history }),
+    body: JSON.stringify({
+      thread: args.thread,
+      message: args.message,
+      history: args.history,
+      ...(args.attachments && args.attachments.length ? { attachments: args.attachments } : {}),
+    }),
     signal: args.signal,
   })
   if (!res.ok || !res.body) {
@@ -801,6 +899,8 @@ export async function apiLoadAgentJobs(
 
 // ── GF-4: Content Creation review links (collaboration layer) ────────────────
 
+export type ReviewLinkView = 'content' | 'strategy'
+
 export interface ReviewLink {
   id: string
   publicId: string
@@ -809,6 +909,12 @@ export interface ReviewLink {
   rangeEnd: string
   /** GF-42 — selected month keys (YYYY-MM); empty = all months in the range. */
   months: string[]
+  /**
+   * GF-105 — which kind of review this link is for. 'content' shows the
+   * finished creative (the original behaviour); 'strategy' shows the text-only
+   * plan. Chosen by the sharer at creation and fixed for the life of the link.
+   */
+  view: ReviewLinkView
   status: 'active' | 'revoked'
   state: 'active' | 'revoked' | 'expired'
   expiresAt: string | null
@@ -846,7 +952,14 @@ export interface ReviewEvent {
 
 export async function apiCreateReviewLink(
   slug: string,
-  body: { title?: string; rangeStart: string; rangeEnd: string; months?: string[]; ttlDays?: number },
+  body: {
+    title?: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    view?: ReviewLinkView
+    ttlDays?: number
+  },
 ): Promise<ReviewLink> {
   return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
 }
@@ -929,10 +1042,26 @@ export interface ReviewFeedbackComment {
   status?: 'open' | 'resolved'
   source: 'reviewer' | 'dashboard'
   createdAt?: string
+  /**
+   * GF-106 — which kind of review link this feedback came from, so the
+   * dashboard can split "what the client said about the posts" from "what they
+   * said about the strategy". OPTIONAL on purpose: an API that predates GF-106
+   * omits it entirely, and absent must be read as 'content' so the panel keeps
+   * rendering every row instead of blanking.
+   */
+  view?: ReviewLinkView
+}
+
+export interface ReviewFeedbackDecision {
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+  /** GF-106 — see ReviewFeedbackComment.view. Absent means 'content'. */
+  view?: ReviewLinkView
 }
 
 export interface ReviewPostFeedback {
-  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  decisions: ReviewFeedbackDecision[]
   comments: ReviewFeedbackComment[]
 }
 
@@ -958,7 +1087,10 @@ export async function apiLoadReviewFeedback(slug: string): Promise<ReviewFeedbac
 export interface PublicReviewPost {
   id: string
   date: string
+  /** Primary channel. Equals `channels[0]` when `channels` is present. */
   channel?: string
+  /** GF-105 — every target platform, not only the primary one. */
+  channels?: string[]
   format?: string
   pillar?: string
   campaign?: string
@@ -966,10 +1098,18 @@ export interface PublicReviewPost {
   copy?: string
   hashtags?: string[]
   cta?: string
+  // GF-105 — every image-bearing field is optional because the API strips them
+  // server-side for a strategy link, leaving only the captions behind. Nothing
+  // here may be assumed present; a content link still populates them as before.
   image?: string
-  slides?: Array<{ image: string; caption?: string }>
-  media?: PostMedia[]
+  slides?: Array<{ image?: string; caption?: string }>
+  media?: PublicReviewMedia[]
   statusLabel?: string
+}
+
+/** Like PostMedia, but `url` is absent on a strategy link (stripped by the API). */
+export interface PublicReviewMedia extends Omit<PostMedia, 'url'> {
+  url?: string
 }
 
 export interface PublicReviewBrand {
@@ -990,8 +1130,18 @@ export interface PublicReviewPayload {
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
-  link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
+  link: {
+    title: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    /** GF-105 — absent on an un-upgraded API response; treat as 'content'. */
+    view?: ReviewLinkView
+  }
   brand?: PublicReviewBrand
+  // GF-92 (B/E) — optional so an older/un-upgraded API response never blanks
+  // the AI-generated badge for external reviewers; absent => treat as true.
+  settings?: { showAiGeneratedLabel: boolean }
   posts: PublicReviewPost[]
   postDecisions?: PublicPostDecision[]
   comments: ReviewComment[]

@@ -66,5 +66,12 @@ export interface Post {
     postizJobId: string | null
     publishedAt: string | null
     publicUrl: string | null
+    // GF-92: kept so the calendar/kanban can confirm a scheduling job actually
+    // exists ("Scheduled for <date> via <provider>") instead of just trusting
+    // the status label.
+    provider?: string | null
+    providerJobId?: string | null
+    scheduledFor?: string | null
+    lastError?: string | null
   }
 }

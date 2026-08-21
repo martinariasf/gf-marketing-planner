@@ -21,6 +21,86 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-21',
+    title: 'The plan summary now opens the Strategy link instead of closing it',
+    items: [
+      'In the card view of a Strategy link, the month-by-month plan summary — the calendar grid plus the counts by topic, network and post type — now sits at the TOP, above the first card, so your client sees how the month is laid out before judging any single post.',
+      'The same summary now also sits at the top of the end screen, above the post-by-post recap, instead of below it.',
+      'It can be collapsed with one click, and it stays collapsed while your client swipes through the cards and reaches the end screen.',
+      'The list view is unchanged: there the summary still closes the page.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'Strategy links now review like the content link, and feedback is split by kind',
+    items: [
+      'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
+      'The Strategy link opens as a card deck by default — one post at a time, swipe right to approve and left to request changes — the same way the content review link works. The old list is still there behind the toggle in the header.',
+      'Requesting changes now asks for a reason: the send button stays disabled until your client writes one, so a change request never arrives without an explanation. Approving is still one click. This applies to content links too.',
+      'The post copy is now clearly labelled as the copy, and opening it continues the few lines already on screen instead of restarting the text from the beginning.',
+      'In the calendar, the "External feedback" box under a post now separates what the client said about the posts from what they said about the strategy, so you can tell which one they were reacting to.',
+      'Existing share links and all previous feedback are unchanged and keep working.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'New: share the plan for sign-off, without the artwork',
+    items: [
+      'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
+      'A Strategy link shows the plan as text only — for each post the topic, the post type, the networks it goes to, a description of how the visual will look, and the date. No images and no mockups, so a client can sign off the plan before anything is produced.',
+      'The post copy is still there on every row, tucked behind a "show copy" toggle.',
+      'At the bottom, a calendar grid per month shows how the posts are spread across the days, plus a count of posts by topic, network and post type.',
+      'Your client can comment, approve and request changes exactly as on a content link, and it all lands in the same Activity tab.',
+      'Existing share links are unchanged and keep working as content reviews.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'New: Instagram Story as a post type',
+    items: [
+      'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',
+      'A Story post previews as a real vertical, full-screen phone frame with a "Story" badge, instead of the square feed layout.',
+      'When Viktor generates the picture for a Story, he now makes it full-screen vertical (1080x1920) instead of the feed shape.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'New: a Configuration page with two per-client dashboard switches',
+    items: [
+      'A new "Configuration" tab lets you turn the "AI generated" label on posts on or off, and turn on auto-programming so an approved post is sent straight to your publishing tool instead of waiting for a separate "Programmed" step.',
+      'If auto-programming a post fails (for example a past date, or no publishing tool connected), the approval still goes through — you just get a heads-up instead of the approval failing outright.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
+    items: [
+      'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
+      'A Programmed post now shows whether it was actually scheduled with the provider (with the date and provider name), and flags it clearly when the schedule could not be confirmed or failed.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'Fixed garbled dashes and ellipses in the calendar export and placeholders',
+    items: [
+      'The export date-range label and the hashtag/CTA placeholder text in the calendar could show a garbled character sequence (mojibake) instead of a dash or ellipsis — those now render correctly.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'Attach images and documents in chat',
+    items: [
+      'You can now attach images and text documents when chatting with Viktor — drag and drop them onto the chat composer or use the new paperclip button. Attached images can be used directly as a reference for image generation; attached documents (notes, transcripts, CSV, etc.) are read and used as context for the reply.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: "You'll now be told when a limit is hit, instead of silence",
+    items: [
+      "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
+    ],
+  },
+  {
     date: '2026-08-03',
     title: 'Status changes made by Viktor now show up on reload',
     items: [

@@ -42,6 +42,10 @@ services:
       # in /opt/agents/staging-demo/config.yaml under platforms.api_server.extra.key
       HERMES_BASE_URL: "${HERMES_BASE_URL:-http://hermes-marketing-staging:8642}"
       HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      # Absolute external base URL the API uses when building attachment file
+      # URLs sent to the agent (GF-68) — a relative /api/v1/... path won't
+      # resolve from inside the agent container, it needs the public host.
+      PUBLIC_API_BASE: "${PUBLIC_API_BASE:-https://staging.marketing.gfinnov.com/api/v1}"
       # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
       # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
       # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.

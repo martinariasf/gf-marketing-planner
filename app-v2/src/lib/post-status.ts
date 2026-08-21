@@ -81,6 +81,23 @@ export function publishedUrl(post: Post): string | null {
   return post.publishing?.publicUrl ?? null
 }
 
+// GF-92 (A4) — a post can carry `status`/`approval.status: 'scheduled'` without
+// a real provider job (the bug this fix addresses, plus any legacy row from
+// before it). The kanban/calendar must show whether the schedule is actually
+// confirmed with a provider, not just trust the label.
+export type ScheduleConfirmation =
+  | { kind: 'confirmed'; scheduledFor: string | null; provider: string | null }
+  | { kind: 'missingJob' }
+  | { kind: 'failed'; lastError: string }
+
+/** Only meaningful when `laneFor(post) === 'scheduled'`. */
+export function scheduleConfirmationFor(post: Post): ScheduleConfirmation {
+  const pub = post.publishing
+  if (pub?.lastError) return { kind: 'failed', lastError: pub.lastError }
+  if (!pub?.providerJobId) return { kind: 'missingJob' }
+  return { kind: 'confirmed', scheduledFor: pub.scheduledFor ?? null, provider: pub.provider ?? null }
+}
+
 // GF-44 — friendly post names. The internal id stays the stable key (Viktor's
 // `pNNN`, or the dashboard/chat `c-<base36 ts>-<rand>`), but users should never
 // see that machine string as the post's *name*. We derive a per-client running

@@ -106,6 +106,12 @@ export function normalizePost(raw: unknown): Post {
       postizJobId: typeof publishingRaw.postizJobId === 'string' ? publishingRaw.postizJobId : null,
       publishedAt: typeof publishingRaw.publishedAt === 'string' ? publishingRaw.publishedAt : null,
       publicUrl: typeof publishingRaw.publicUrl === 'string' ? publishingRaw.publicUrl : null,
+      // GF-92: surface the scheduling confirmation so the UI can distinguish
+      // "actually scheduled with a provider" from "just labeled scheduled".
+      provider: typeof publishingRaw.provider === 'string' ? publishingRaw.provider : null,
+      providerJobId: typeof publishingRaw.providerJobId === 'string' ? publishingRaw.providerJobId : null,
+      scheduledFor: typeof publishingRaw.scheduledFor === 'string' ? publishingRaw.scheduledFor : null,
+      lastError: typeof publishingRaw.lastError === 'string' ? publishingRaw.lastError : null,
     },
   }
 }

@@ -1,3 +1,6 @@
+> **ARCHIVED.** Q2 2026 optimisation wishlist. Historical — items were absorbed into the Notion GF Platform Backlog.
+> See [docs/archive/README.md](./README.md).
+
 # Viktor Platform — Plan de Optimizaciones
 **GF Innovative Solutions · Viktor v2 · Q2 2026**
 *Documento de trabajo interno · Junio 2026*

@@ -30,6 +30,9 @@ export interface SchedulablePost {
   image?: string
   /** Carousel / multi-media URLs, if any. */
   mediaUrls?: string[]
+  /** GF-69: canonical post type ("single image" | "carousel" | "story" | …),
+   *  used to tell an Instagram story from a feed post at the provider boundary. */
+  format?: string
   /** Whatever else the canonical post carries — providers ignore unknown keys. */
   [k: string]: unknown
 }

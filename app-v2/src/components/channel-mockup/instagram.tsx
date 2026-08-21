@@ -1,4 +1,5 @@
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, Film, Sparkles } from 'lucide-react'
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Copy, Film, Sparkles, CircleDot } from 'lucide-react'
+import { isStoryFormat } from '@/lib/post-format'
 import type { MockupPost } from './index'
 
 interface Props {
@@ -7,12 +8,17 @@ interface Props {
   logoInitials: string
   /** GF-65 — localized "AI generated" disclosure shown on the post media. */
   aiLabel?: string
+  /** GF-69 — localized "Story" badge shown on an Instagram story post. */
+  storyLabel?: string
 }
 
-export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) {
+export function InstagramMockup({ post, handle, logoInitials, aiLabel, storyLabel }: Props) {
   const slideCount = post.slides?.length ?? 0
   const isCarousel = slideCount > 1
   const video = post.media?.find((item) => item.type === 'video' && item.url)
+  // GF-69 — a video post keeps its existing 9:16 reel rendering (unchanged);
+  // a story is only recognized when there is no video attached.
+  const isStory = !video && isStoryFormat(post.format)
   return (
     <div className="mx-auto max-w-[340px] rounded-[2.2rem] border-8 border-neutral-900 bg-white shadow-xl">
       <div className="rounded-[1.5rem] overflow-hidden">
@@ -32,11 +38,14 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) 
         </div>
 
         {/* GF-72 — a video post renders as a playable 9:16 reel (real .mp4 with
-            a native play control), not a static square thumbnail. */}
+            a native play control), not a static square thumbnail.
+            GF-69 — a story post renders full-screen 9:16, same frame shape as a
+            reel but with a "Story" badge instead of "Reel", no carousel dots,
+            and no feed action bar (a story has no feed chrome). */}
         <div
           className={
             'relative overflow-hidden ' +
-            (video ? 'aspect-[9/16] bg-black' : 'aspect-square bg-neutral-100')
+            (video || isStory ? 'aspect-[9/16] bg-black' : 'aspect-square bg-neutral-100')
           }
         >
           {video ? (
@@ -62,10 +71,20 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) 
               loading="lazy"
             />
           )}
-          {!video && isCarousel && (
+          {/* format is metadata-only (never mutates slides), so a post can
+              legitimately be format:"story" AND carry >1 slides at the same
+              time — !isStory keeps the slide counter from stacking on top of
+              the story badge below (both use the same top-2 right-2 slot). */}
+          {!video && !isStory && isCarousel && (
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5">
               <Copy className="h-3 w-3" />
               1/{slideCount}
+            </span>
+          )}
+          {!video && isStory && storyLabel && (
+            <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 text-white text-[11px] font-medium px-2 py-0.5 pointer-events-none">
+              <CircleDot className="h-3 w-3" />
+              {storyLabel}
             </span>
           )}
           {/* GF-65 — AI-generated disclosure (all Viktor media is AI-made). */}
@@ -77,8 +96,8 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) 
           )}
         </div>
 
-        {/* Carousel dots (IG shows them below the image) */}
-        {isCarousel && (
+        {/* Carousel dots (IG shows them below the image) — never on a story. */}
+        {isCarousel && !isStory && (
           <div className="flex items-center justify-center gap-1 pt-2">
             {Array.from({ length: slideCount }).map((_, i) => (
               <span
@@ -91,14 +110,17 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel }: Props) 
           </div>
         )}
 
-        <div className="px-3 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Heart className="h-5 w-5" />
-            <MessageCircle className="h-5 w-5" />
-            <Send className="h-5 w-5" />
+        {/* Feed action bar (heart/comment/send/bookmark) — a story has no feed chrome. */}
+        {!isStory && (
+          <div className="px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Heart className="h-5 w-5" />
+              <MessageCircle className="h-5 w-5" />
+              <Send className="h-5 w-5" />
+            </div>
+            <Bookmark className="h-5 w-5" />
           </div>
-          <Bookmark className="h-5 w-5" />
-        </div>
+        )}
 
         <div className="px-3 pb-3 text-[12px] leading-snug">
           <p className="font-semibold mb-1">{post.title}</p>

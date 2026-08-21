@@ -4,6 +4,8 @@ import { audit } from '../audit.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
+import { loadOrgSettings, DEFAULTS as ORG_SETTINGS_DEFAULTS, type OrgSettings } from '../orgSettings.js'
+import { isTextUpload } from '../textUpload.js'
 
 export type CalendarRange = {
   startMonth: string
@@ -108,6 +110,70 @@ planningConfig.put(
   },
 )
 
+// GF-92 (B) — per-client dashboard configuration toggles.
+planningConfig.get('/clients/:slug/config/settings', requireScope(), async (c) => {
+  const slug = c.req.param('slug')
+  const settings = await loadOrgSettings(slug)
+  return c.json({ data: settings })
+})
+
+function validateOrgSettings(data: unknown): OrgSettings | null {
+  if (!data || typeof data !== 'object') return null
+  const raw = data as Record<string, unknown>
+  const keys = Object.keys(raw)
+  const allowed = new Set(['showAiGeneratedLabel', 'autoScheduleOnApprove'])
+  if (keys.some((k) => !allowed.has(k))) return null
+  if (typeof raw.showAiGeneratedLabel !== 'boolean') return null
+  if (typeof raw.autoScheduleOnApprove !== 'boolean') return null
+  return {
+    showAiGeneratedLabel: raw.showAiGeneratedLabel,
+    autoScheduleOnApprove: raw.autoScheduleOnApprove,
+  }
+}
+
+planningConfig.put(
+  '/clients/:slug/config/settings',
+  requireScope(),
+  requireRole('dash', 'admin'),
+  async (c) => {
+    const slug = c.req.param('slug')
+    let body: { data?: unknown }
+    try {
+      body = await c.req.json()
+    } catch {
+      return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
+    }
+    const settings = validateOrgSettings(body.data)
+    if (!settings) {
+      return problem(c, {
+        title: 'Unprocessable Entity',
+        status: 422,
+        detail: `Settings must include exactly showAiGeneratedLabel and autoScheduleOnApprove as booleans (defaults: ${JSON.stringify(ORG_SETTINGS_DEFAULTS)}).`,
+      })
+    }
+    const actor = principalLabel(c)
+    const updatedAt = new Date().toISOString()
+    const result = await withPb(async (pb) => {
+      const coll = pb.collection('org_configs')
+      try {
+        const existing = await coll.getFirstListItem<{ id: string; settings?: unknown }>(`slug="${slug}"`)
+        const updated = await coll.update<{ settings?: OrgSettings }>(existing.id, { settings, updatedAt, actor })
+        return { before: existing.settings ?? null, after: updated.settings ?? settings }
+      } catch {
+        const created = await coll.create<{ settings?: OrgSettings }>({ slug, settings, updatedAt, actor })
+        return { before: null, after: created.settings ?? settings }
+      }
+    })
+    await audit(c.get('principal'), {
+      action: 'org_settings.update',
+      slug,
+      before: result.before,
+      after: result.after,
+    })
+    return c.json({ data: result.after })
+  },
+)
+
 planningConfig.get('/clients/:slug/information-sources', requireScope(), async (c) => {
   const slug = c.req.param('slug')
   const approvedOnly = c.req.query('approved') === 'true'
@@ -176,15 +242,7 @@ planningConfig.post(
 // Only text-based files are accepted (transcripts, notes, captions, CSV, JSON).
 // Binary formats (PDF/DOCX) would need a parser dependency and are rejected with
 // a clear message rather than stored as unreadable bytes.
-const TEXT_EXT_RE = /\.(txt|md|markdown|vtt|srt|csv|json|log|text)$/i
 const MAX_UPLOAD_BYTES = 15_000_000
-
-function isTextUpload(file: File): boolean {
-  const type = (file.type || '').toLowerCase()
-  if (type.startsWith('text/')) return true
-  if (type === 'application/json') return true
-  return TEXT_EXT_RE.test(file.name || '')
-}
 
 planningConfig.post(
   '/clients/:slug/information-sources/upload',

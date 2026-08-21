@@ -21,8 +21,12 @@ import {
   defaultExpiry,
   linkState,
   parseMonthSelection,
+  parseLinkView,
+  linkViewResolver,
+  buildReviewFeedback,
   DEFAULT_TTL_DAYS,
   type ReviewLinkRecord,
+  type ReviewLinkView,
 } from '../reviewLib.js'
 
 const MONTH_KEY = z.string().regex(/^\d{4}-\d{2}$/, 'must be a YYYY-MM month key')
@@ -35,6 +39,9 @@ const createSchema = z
     // GF-42 — optional subset of months within [rangeStart, rangeEnd] to share.
     // Omit or pass [] to share every month in the range (legacy behavior).
     months: z.array(MONTH_KEY).max(60).optional(),
+    // GF-105 — which kind of review this link is for. The sharer picks it at
+    // creation; it is not a toggle the recipient can flip. Omit for 'content'.
+    view: z.enum(['content', 'strategy']).optional(),
     ttlDays: z.number().int().min(1).max(90).optional(),
   })
   .strict()
@@ -68,6 +75,7 @@ function publicLink(rec: ReviewLinkRecord) {
     rangeStart: rec.rangeStart,
     rangeEnd: rec.rangeEnd,
     months: parseMonthSelection(rec.months),
+    view: parseLinkView(rec.view),
     status: rec.status,
     state: linkState(rec),
     expiresAt: rec.expiresAt ?? null,
@@ -126,6 +134,7 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
       rangeEnd: body.rangeEnd,
       // Persist a clean, de-duplicated selection; [] means "all months".
       months: parseMonthSelection(body.months),
+      view: parseLinkView(body.view),
       codeHash: hashCode(publicId, code),
       status: 'active',
       expiresAt: body.ttlDays
@@ -144,6 +153,7 @@ reviewLinks.post('/clients/:slug/review-links', requireScope(), requireRole('das
       rangeStart: body.rangeStart,
       rangeEnd: body.rangeEnd,
       months: parseMonthSelection(body.months),
+      view: parseLinkView(body.view),
       ttlDays: body.ttlDays ?? DEFAULT_TTL_DAYS,
     },
   })
@@ -408,6 +418,12 @@ interface ReviewCommentRow {
   createdAt?: string
 }
 
+// GF-106: a decision/comment carries the view of the link it came from, so the
+// dashboard can separate feedback on the finished posts from feedback on the
+// strategy plan. Unresolvable => 'content' (never dropped). The shape and the
+// merge that produces it live in reviewLib as FeedbackDecisionEntry /
+// buildReviewFeedback, so the semantics can be unit-tested without a live PB.
+
 // GF-66: 'agent' may read aggregated feedback (decisions + comments per post)
 // so Viktor can summarize what reviewers said when asked in the dashboard chat.
 reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('dash', 'admin', 'agent'), async (c) => {
@@ -435,36 +451,20 @@ reviewLinks.get('/clients/:slug/review-feedback', requireScope(), requireRole('d
     comments = []
   }
 
-  // Latest decision per (postId, reviewer). Events are createdAt-ascending, so
-  // a plain overwrite keeps the newest.
-  const decisionsByPost = new Map<string, Map<string, { decision: string; reviewerName: string; createdAt: string }>>()
-  for (const ev of events) {
-    if (!ev.postId) continue
-    const reviewer = ev.reviewerName || 'Guest'
-    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map()
-    perReviewer.set(reviewer, {
-      decision: ev.kind,
-      reviewerName: reviewer,
-      createdAt: ev.createdAt ?? '',
-    })
-    decisionsByPost.set(ev.postId, perReviewer)
+  // GF-106: fetch the client's links ONCE and resolve each row's originating
+  // view from the map. A row whose linkId no longer resolves (deleted link,
+  // pre-id row) is still returned, stamped 'content'.
+  let links: ReviewLinkRecord[] = []
+  try {
+    links = await withPb((pb) =>
+      pb.collection('review_links').getFullList<ReviewLinkRecord>({ filter: `slug="${slug}"` }),
+    )
+  } catch {
+    links = []
   }
+  const viewOf = linkViewResolver(links)
 
-  const byPost: Record<
-    string,
-    { decisions: { decision: string; reviewerName: string; createdAt: string }[]; comments: ReviewCommentRow[] }
-  > = {}
-  const bucket = (postId: string) =>
-    (byPost[postId] ??= { decisions: [], comments: [] })
-
-  for (const [postId, perReviewer] of decisionsByPost) {
-    bucket(postId).decisions = [...perReviewer.values()]
-  }
-  const general: { comments: ReviewCommentRow[] } = { comments: [] }
-  for (const cm of comments) {
-    if (cm.postId) bucket(cm.postId).comments.push(cm)
-    else general.comments.push(cm)
-  }
+  const { byPost, general } = buildReviewFeedback(events, comments, viewOf)
 
   return c.json({ byPost, general })
 })

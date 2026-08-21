@@ -26,6 +26,18 @@ export const POST_STATUSES = [
 
 export const CHANNELS = ['instagram', 'linkedin', 'tiktok', 'x', 'facebook'] as const
 
+// GF-69 — the canonical set of post-type values. `format` STAYS a free-form
+// string on the wire (see `postFields.format` below): a strict enum would 422
+// legacy rows and third-party writes that already carry some other string.
+// This constant is the shared source of truth for detection (isStoryFormat),
+// the frontend picker, and the Postiz story mapping — not a write-time gate.
+export const POST_FORMATS = ['single image', 'carousel', 'story'] as const
+
+/** True only for a case-insensitive, trimmed "story" format. */
+export function isStoryFormat(post: { format?: unknown } | null | undefined): boolean {
+  return typeof post?.format === 'string' && post.format.trim().toLowerCase() === 'story'
+}
+
 // GF-23 — the dashboard now drives the full content workflow (not just
 // accept/reject), so a status change can move a post into any settable state.
 // `published` is intentionally NOT here: it is terminal and derived from the
@@ -253,13 +265,20 @@ export function coalescePost<T extends Record<string, unknown>>(post: T): T {
   // blank post type. Derive a structural default from the shape (carousel when
   // there are multiple slides, otherwise a single image) so every post — and
   // every chat action that quotes it — carries its type.
+  // GF-69: this derivation is a fallback for an EMPTY/missing format ONLY. A
+  // story has exactly one image (same shape as a single-image post), so it can
+  // never be inferred from `slides`/`media` — an explicit `format:"story"` must
+  // survive untouched, which the `p.format.length === 0` guard below ensures.
   if (typeof p.format !== 'string' || p.format.length === 0) {
     p.format = Array.isArray(p.slides) && (p.slides as unknown[]).length > 1 ? 'carousel' : 'single image'
   }
   if (typeof p.approval !== 'object' || p.approval === null) {
     p.approval = { ...DEFAULT_APPROVAL, status: p.status }
   } else {
-    p.approval = { ...DEFAULT_APPROVAL, ...(p.approval as object) }
+    // GF-92: an approval block without a `status` key (the shape Viktor writes)
+    // must inherit the post's top-level status, not silently default to 'idea'
+    // — otherwise laneFor() puts a scheduled post back in Draft.
+    p.approval = { ...DEFAULT_APPROVAL, status: p.status, ...(p.approval as object) }
   }
   if (typeof p.publishing !== 'object' || p.publishing === null) {
     p.publishing = { ...DEFAULT_PUBLISHING }
