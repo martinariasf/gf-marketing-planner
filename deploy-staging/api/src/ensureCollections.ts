@@ -453,6 +453,25 @@ export function textMaxRaises(specFields: FieldSpec[], liveFields: LiveField[]):
   return raises
 }
 
+/** The exact `fields` array sent to PB in the collection patch: every live
+ *  field in its original order, with raised ones swapped in place, then the
+ *  newly-declared fields appended.
+ *
+ *  Split out from ensureCollections so the wiring is testable, not just the
+ *  raise decision: getting this array wrong is how a schema patch silently
+ *  drops or duplicates a column. */
+export function patchFields(
+  currentFields: LiveField[],
+  raises: TextMaxRaise[],
+  missingFields: FieldSpec[],
+): unknown[] {
+  const raisedById = new Map(raises.map((r) => [r.field.id, r.field]))
+  return [
+    ...currentFields.map((f) => raisedById.get(f.id) ?? f),
+    ...missingFields,
+  ]
+}
+
 export async function ensureCollections(): Promise<void> {
   await withPb(async (pb) => {
     const existing = await pb.collections.getFullList()
@@ -476,18 +495,12 @@ export async function ensureCollections(): Promise<void> {
         // GF-110 — a field that already exists was previously never revisited,
         // so correcting the spec alone would not have moved a single live cap.
         const raises = textMaxRaises(spec.fields, currentFields as LiveField[])
-        const raisedById = new Map(raises.map((r) => [r.field.id as string, r.field]))
 
         if (missingFields.length > 0 || needsRules || raises.length > 0) {
           try {
             const patch: Record<string, unknown> = {
               ...current,
-              fields: [
-                ...currentFields.map((f: LiveField) =>
-                  raisedById.get(f.id as string) ?? f,
-                ),
-                ...missingFields,
-              ],
+              fields: patchFields(currentFields as LiveField[], raises, missingFields),
               indexes: spec.indexes ?? current.indexes ?? [],
             }
             if (spec.name === 'chat_messages') {

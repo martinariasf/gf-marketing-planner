@@ -2,7 +2,8 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { asPbError } from './pbError.js'
+import { Hono } from 'hono'
+import { asPbError, errorResponse } from './pbError.js'
 
 /** Shaped exactly like the ClientResponseError captured from the prod logs
  *  when a >5000-character Markdown upload was rejected. */
@@ -75,4 +76,58 @@ test('falls back to the bare message when PB sends no field errors', () => {
   assert.ok(p)
   assert.equal(p.detail, 'Failed to create record.')
   assert.deepEqual(p.fields, {})
+})
+
+// ── the response a client actually receives ─────────────────────────────────
+// asPbError returning the right object proves nothing if problem() drops the
+// payload on the way out. Drive the REAL handler through a Hono app and read
+// the body, the way the dashboard's fetch does.
+
+function appThrowing(err: unknown) {
+  const app = new Hono()
+  app.get('/boom', () => {
+    throw err
+  })
+  app.onError((e, c) => errorResponse(c, e))
+  return app
+}
+
+test('the HTTP body carries the field detail the dashboard toasts', async () => {
+  const res = await appThrowing(pbValidationError()).request('/boom')
+  assert.equal(res.status, 400)
+  const body = (await res.json()) as { title: string; detail: string; fields: Record<string, string> }
+  // api-client.ts surfaces `body.detail` verbatim as the toast message.
+  assert.match(body.detail, /summary/)
+  assert.match(body.detail, /no more than 5000 character/)
+  assert.equal(body.fields.summary, 'Must be no more than 5000 character(s).')
+  assert.equal(body.title, 'Bad Request')
+})
+
+test('an ordinary error still produces the plain 500 body', async () => {
+  const res = await appThrowing(new Error('kaboom')).request('/boom')
+  assert.equal(res.status, 500)
+  const body = (await res.json()) as { title: string; detail: string; fields?: unknown }
+  assert.equal(body.title, 'Internal Server Error')
+  assert.equal(body.detail, 'kaboom')
+  assert.equal(body.fields, undefined)
+})
+
+test('a Hono-style error with a res property is not mistaken for a PocketBase error', async () => {
+  // Guards the structural check in asPbError: another library throwing an
+  // object with a status must not get downgraded from 500 to 4xx.
+  const notPb = Object.assign(new Error('upstream failed'), {
+    status: 400,
+    response: { some: 'other shape' },
+  })
+  assert.equal(asPbError(notPb), null)
+  const res = await appThrowing(notPb).request('/boom')
+  assert.equal(res.status, 500)
+})
+
+test('a response envelope whose status disagrees with the outer status is rejected', () => {
+  const mismatched = Object.assign(new Error('nope'), {
+    status: 400,
+    response: { data: {}, message: 'nope', status: 500 },
+  })
+  assert.equal(asPbError(mismatched), null)
 })

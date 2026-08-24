@@ -7,7 +7,12 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { textMaxRaises, PB_DEFAULT_TEXT_MAX, type LiveField } from './ensureCollections.js'
+import {
+  textMaxRaises,
+  patchFields,
+  PB_DEFAULT_TEXT_MAX,
+  type LiveField,
+} from './ensureCollections.js'
 
 const live = (over: Partial<LiveField> & { name: string }): LiveField => ({
   id: `f_${over.name}`,
@@ -96,4 +101,50 @@ test('raises only the fields that need it within one collection', () => {
     raises.map((r) => r.name),
     ['summary'],
   )
+})
+
+// ── the patch array actually sent to PocketBase ──────────────────────────────
+// textMaxRaises decides WHAT to raise; patchFields builds the array PB receives.
+// A bug here does not fail a raise test — it corrupts the live schema.
+
+test('patchFields swaps a raised field in place and keeps every other field', () => {
+  const live: LiveField[] = [
+    { id: 'a', name: 'slug', type: 'text', max: 100 },
+    { id: 'b', name: 'summary', type: 'text', max: 0 },
+    { id: 'c', name: 'approved', type: 'bool' },
+  ]
+  const raises = textMaxRaises([{ name: 'summary', type: 'text', max: 1_000_000 }], live)
+  const out = patchFields(live, raises, []) as LiveField[]
+
+  assert.equal(out.length, 3, 'no field added or dropped')
+  assert.deepEqual(out.map((f) => f.name), ['slug', 'summary', 'approved'], 'order preserved')
+  assert.deepEqual(out.map((f) => f.id), ['a', 'b', 'c'], 'ids preserved')
+  assert.equal(out[1].max, 1_000_000, 'the raised field carries the new max')
+  assert.equal(out[0].max, 100, 'untouched fields keep their max')
+})
+
+test('patchFields appends newly-declared fields after the existing ones', () => {
+  const live: LiveField[] = [{ id: 'a', name: 'slug', type: 'text', max: 100 }]
+  const out = patchFields(live, [], [{ name: 'brandNew', type: 'text', max: 40 }]) as LiveField[]
+  assert.deepEqual(out.map((f) => f.name), ['slug', 'brandNew'])
+})
+
+test('patchFields never duplicates a field that is both raised and present', () => {
+  // The raised field must REPLACE its live entry, not sit alongside it — a
+  // duplicate name in the array is rejected by PB and would fail every boot.
+  const live: LiveField[] = [{ id: 'b', name: 'summary', type: 'text', max: 0 }]
+  const raises = textMaxRaises([{ name: 'summary', type: 'text', max: 1_000_000 }], live)
+  const out = patchFields(live, raises, []) as LiveField[]
+  assert.equal(out.length, 1)
+  assert.equal(out.filter((f) => f.name === 'summary').length, 1)
+})
+
+test('patchFields with nothing to do returns the live fields unchanged', () => {
+  const live: LiveField[] = [
+    { id: 'a', name: 'slug', type: 'text', max: 100 },
+    { id: 'b', name: 'summary', type: 'text', max: 1_000_000 },
+  ]
+  const raises = textMaxRaises([{ name: 'summary', type: 'text', max: 1_000_000 }], live)
+  assert.deepEqual(raises, [])
+  assert.deepEqual(patchFields(live, raises, []), live)
 })

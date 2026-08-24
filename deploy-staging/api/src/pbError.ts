@@ -11,7 +11,9 @@
 // so a plain validation failure reached the dashboard as an unactionable
 // "Failed to create record" — which is exactly how GF-110 stayed unexplained.
 
+import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import { problem } from './problem.js'
 
 /** A PB field-level validation entry. */
 interface FieldError {
@@ -44,15 +46,23 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /** Recognise a PocketBase ClientResponseError by shape rather than by
  *  `instanceof` — the SDK class is not exported from every entry point, and a
- *  structural check keeps this testable without constructing a real one. */
+ *  structural check keeps this testable without constructing a real one.
+ *
+ *  The shape is matched narrowly on purpose. A loose "has a numeric status and
+ *  some response object" test would also swallow errors thrown by other
+ *  middleware and quietly turn a 500 into a 4xx, so we additionally require the
+ *  two things ClientResponseError always carries: a `response` envelope whose
+ *  `status` AGREES with the outer one, and a `data` record for field errors. */
 export function asPbError(err: unknown): PbErrorSummary | null {
   if (!isRecord(err)) return null
   const status = err.status
   const response = err.response
   if (typeof status !== 'number' || status < 400 || status > 599) return null
   if (!isRecord(response)) return null
+  if (response.status !== status) return null
+  if (!isRecord(response.data)) return null
 
-  const data = isRecord(response.data) ? response.data : {}
+  const data = response.data
   const fields: Record<string, string> = {}
   for (const [name, raw] of Object.entries(data)) {
     if (!isRecord(raw)) continue
@@ -83,4 +93,21 @@ export function asPbError(err: unknown): PbErrorSummary | null {
     detail: fieldPart ? `${baseMessage} (${fieldPart})` : baseMessage,
     fields,
   }
+}
+
+/** The API's unhandled-error response. Exported (rather than inlined in
+ *  server.ts's onError) so a test can drive the REAL handler through a Hono
+ *  app and assert the response body clients actually receive — asserting only
+ *  that asPbError returns the right object would not catch `problem()` dropping
+ *  the payload on the way out. */
+export function errorResponse(c: Context, err: unknown) {
+  const pb = asPbError(err)
+  if (pb) {
+    return problem(c, { title: pb.title, status: pb.status, detail: pb.detail, fields: pb.fields })
+  }
+  return problem(c, {
+    title: 'Internal Server Error',
+    status: 500,
+    detail: err instanceof Error ? err.message : 'unknown',
+  })
 }
