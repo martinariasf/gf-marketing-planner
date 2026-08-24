@@ -7,20 +7,59 @@
 
 import { withPb } from './pb.js'
 
-interface FieldSpec {
+// GF-110 — the length option is NOT interchangeable across PB field types:
+// `text` is bounded by `max` (characters), while `json`/`editor`/`file` use
+// `maxSize` (bytes). PocketBase drops an unknown option silently, so a `text`
+// field declared with `maxSize` kept `max: 0` and inherited PB's 5000-character
+// DEFAULT — six fields were capped at 5000 for months while claiming megabytes.
+// The union below makes that spelling a compile error instead of a runtime
+// surprise: `text` has no `maxSize`, and the byte-sized types have no `max`.
+interface FieldSpecBase {
   name: string
-  type: string
   required?: boolean
-  max?: number
-  min?: number
-  values?: string[]
-  maxSize?: number
   onCreate?: boolean
   onUpdate?: boolean
-  // file-field options
+}
+
+/** Character-bounded. `max: 0`/omitted means PB's 5000 default — always set it. */
+interface TextFieldSpec extends FieldSpecBase {
+  type: 'text'
+  max?: number
+  min?: number
+  maxSize?: never
+}
+
+/** Byte-bounded field types. */
+interface SizedFieldSpec extends FieldSpecBase {
+  type: 'json' | 'editor'
+  maxSize?: number
+  max?: never
+}
+
+interface SelectFieldSpec extends FieldSpecBase {
+  type: 'select'
+  values?: string[]
+  maxSelect?: number
+}
+
+interface FileFieldSpec extends FieldSpecBase {
+  type: 'file'
+  maxSize?: number
   maxSelect?: number
   mimeTypes?: string[]
 }
+
+/** Field types with no length/size option (bool, date, url, autodate, ...). */
+interface PlainFieldSpec extends FieldSpecBase {
+  type: 'bool' | 'date' | 'url' | 'autodate' | 'number' | 'email'
+}
+
+type FieldSpec =
+  | TextFieldSpec
+  | SizedFieldSpec
+  | SelectFieldSpec
+  | FileFieldSpec
+  | PlainFieldSpec
 
 interface CollectionSpec {
   name: string
@@ -67,7 +106,7 @@ const collections: CollectionSpec[] = [
       { name: 'slug', type: 'text', required: true, max: 100 },
       { name: 'thread', type: 'text', max: 100 },
       { name: 'role', type: 'select', required: true, values: ['user', 'assistant', 'tool'] },
-      { name: 'content', type: 'text', maxSize: 5_000_000 },
+      { name: 'content', type: 'text', max: 5_000_000 },
       { name: 'toolEvent', type: 'json', maxSize: 1_000_000 },
       // GF-68: structured attachment metadata (id/kind/filename/url/etc per
       // attachment) carried on the message row. `content` stays the user's
@@ -179,7 +218,7 @@ const collections: CollectionSpec[] = [
       { name: 'filename', type: 'text', max: 300 },
       { name: 'mimeType', type: 'text', max: 120 },
       { name: 'size', type: 'number' },
-      { name: 'text', type: 'text', maxSize: 200_000 },
+      { name: 'text', type: 'text', max: 200_000 },
       { name: 'messageId', type: 'text', max: 100 },
       { name: 'actor', type: 'text', max: 100 },
       { name: 'createdAt', type: 'text', max: 40 },
@@ -264,7 +303,7 @@ const collections: CollectionSpec[] = [
     name: 'integration_secrets',
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },
-      { name: 'postizApiKeyEnc', type: 'text', maxSize: 5_000 },
+      { name: 'postizApiKeyEnc', type: 'text', max: 5_000 },
       { name: 'postizLast4', type: 'text', max: 8 },
       { name: 'updatedAt', type: 'text', max: 40 },
       { name: 'actor', type: 'text', max: 100 },
@@ -280,8 +319,8 @@ const collections: CollectionSpec[] = [
       { name: 'title', type: 'text', required: true, max: 300 },
       { name: 'url', type: 'url' },
       { name: 'sourceType', type: 'select', values: ['website', 'note', 'news', 'reference', 'other'] },
-      { name: 'summary', type: 'text', maxSize: 1_000_000 },
-      { name: 'prompt', type: 'text', maxSize: 1_000_000 },
+      { name: 'summary', type: 'text', max: 1_000_000 },
+      { name: 'prompt', type: 'text', max: 1_000_000 },
       { name: 'approved', type: 'bool' },
       { name: 'approvedAt', type: 'text', max: 40 },
       { name: 'lastImportedAt', type: 'text', max: 40 },
@@ -333,7 +372,7 @@ const collections: CollectionSpec[] = [
       { name: 'slug', type: 'text', required: true, max: 100 },
       { name: 'postId', type: 'text', max: 100 },
       { name: 'reviewerName', type: 'text', max: 120 },
-      { name: 'body', type: 'text', required: true, maxSize: 20_000 },
+      { name: 'body', type: 'text', required: true, max: 20_000 },
       { name: 'status', type: 'select', values: ['open', 'resolved'] },
       { name: 'source', type: 'select', required: true, values: ['reviewer', 'dashboard'] },
       { name: 'parentId', type: 'text', max: 50 },
@@ -370,6 +409,69 @@ const collections: CollectionSpec[] = [
   },
 ]
 
+/** PocketBase's implicit cap on a `text` field left at `max: 0`. */
+export const PB_DEFAULT_TEXT_MAX = 5000
+
+/** One live PB field, as returned by collections.getFullList(). */
+export type LiveField = { name?: string; type?: string; max?: number } & Record<string, unknown>
+
+/** A live field with its `max` raised, plus a label for the log line. */
+export interface TextMaxRaise {
+  /** The live field object with `max` replaced — PB requires the original
+   *  field `id` and every other option to survive the patch untouched. */
+  field: LiveField
+  name: string
+  from: number
+  to: number
+}
+
+/** GF-110 — raise `max` on live `text` fields that sit below what the spec
+ *  declares. Only ever RAISES: a live field already at or above the declared
+ *  max is left alone, so this can never shrink a limit under existing rows.
+ *  `max: 0` counts as PB's 5000 default, which is the whole reason this exists.
+ *
+ *  Pure and PB-free so it unit-tests: hand it the spec fields and the live
+ *  fields, get back the subset to patch. Returns [] when nothing needs raising,
+ *  which is what keeps the boot pass idempotent across restarts. */
+export function textMaxRaises(specFields: FieldSpec[], liveFields: LiveField[]): TextMaxRaise[] {
+  const declared = new Map<string, number>()
+  for (const f of specFields) {
+    if (f.type === 'text' && typeof f.max === 'number' && f.max > 0) declared.set(f.name, f.max)
+  }
+  const raises: TextMaxRaise[] = []
+  for (const live of liveFields) {
+    if (live.type !== 'text' || typeof live.name !== 'string') continue
+    const want = declared.get(live.name)
+    if (want === undefined) continue
+    // A live `max` of 0 (or absent) is not "unlimited" — PB enforces its
+    // default. Compare against the cap that is actually in force.
+    const rawMax = typeof live.max === 'number' ? live.max : 0
+    const effective = rawMax > 0 ? rawMax : PB_DEFAULT_TEXT_MAX
+    if (effective >= want) continue
+    raises.push({ field: { ...live, max: want }, name: live.name, from: effective, to: want })
+  }
+  return raises
+}
+
+/** The exact `fields` array sent to PB in the collection patch: every live
+ *  field in its original order, with raised ones swapped in place, then the
+ *  newly-declared fields appended.
+ *
+ *  Split out from ensureCollections so the wiring is testable, not just the
+ *  raise decision: getting this array wrong is how a schema patch silently
+ *  drops or duplicates a column. */
+export function patchFields(
+  currentFields: LiveField[],
+  raises: TextMaxRaise[],
+  missingFields: FieldSpec[],
+): unknown[] {
+  const raisedById = new Map(raises.map((r) => [r.field.id, r.field]))
+  return [
+    ...currentFields.map((f) => raisedById.get(f.id) ?? f),
+    ...missingFields,
+  ]
+}
+
 export async function ensureCollections(): Promise<void> {
   await withPb(async (pb) => {
     const existing = await pb.collections.getFullList()
@@ -390,11 +492,15 @@ export async function ensureCollections(): Promise<void> {
             current.updateRule !== (spec.updateRule ?? null) ||
             current.deleteRule !== (spec.deleteRule ?? null))
 
-        if (missingFields.length > 0 || needsRules) {
+        // GF-110 — a field that already exists was previously never revisited,
+        // so correcting the spec alone would not have moved a single live cap.
+        const raises = textMaxRaises(spec.fields, currentFields as LiveField[])
+
+        if (missingFields.length > 0 || needsRules || raises.length > 0) {
           try {
             const patch: Record<string, unknown> = {
               ...current,
-              fields: [...currentFields, ...missingFields],
+              fields: patchFields(currentFields as LiveField[], raises, missingFields),
               indexes: spec.indexes ?? current.indexes ?? [],
             }
             if (spec.name === 'chat_messages') {
@@ -407,7 +513,10 @@ export async function ensureCollections(): Promise<void> {
             await pb.collections.update(current.id, patch)
             console.log(
               `[ensureCollections] updated ${spec.name}` +
-                (missingFields.length ? ` (+${missingFields.map((f) => f.name).join(',')})` : ''),
+                (missingFields.length ? ` (+${missingFields.map((f) => f.name).join(',')})` : '') +
+                (raises.length
+                  ? ` (max raised: ${raises.map((r) => `${r.name} ${r.from}->${r.to}`).join(', ')})`
+                  : ''),
             )
           } catch (err) {
             console.warn(`[ensureCollections] failed updating ${spec.name}`, err)
