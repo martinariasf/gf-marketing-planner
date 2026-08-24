@@ -12,6 +12,7 @@ import { apiReference } from '@scalar/hono-api-reference'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { env } from './env.js'
+import { asPbError } from './pbError.js'
 import { health } from './routes/health.js'
 import { clients } from './routes/clients.js'
 import { userOwned } from './routes/userOwned.js'
@@ -149,6 +150,13 @@ app.notFound((c) =>
 )
 app.onError((err, c) => {
   console.error('[api] unhandled', err)
+  // GF-110 — a PocketBase validation failure is the caller's problem, not a
+  // server fault. Report PB's status and the field-level reason instead of
+  // flattening everything into a 500 whose detail says "Failed to create record."
+  const pb = asPbError(err)
+  if (pb) {
+    return problem(c, { title: pb.title, status: pb.status, detail: pb.detail, fields: pb.fields })
+  }
   return problem(c, {
     title: 'Internal Server Error',
     status: 500,

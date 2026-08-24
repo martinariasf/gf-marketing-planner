@@ -21,6 +21,16 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-24',
+    title: 'Long documents no longer fail to save',
+    items: [
+      'Uploading a longer text file — a brand book, a brief, a transcript — in the Information Sources section of the Assets tab used to fail with "Failed to create record" once the file passed about two pages. Any length up to roughly 1 MB now saves.',
+      'The same limit was silently cutting off other things: long chat messages from Viktor, the text of documents attached in the chat, and long review comments from your clients. All of them now hold the full text.',
+      'A file you upload in the Assets tab is now available to Viktor straight away. It used to need a second "approve" click before he could use it, which was easy to miss.',
+      'When something you upload really is invalid, the message now says which field was rejected and why, instead of a generic failure.',
+    ],
+  },
+  {
     date: '2026-08-20',
     title: 'The plan summary now opens the Strategy link instead of closing it',
     items: [

@@ -294,8 +294,13 @@ planningConfig.post(
         sourceType: 'reference',
         summary: text,
         prompt: 'Use this uploaded source as factual context for post generation. Show source references.',
-        approved: false,
-        approvedAt: '',
+        // GF-110 — approved on arrival. The agent-facing read filters
+        // `approved=true`, so an upload that landed unapproved was invisible to
+        // Viktor until someone clicked approve; dropping a file in the Assets
+        // tab is already the deliberate act, and the second click was pure
+        // friction. The JSON create route still honours the caller's flag.
+        approved: true,
+        approvedAt: now,
         lastImportedAt: now,
         tags: ['upload'],
         actor,
@@ -307,7 +312,7 @@ planningConfig.post(
       action: 'information_source.upload',
       slug,
       resourceId: item.id,
-      after: { title, bytes: file.size, filename: file.name },
+      after: { title, bytes: file.size, filename: file.name, autoApproved: true },
     })
     return c.json(item, 201)
   },
