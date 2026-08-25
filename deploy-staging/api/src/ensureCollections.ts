@@ -313,6 +313,43 @@ const collections: CollectionSpec[] = [
     indexes: ['CREATE UNIQUE INDEX `idx_integration_secrets_slug` ON `integration_secrets` (`slug`)'],
   },
   {
+    // GF-113 — server-side cache of provider analytics (Postiz today, GF-21's
+    // Meta adapter later). CACHE, NOT SOURCE OF TRUTH: it may be dropped and
+    // rebuilt by any sync, so nothing may be stored here that cannot be re-fetched.
+    //
+    // It exists because the Postiz public API is rate limited and returns NO
+    // rate-limit headers at all (measured in the TASK-001 probe), so we cannot
+    // self-regulate at runtime. Calling Postiz on page load would burn an
+    // unmeasurable quota; the tab therefore reads this row and only this row.
+    //
+    // Default deny on every PB rule — the payload is per-client business data and
+    // only the admin API (withPb superuser) touches it.
+    name: 'analytics_cache',
+    fields: [
+      { name: 'slug', type: 'text', required: true, max: 100 },
+      { name: 'provider', type: 'text', max: 80 },
+      { name: 'status', type: 'select', values: ['ok', 'no_key', 'no_channels', 'stale', 'error'] },
+      // TRAP (platform gotcha): PocketBase does NOT auto-populate a `created`
+      // field in this deployment, so the sync worker writes this ISO string
+      // itself. The tab's "last updated" stamp is read straight from it — if it
+      // were left to PB it would silently be empty and the stamp would lie.
+      { name: 'syncedAt', type: 'text', max: 40 },
+      { name: 'error', type: 'text', max: 2_000 },
+      { name: 'channels', type: 'json', maxSize: 5_000_000 },
+      // NOTE: `series` is written as `[]` today. TASK-002 settled the contract
+      // with series nested PER CHANNEL (inside `channels[].series`), because every
+      // metric Postiz returns belongs to exactly one connected channel. This
+      // top-level column is kept because TASK-004 specifies it and it is the
+      // natural home for an account-level rollup that belongs to no single
+      // channel — but nothing writes or reads it yet, and the SPA does not
+      // receive it. Do not start populating it without updating the contract.
+      { name: 'series', type: 'json', maxSize: 5_000_000 },
+      { name: 'posts', type: 'json', maxSize: 5_000_000 },
+      { name: 'unlinked', type: 'number' },
+    ],
+    indexes: ['CREATE UNIQUE INDEX `idx_analytics_cache_slug` ON `analytics_cache` (`slug`)'],
+  },
+  {
     name: 'information_sources',
     fields: [
       { name: 'slug', type: 'text', required: true, max: 100 },
