@@ -362,7 +362,12 @@ export default function PerformanceView() {
   }
 
   const hasData = analytics.channels.length > 0 || analytics.posts.length > 0
-  const published = analytics.posts.filter((p) => p.state !== 'draft')
+  // Drafts never went anywhere, so they do not belong in a record of what was
+  // sent. Everything else does — INCLUDING failures, because a post that errored
+  // must be visible rather than sitting as "Programmed" forever. The heading says
+  // "Posts we sent", not "Published posts", precisely because this list is wider
+  // than the published ones.
+  const sent = analytics.posts.filter((p) => p.state !== 'draft')
 
   return (
     <div className="space-y-8">
@@ -445,7 +450,7 @@ export default function PerformanceView() {
               </p>
             </div>
 
-            {published.length === 0 ? (
+            {sent.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center text-sm text-ink-muted">
                   {t('analytics.ledgerEmpty')}
@@ -454,7 +459,7 @@ export default function PerformanceView() {
             ) : (
               <Card className="overflow-hidden">
                 <CardContent className="p-0">
-                  {published.map((p) => (
+                  {sent.map((p) => (
                     <PostLedgerRow key={p.remoteId} post={p} seq={postIdToSeq(p.postId)} t={t} />
                   ))}
                 </CardContent>

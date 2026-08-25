@@ -36,10 +36,18 @@ analytics.post(
   requireScope(),
   requireRole('dash', 'admin'),
   // The Refresh button must not be a quota cannon. Six refreshes per five minutes
-  // per client is generous for a human clicking it and still nowhere near even the
-  // most pessimistic reading of the Postiz hourly limit, given each sync costs ~4
-  // requests. This is a SECOND limiter on top of the global one precisely because
-  // the cost here is external and unmeasurable rather than local CPU.
+  // per client is generous for a human clicking it, while capping the DAMAGE from
+  // a stuck tab or a leaning-on-the-button user.
+  //
+  // Honest arithmetic: 6 per 5 min sustained is 72 syncs/hour = ~288 Postiz
+  // requests/hour, which is far ABOVE the documented 30-90/hour. This limiter
+  // does not by itself keep us inside the quota and is not what protects it —
+  // the 6-hourly background worker does. What this bounds is a human, who will
+  // not sit and click for an hour. Sustained abuse surfaces as a 429 from Postiz,
+  // which the worker turns into `stale` while retaining the last good payload.
+  //
+  // It is a SECOND limiter on top of the global one because the cost is external
+  // and unmeasurable (Postiz sends no rate-limit headers), not local CPU.
   rateLimit({ windowMs: 5 * 60_000, max: 6 }),
   async (c) => {
     const slug = c.req.param('slug')

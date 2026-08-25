@@ -114,6 +114,13 @@ async function writeAnalyticsCache(slug: string, payload: ClientAnalytics): Prom
   })
 }
 
+/** The only part of a post this module cares about: the provider join key. */
+export interface OurPublishing {
+  providerJobId?: unknown
+  /** Legacy alias kept by the post schema. */
+  postizJobId?: unknown
+}
+
 /**
  * Join what Postiz reports back to our own posts (TASK-007).
  *
@@ -128,7 +135,7 @@ async function writeAnalyticsCache(slug: string, payload: ClientAnalytics): Prom
  */
 export function reconcilePosts(
   remote: RemotePost[],
-  ours: { id: string; publishing?: { providerJobId?: unknown; postizJobId?: unknown } }[],
+  ours: { id: string; publishing?: OurPublishing }[],
 ): { posts: AnalyticsPost[]; unlinked: number } {
   const byJobId = new Map<string, string>()
   let unlinked = 0
@@ -159,6 +166,72 @@ export function reconcilePosts(
   }))
 
   return { posts, unlinked }
+}
+
+/**
+ * Fill each ENABLED channel's series, in place, one request per channel.
+ *
+ * Extracted from the sync so the partial-failure contract is directly testable
+ * against a stub provider, with no PocketBase in the way. That contract is the
+ * whole reason this is a loop with a try inside rather than a `Promise.all`:
+ * ONE channel failing must not blank the others. Instagram working while
+ * LinkedIn 500s has to leave Instagram's numbers on the page.
+ *
+ * A disabled channel is skipped entirely — it is still reported to the tab (so
+ * the client can see it needs reconnecting) but costs no request.
+ *
+ * The ONE error that is rethrown is a 429. A rate-limit refusal is not a
+ * per-channel problem: it means the whole sync must stop and the previous
+ * payload must be kept, so it has to escape this loop.
+ */
+export async function collectChannelSeries(
+  provider: Pick<AnalyticsProvider, 'channelSeries'>,
+  channels: AnalyticsChannel[],
+  days: number,
+): Promise<AnalyticsChannel[]> {
+  for (const ch of channels) {
+    if (ch.disabled) continue
+    try {
+      ch.series = await provider.channelSeries(ch.id, days)
+    } catch (err) {
+      if (err instanceof AnalyticsError && err.status === 429) throw err
+      ch.error = err instanceof Error ? err.message : 'Channel analytics failed.'
+      ch.series = []
+    }
+  }
+  return channels
+}
+
+/**
+ * Decide what to store when a sync fails.
+ *
+ * Extracted because this is the most safety-critical branch in the worker and it
+ * is pure: given the previous payload and the error, it decides between "keep
+ * what we had, mark it stale" and "we have nothing, report the error".
+ *
+ * A 429, or ANY failure when we already hold good data, keeps the PREVIOUS
+ * payload. Blanking a working tab because one refresh was refused would be
+ * strictly worse than showing slightly older real numbers — and since Postiz
+ * publishes no rate-limit headers, refusals are something we discover by being
+ * refused, not something we can avoid.
+ */
+export function payloadAfterFailure(
+  previous: ClientAnalytics,
+  providerName: string,
+  err: unknown,
+): ClientAnalytics {
+  const message = err instanceof Error ? err.message : 'Analytics sync failed.'
+  const rateLimited = err instanceof AnalyticsError && err.status === 429
+  const hadData = previous.status === 'ok' && previous.channels.length > 0
+
+  if (rateLimited || hadData) {
+    return { ...previous, status: 'stale', error: message }
+  }
+  return {
+    ...emptyAnalytics('error', { provider: providerName }),
+    error: message,
+    syncedAt: new Date().toISOString(),
+  }
 }
 
 /** Run one client's sync. Returns the payload it wrote. */
@@ -197,27 +270,23 @@ export async function syncClientAnalytics(slug: string): Promise<ClientAnalytics
       return payload
     }
 
-    // One request per ENABLED channel. A disabled channel is reported to the tab
-    // (so the client can see it needs reconnecting) but costs no request.
-    for (const ch of channels) {
-      if (ch.disabled) continue
-      try {
-        ch.series = await provider.channelSeries(ch.id, WINDOW_DAYS)
-      } catch (err) {
-        // Partial success is a first-class outcome: one bad channel must not
-        // blank the others.
-        ch.error = err instanceof Error ? err.message : 'Channel analytics failed.'
-        ch.series = []
-        if (err instanceof AnalyticsError && err.status === 429) throw err
-      }
-    }
+    await collectChannelSeries(provider, channels, WINDOW_DAYS)
 
     const remote = await provider.listRemotePosts(
       isoDaysAgo(POSTS_WINDOW_DAYS),
       new Date().toISOString().slice(0, 10),
     )
-    const ours = (await listPosts(slug)) as unknown as Parameters<typeof reconcilePosts>[1]
-    const { posts, unlinked } = reconcilePosts(remote, ours ?? [])
+    // `listPosts` returns PostBase[]; `publishing` is an untyped bag on it, so
+    // narrow explicitly rather than double-casting. A double cast here would hide
+    // a shape change and silently mark every post `unlinked`.
+    const ours = await listPosts(slug)
+    const { posts, unlinked } = reconcilePosts(
+      remote,
+      (ours ?? []).map((p) => ({
+        id: p.id,
+        publishing: (p as { publishing?: OurPublishing }).publishing,
+      })),
+    )
 
     const payload: ClientAnalytics = {
       provider: provider.name,
@@ -231,18 +300,7 @@ export async function syncClientAnalytics(slug: string): Promise<ClientAnalytics
     await writeAnalyticsCache(slug, payload)
     return payload
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Analytics sync failed.'
-    const rateLimited = err instanceof AnalyticsError && err.status === 429
-
-    // A 429, or any failure when we already hold good data, keeps the PREVIOUS
-    // payload and marks it stale. Blanking a working tab because one refresh was
-    // refused would be strictly worse than showing slightly old real numbers.
-    const hadData = previous.status === 'ok' && previous.channels.length > 0
-    const payload: ClientAnalytics =
-      rateLimited || hadData
-        ? { ...previous, status: 'stale', error: message }
-        : { ...emptyAnalytics('error', { provider: provider.name }), error: message, syncedAt: new Date().toISOString() }
-
+    const payload = payloadAfterFailure(previous, provider.name, err)
     await writeAnalyticsCache(slug, payload)
     return payload
   }

@@ -388,6 +388,12 @@ function ChannelHealth({ slug }: { slug: string }) {
       <p className="text-[11px] text-rose-600">{t('integration.postizKeyRejected')}</p>
     )
   }
+  // A key that is saved but has never synced yet is NOT "no channels connected" —
+  // that would send someone off to reconnect a channel that is probably fine. The
+  // worker simply has not run for this client yet.
+  if (analytics.status === 'no_key' || !analytics.syncedAt) {
+    return <p className="text-[11px] text-ink-muted">{t('integration.postizNotSyncedYet')}</p>
+  }
   if (analytics.channels.length === 0) {
     return (
       <p className="text-[11px] text-ink-muted">{t('integration.postizNoChannels')}</p>

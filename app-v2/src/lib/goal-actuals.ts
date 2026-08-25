@@ -19,6 +19,18 @@
 import type { ClientAnalytics } from '@/types'
 
 /**
+ * The window every Postiz metric we hold is measured over. Must match
+ * `WINDOW_DAYS` in the API's analyticsSync.ts.
+ *
+ * THIS IS WHY GOAL PROGRESS BARS ARE NOT DRAWN FROM THESE NUMBERS. Goals are
+ * quarterly; our measurements cover 30 days. A client exactly on track for the
+ * quarter would fill a progress bar to about a third, which reads as "badly
+ * behind" — a real number presented so as to mislead, which is no better than a
+ * fabricated one. The card shows the measured value WITH its window, and no bar.
+ */
+export const ANALYTICS_WINDOW_DAYS = 30
+
+/**
  * The mapping is a HAND-WRITTEN TABLE on purpose.
  *
  * The obvious alternative — matching a goal's label against a metric name — is

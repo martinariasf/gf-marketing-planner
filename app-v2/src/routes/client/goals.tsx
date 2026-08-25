@@ -20,7 +20,7 @@ import { Clock, Pencil, Lock } from 'lucide-react'
 import { useEdit } from '@/lib/edit-store'
 import { useT, useI18n, type Lang } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
-import { actualForGoal } from '@/lib/goal-actuals'
+import { actualForGoal, ANALYTICS_WINDOW_DAYS } from '@/lib/goal-actuals'
 
 // GV2 — period filter types + helpers (mirrors performance.tsx)
 type PeriodKey = 'all' | 'last4w' | 'thisMonth' | 'thisQuarter'
@@ -453,6 +453,14 @@ export default function GoalsView() {
                 current={actualValue}
                 target={g.target}
                 unit={g.unit}
+                // Our measurements span 30 days; these targets are quarterly. Say
+                // so and drop the bar rather than implying a third of a quarter
+                // is a third of the goal.
+                windowNote={
+                  actualValue === null
+                    ? undefined
+                    : t('goals.measuredWindow', { days: String(ANALYTICS_WINDOW_DAYS) })
+                }
                 compact={g.target > 1000}
                 channel={matchedProfile?.network}
                 channelUrl={matchedProfile?.url}

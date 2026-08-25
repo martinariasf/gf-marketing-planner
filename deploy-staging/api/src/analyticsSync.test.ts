@@ -80,3 +80,111 @@ test('no reconciled post carries metrics — per-post metrics are out of scope',
   )
   assert.deepEqual(posts[0]?.metrics, [])
 })
+
+// ── Review round 1, findings 2 and 3 ────────────────────────────────────────
+// The two most safety-critical branches in the worker had no coverage: what
+// happens when a refresh is REFUSED, and what happens when ONE channel fails.
+// Both were extracted from syncClientAnalytics specifically so they can be
+// tested without PocketBase.
+
+import { collectChannelSeries, payloadAfterFailure } from './analyticsSync.js'
+import { AnalyticsError } from './analytics/provider.js'
+import { emptyAnalytics, type AnalyticsChannel, type ClientAnalytics } from './schemas/analytics.js'
+
+const channel = (id: string, over: Partial<AnalyticsChannel> = {}): AnalyticsChannel => ({
+  id,
+  identifier: 'instagram-standalone',
+  name: id,
+  profile: null,
+  picture: null,
+  disabled: false,
+  series: [],
+  error: null,
+  ...over,
+})
+
+const goodPayload = (): ClientAnalytics => ({
+  provider: 'postiz',
+  status: 'ok',
+  syncedAt: '2026-08-24T06:00:00.000Z',
+  error: null,
+  channels: [channel('cm-ig', { series: [{ label: 'Reach', kind: 'series', points: [{ date: '2026-08-24', total: 120 }] }] })],
+  posts: [],
+  unlinked: 0,
+})
+
+test('one channel failing leaves the other channels intact', async () => {
+  const provider = {
+    channelSeries: async (id: string) => {
+      if (id === 'cm-bad') throw new AnalyticsError('postiz', 'Postiz returned 500.', { status: 500 })
+      return [{ label: 'Reach', kind: 'series' as const, points: [{ date: '2026-08-24', total: 99 }] }]
+    },
+  }
+  const channels = [channel('cm-good'), channel('cm-bad'), channel('cm-good-2')]
+  await collectChannelSeries(provider, channels, 30)
+
+  assert.equal(channels[0]?.series.length, 1, 'the first good channel keeps its data')
+  assert.equal(channels[2]?.series.length, 1, 'a good channel AFTER the failure still runs')
+  assert.deepEqual(channels[1]?.series, [], 'the failed channel is empty, not fabricated')
+  assert.ok(channels[1]?.error, 'the failed channel records why')
+  assert.equal(channels[0]?.error, null, 'a healthy channel carries no error')
+})
+
+test('a disabled channel costs no request and is still reported', async () => {
+  let calls = 0
+  const provider = {
+    channelSeries: async () => {
+      calls += 1
+      return []
+    },
+  }
+  const channels = [channel('cm-off', { disabled: true }), channel('cm-on')]
+  await collectChannelSeries(provider, channels, 30)
+  assert.equal(calls, 1, 'only the enabled channel was fetched')
+  assert.equal(channels.length, 2, 'the disabled channel is still in the payload')
+})
+
+test('a 429 escapes the channel loop instead of being swallowed per-channel', async () => {
+  // A rate-limit refusal is not a per-channel problem: the whole sync must stop
+  // so the previous payload is kept.
+  const provider = {
+    channelSeries: async () => {
+      throw new AnalyticsError('postiz', 'Too many requests', { status: 429 })
+    },
+  }
+  await assert.rejects(
+    () => collectChannelSeries(provider, [channel('cm-ig')], 30),
+    (err: unknown) => err instanceof AnalyticsError && err.status === 429,
+  )
+})
+
+test('a 429 keeps the previous numbers and marks them stale', async () => {
+  const previous = goodPayload()
+  const out = payloadAfterFailure(previous, 'postiz', new AnalyticsError('postiz', 'Too many requests', { status: 429 }))
+  assert.equal(out.status, 'stale')
+  assert.equal(out.channels.length, 1, 'the working tab is NOT blanked')
+  assert.equal(out.channels[0]?.series.length, 1)
+  assert.equal(out.syncedAt, previous.syncedAt, 'the stamp still reflects when the data was real')
+  assert.match(out.error ?? '', /Too many requests/)
+})
+
+test('a non-429 failure also keeps previous good data rather than blanking it', async () => {
+  const out = payloadAfterFailure(goodPayload(), 'postiz', new Error('network down'))
+  assert.equal(out.status, 'stale')
+  assert.equal(out.channels.length, 1)
+})
+
+test('a failure with no previous good data reports error, not stale', async () => {
+  // Nothing to fall back on, so "stale" would imply data we do not have.
+  const out = payloadAfterFailure(emptyAnalytics('no_key'), 'postiz', new Error('401 unauthorized'))
+  assert.equal(out.status, 'error')
+  assert.deepEqual(out.channels, [])
+  assert.match(out.error ?? '', /401/)
+})
+
+test('a previously-stale payload with data still degrades to stale, not error', async () => {
+  const prev = { ...goodPayload(), status: 'stale' as const }
+  const out = payloadAfterFailure(prev, 'postiz', new AnalyticsError('postiz', 'Too many requests', { status: 429 }))
+  assert.equal(out.status, 'stale')
+  assert.equal(out.channels.length, 1)
+})
