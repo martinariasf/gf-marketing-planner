@@ -383,15 +383,24 @@ export function registerApiDocs(app: OpenAPIHono): void {
     responses: { 201: { description: 'Recorded', content: json(z.object({}).passthrough()) }, 401: errs[401], 403: errs[403], 422: errs[422] },
   })
 
-  // ── Performance + assets ─────────────────────────────────────────────────────
+  // ── Analytics (GF-113) + assets ──────────────────────────────────────────────
   reg({
     method: 'get',
-    path: '/api/v1/clients/{slug}/performance',
+    path: '/api/v1/clients/{slug}/analytics',
     tags: ['assets'],
-    summary: 'Read performance JSON',
+    summary: 'Read cached provider analytics (never calls the provider)',
     security: bearer,
     request: { params: slugParam },
-    responses: { 200: { description: 'Performance', content: json(z.object({}).passthrough()) }, 401: errs[401], 403: errs[403] },
+    responses: { 200: { description: 'ClientAnalytics', content: json(z.object({}).passthrough()) }, 401: errs[401], 403: errs[403] },
+  })
+  reg({
+    method: 'post',
+    path: '/api/v1/clients/{slug}/analytics/sync',
+    tags: ['assets'],
+    summary: 'Refresh one client analytics now (rate limited)',
+    security: bearer,
+    request: { params: slugParam },
+    responses: { 200: { description: 'ClientAnalytics', content: json(z.object({}).passthrough()) }, 401: errs[401], 403: errs[403] },
   })
   reg({
     method: 'get',

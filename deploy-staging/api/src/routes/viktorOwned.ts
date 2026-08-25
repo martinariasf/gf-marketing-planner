@@ -395,11 +395,13 @@ viktorOwned.patch(
   },
 )
 
-// ── Performance + assets (unchanged from Phase 2) ───────────────────────────
-
-viktorOwned.get('/clients/:slug/performance', requireScope(), async (c) => {
-  return c.json((await disk.performance(c.req.param('slug'))) ?? {})
-})
+// ── Assets ──────────────────────────────────────────────────────────────────
+//
+// GF-113 / TASK-011: `GET /clients/:slug/performance` was REMOVED here. It served
+// the hand-authored performance.json and ended in `?? {}`, which is precisely why
+// the SPA could not tell "no data" from "not configured" - both arrived as an
+// empty object. Its replacement is GET /clients/:slug/analytics, which always
+// carries an explicit status.
 
 viktorOwned.get('/clients/:slug/assets/manifest', requireScope(), async (c) => {
   const slug = c.req.param('slug')

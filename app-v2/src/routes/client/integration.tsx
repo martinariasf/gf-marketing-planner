@@ -39,12 +39,14 @@ import {
 import { toast } from 'sonner'
 import {
   apiLoadIntegration,
+  apiLoadAnalytics,
   apiSavePostizKey,
   apiDeletePostizKey,
   type IntegrationInfo,
   type PostizStatus,
 } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
+import type { ClientAnalytics } from '@/types'
 
 export default function IntegrationView() {
   const t = useT()
@@ -349,8 +351,71 @@ function PostizCard({ slug, initial }: { slug: string; initial: PostizStatus }) 
           <Eye className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-60" />
           {t('integration.postizNeverShown')}
         </p>
+
+        {/* GF-113 / TASK-013 — which channels this key can actually see.
+            This is where a client (or Pilar) looks first when the Performance
+            tab says "no channels", so it closes that loop instead of leaving
+            them guessing whether the key or the connection is at fault. */}
+        {status.configured && <ChannelHealth slug={slug} />}
       </CardContent>
     </Card>
+  )
+}
+
+/** Connected-channel strip, read from the analytics cache. Never calls Postiz and
+ *  never shows key material — only the masked status above does that. */
+function ChannelHealth({ slug }: { slug: string }) {
+  const t = useT()
+  const [analytics, setAnalytics] = useState<ClientAnalytics | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    apiLoadAnalytics(slug)
+      .then((a) => alive && setAnalytics(a))
+      .catch(() => alive && setAnalytics(null))
+    return () => {
+      alive = false
+    }
+  }, [slug])
+
+  if (!analytics) return null
+
+  // A key that IS configured but which Postiz refuses is a completely different
+  // problem from a key with nothing connected to it, and it needs a different
+  // fix, so it gets its own message rather than "no channels".
+  if (analytics.status === 'error') {
+    return (
+      <p className="text-[11px] text-rose-600">{t('integration.postizKeyRejected')}</p>
+    )
+  }
+  if (analytics.channels.length === 0) {
+    return (
+      <p className="text-[11px] text-ink-muted">{t('integration.postizNoChannels')}</p>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <p className="text-[11px] uppercase tracking-wide text-ink-muted">
+        {t('integration.postizChannels')}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {analytics.channels.map((ch) => (
+          <span
+            key={ch.id}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]"
+          >
+            <span className="font-medium text-ink">{ch.name}</span>
+            <span className="text-ink-muted">
+              {ch.profile ? `@${ch.profile}` : ch.identifier.replace(/-standalone$/, '')}
+            </span>
+            {ch.disabled && (
+              <span className="text-amber-700">{t('integration.postizChannelDisabled')}</span>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
 

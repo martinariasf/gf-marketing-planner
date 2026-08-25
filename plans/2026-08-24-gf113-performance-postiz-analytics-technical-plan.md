@@ -224,7 +224,7 @@ notes:
 - The skill's guessed endpoint `GET {POSTIZ_BASE}/api/posts/{jobId}/analytics` returning a flat `metrics` object does not exist. The real one is `GET /public/v1/analytics/post/{postId}?date=N` returning a label-driven array. Installing that skill as written would have failed exactly the way GF-26 failed — from a guessed contract.
 
 ### TASK-017: Retire the two stale spec-only Viktor analytics skills
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -243,7 +243,7 @@ notes:
 - Known trap from the agent internals: a skill file sitting in the tree can still get picked up by a later sync even when it looks dormant. Delete or fix it; do not just leave it marked "spec only".
 
 ### TASK-002: Define the normalized analytics contract between API and SPA
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -270,7 +270,7 @@ notes:
 ## Backend Implementation
 
 ### TASK-003: Add the analytics provider port and the Postiz analytics adapter
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -292,7 +292,7 @@ notes:
 - Reuse, do not duplicate, `POSTIZ_API_BASE` resolution.
 
 ### TASK-004: Add the analytics cache collection to PocketBase
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -312,7 +312,7 @@ notes:
 - Cache, not source of truth: it may be dropped and rebuilt by a sync at any time.
 
 ### TASK-005: Background analytics sync worker + manual refresh endpoint
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -336,7 +336,7 @@ notes:
 - The worker must survive a client with a revoked key: mark `no_key` and move on.
 
 ### TASK-006: Read route GET /api/v1/clients/:slug/analytics
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -356,7 +356,7 @@ notes:
 - Keep the legacy `/performance` route working until TASK-011 retires its consumers.
 
 ### TASK-007: Reconcile our posts with Postiz reality (state + real public link)
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -380,7 +380,7 @@ notes:
 ## Frontend Implementation
 
 ### TASK-008: SPA types + api-client for the analytics endpoint
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -399,7 +399,7 @@ notes:
 - Known trap: `VITE_API_BASE` behaviour differs in file mode — the new call must not break the static demo bundle.
 
 ### TASK-009: Restructure the Performance tab around real, label-driven metrics
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -426,7 +426,7 @@ notes:
 - Keep the existing recharts + shadcn Card/Badge/Tabs vocabulary; this is a data change, not a visual redesign — but it is still a non-trivial UI change and needs Martin's screenshot approval (TASK-015).
 
 ### TASK-010: Replace the per-post metrics table with a published-posts ledger
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -470,7 +470,7 @@ notes:
 - The one piece of forward-compatibility that survives: TASK-010's row component still takes an **optional** label-driven metrics array, so when GF-21 lands a per-post source the ledger gains columns without being rebuilt. That is a prop that defaults to empty, not a feature - do not build a metrics pipeline behind it.
 
 ### TASK-011: Handle the Goals-tab fallout of dropping mock performance data
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -493,7 +493,7 @@ notes:
 - Deleting the demo data means the sales demo loses its Performance tab until a real Postiz channel is connected. Martin accepted that trade on 2026-08-24 in favour of never shipping fabricated numbers. Sales demos currently depend on `fitvibe-demo` looking full. Default assumption if Martin does not weigh in: keep the demo client's mock data behind an unmissable "Demo data" badge, and serve nothing mock to real clients.
 
 ### TASK-012: i18n copy for the analytics tab in EN / DE / ES
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -512,7 +512,7 @@ notes:
 - GF-67 already made months/dates locale-complete; do not regress it.
 
 ### TASK-013: Channel connection health on the Integration tab
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex

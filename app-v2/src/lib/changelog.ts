@@ -21,6 +21,19 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-25',
+    title: 'The Performance tab now shows real numbers',
+    items: [
+      'Every number on the Performance tab used to come from a file we filled in by hand. Nothing on that page had ever touched a social network. It now reads live figures from the account that actually publishes your posts, with a visible "last updated" stamp and a Refresh button.',
+      'Published posts are listed with their real state and a link straight through to the live post on Instagram or LinkedIn.',
+      'Per-post numbers (likes, comments and so on for one specific post) are not shown, because our publishing tool does not report them. We would rather show nothing than show a zero we cannot stand behind. Getting those numbers is being handled as separate work.',
+      'If your account is not connected, or is connected but has no channels linked, the tab now tells you exactly which of the two it is instead of showing an empty page.',
+      'The Google Analytics box has been removed. It announced that web analytics was not connected and then showed two made-up numbers underneath it.',
+      'On the Goals tab, the weekly wins and losses summary has been removed, and any goal we cannot actually measure now says so rather than showing an empty progress bar.',
+      'The Integration tab now lists which social channels your publishing key can see, so a missing channel is obvious at the point where you would fix it.',
+    ],
+  },
+  {
     date: '2026-08-24',
     title: 'Long documents no longer fail to save',
     items: [
