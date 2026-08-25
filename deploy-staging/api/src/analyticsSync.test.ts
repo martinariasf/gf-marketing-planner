@@ -188,3 +188,56 @@ test('a previously-stale payload with data still degrades to stale, not error', 
   assert.equal(out.status, 'stale')
   assert.equal(out.channels.length, 1)
 })
+
+// ── Review round 2, finding 1 ───────────────────────────────────────────────
+// Round 1's fix keyed retention on `previous.status === 'ok'`, so a payload that
+// had already gone stale was treated as having nothing worth keeping. The real
+// question is whether we still hold data, not what the last status happened to be.
+
+test('a stale payload with data survives a SECOND, non-429 failure', async () => {
+  // The sequence that exposed the bug: ok -> 429 (stale, kept) -> 500.
+  const afterRateLimit = payloadAfterFailure(
+    goodPayload(),
+    'postiz',
+    new AnalyticsError('postiz', 'Too many requests', { status: 429 }),
+  )
+  assert.equal(afterRateLimit.status, 'stale')
+
+  const afterOutage = payloadAfterFailure(afterRateLimit, 'postiz', new Error('connect ETIMEDOUT'))
+  assert.equal(afterOutage.status, 'stale', 'must NOT fall through to error')
+  assert.equal(afterOutage.channels.length, 1, 'the real numbers are still there')
+  assert.equal(afterOutage.channels[0]?.series.length, 1)
+})
+
+test('a payload with posts but no channels still counts as data worth keeping', async () => {
+  const prev: ClientAnalytics = {
+    ...emptyAnalytics('ok'),
+    posts: [
+      {
+        postId: 'p1',
+        remoteId: 'cm-1',
+        integrationId: null,
+        channel: 'instagram-standalone',
+        state: 'published',
+        publishDate: '2026-08-05T10:00:00Z',
+        releaseURL: 'https://www.instagram.com/p/DZ-Q8yzmuMl/',
+        metrics: [],
+      },
+    ],
+  }
+  const out = payloadAfterFailure(prev, 'postiz', new Error('boom'))
+  assert.equal(out.status, 'stale')
+  assert.equal(out.posts.length, 1, 'the ledger is not thrown away')
+})
+
+test('a 429 with NOTHING previously stored reports error, not a stale lie', async () => {
+  // "stale" promises the reader the numbers on screen were real once. With no
+  // prior data there are no numbers on screen, so that promise would be false.
+  const out = payloadAfterFailure(
+    emptyAnalytics('no_key'),
+    'postiz',
+    new AnalyticsError('postiz', 'Too many requests', { status: 429 }),
+  )
+  assert.equal(out.status, 'error')
+  assert.deepEqual(out.channels, [])
+})

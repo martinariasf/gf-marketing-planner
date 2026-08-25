@@ -313,9 +313,16 @@ function StatusPanel({ analytics }: { analytics: ClientAnalytics }) {
     no_key: { Icon: KeyRound, title: 'analytics.noKeyTitle', body: 'analytics.noKeyBody' },
     no_channels: { Icon: Unplug, title: 'analytics.noChannelsTitle', body: 'analytics.noChannelsBody' },
     error: { Icon: AlertCircle, title: 'analytics.errorTitle', body: 'analytics.errorBody' },
+    // `stale` normally means "showing retained real numbers", which never reaches
+    // this panel because there IS data to render. It can only land here if a
+    // payload is stale with nothing in it, and then the stale wording would
+    // promise numbers that are not on screen. Treat it as the failure it is.
+    stale: { Icon: AlertCircle, title: 'analytics.errorTitle', body: 'analytics.errorBody' },
   } as const
-  const entry = map[analytics.status as keyof typeof map]
-  if (!entry) return null
+  // Never return null: this panel is the ONLY thing rendered when there is no
+  // data, so returning null would leave a blank page with no explanation - the
+  // exact failure the explicit `status` exists to prevent.
+  const entry = map[analytics.status as keyof typeof map] ?? map.error
   const { Icon, title, body } = entry
   return (
     <Card>
@@ -413,7 +420,7 @@ export default function PerformanceView() {
       {/* Stale is NOT an error state: it means a refresh was refused (usually a
           429) and we are still showing the last real numbers. Blanking a working
           tab because one refresh failed would be strictly worse. */}
-      {analytics.status === 'stale' ? (
+      {analytics.status === 'stale' && hasData ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{t('analytics.staleBody')}</span>

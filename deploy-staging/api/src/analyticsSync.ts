@@ -221,12 +221,22 @@ export function payloadAfterFailure(
   err: unknown,
 ): ClientAnalytics {
   const message = err instanceof Error ? err.message : 'Analytics sync failed.'
-  const rateLimited = err instanceof AnalyticsError && err.status === 429
-  const hadData = previous.status === 'ok' && previous.channels.length > 0
 
-  if (rateLimited || hadData) {
+  // The ONLY question that matters: do we still hold real numbers worth showing?
+  //
+  // This is deliberately keyed on the DATA, not on the previous status. Keying it
+  // on `status === 'ok'` was a bug: after ok -> 429 (stale, data retained) -> 500,
+  // the third failure saw status 'stale', concluded there was nothing to keep, and
+  // blanked a tab that was still holding real numbers from the first sync. Once a
+  // payload goes stale it must be able to STAY stale.
+  const hasData = previous.channels.length > 0 || previous.posts.length > 0
+
+  if (hasData) {
     return { ...previous, status: 'stale', error: message }
   }
+
+  // Nothing to retain. `stale` would be a lie here - it promises the reader that
+  // the numbers on screen were real once, and there are no numbers on screen.
   return {
     ...emptyAnalytics('error', { provider: providerName }),
     error: message,
