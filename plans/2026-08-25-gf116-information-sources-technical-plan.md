@@ -4,7 +4,7 @@ updated: 2026-08-25
 owner: martin
 repo: C:/Users/Admin/Desktop/GF Innovative Solutions/GF/marketing-planner
 source_branch: experimental
-code_reviewed: false
+code_reviewed: true
 focus_tasks: [TASK-000, TASK-001, TASK-002, TASK-003, TASK-004, TASK-005]
 items:
   - gf-116: "Bug: Viktor never reads uploaded Information Sources | priority: high"
@@ -270,8 +270,10 @@ acceptance:
 - `npx tsc -b` and `npx eslint` pass in `app-v2`; `npx tsc --noEmit` passes in `deploy-staging/api`.
 notes:
 - "Approved" reads as a workflow state. "Viktor is using this" states the fact the user actually came to check, and is what the Assets tab promises.
-- The 404 is the diagnostic that would have collapsed this whole investigation into one line of output.
-- Copy-only, so the UI design-approval policy's copy-fix exclusion applies — no screenshot gate.
+- Copy-only on the SPA side, so the UI design-approval policy's copy-fix exclusion applies — no screenshot gate.
+- **Shipped as a `warning` on the 200, not a 404.** A 404 would turn "this client has no source material yet" into an error for any live slug that has no row in either the CI-seeded `clients/index.json` or the hand-made PB `clients` collection — and nothing in this repo creates such a row. Failing an agent's read closed is a worse outcome than an ambiguous empty list, so the diagnostic is additive and can never deny service.
+- Independent review (GLM 5.2) accepted this but corrected one step of the reasoning: a slug *serving* data would return non-empty items and never reach the warning path at all. The risk is therefore narrower than first written — it is the empty-but-legitimate client that a 404 would misreport, not a populated one. The conclusion is unchanged.
+- `clientExists` returns `false` only when BOTH the disk index and PocketBase answered. One source failing yields `null` and the caller stays silent, so an outage cannot manufacture a "wrong workspace" message.
 
 ## Verification
 
