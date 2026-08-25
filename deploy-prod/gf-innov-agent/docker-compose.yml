@@ -6,6 +6,18 @@ services:
     image: viktor-v2:latest
     container_name: viktor-v2-gf-innov
     restart: unless-stopped
+    # REQUIRED on the hermes-agent:base-v2026.7.1 base. Its s6-overlay preinit
+    # must regain root (euid=0) to fix /run ownership, which the box's
+    # long-standing daemon-wide no-new-privileges=true (/etc/docker/daemon.json,
+    # set 2026-02-22) prevents. Without this the container crash-loops at preinit
+    # with "/run belongs to uid 0 instead of 10000 ... lacking the privileges to
+    # fix it". The older hermes-agent:base did NOT need it — which is why biomas
+    # still runs fine without the line, and why prod only broke the first time it
+    # was recreated onto the base-v2026.7.1 rebuild (2026-08-04). staging-demo
+    # has carried this since its own move to that base. Any agent rebuilt onto
+    # base-v2026.7.1 or newer needs this line BEFORE the next recreate.
+    security_opt:
+      - no-new-privileges=false
     env_file: .env
     volumes:
       - ./data:/opt/data
