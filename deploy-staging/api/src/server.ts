@@ -33,6 +33,8 @@ import { agentJobsRoute } from './routes/agentJobs.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { startAgentJobReconciler } from './agentJobs.js'
+import { startAnalyticsSync } from './analyticsSync.js'
+import { analytics } from './routes/analytics.js'
 import { registerApiDocs } from './openapi-docs.js'
 import { problem } from './problem.js'
 
@@ -132,6 +134,7 @@ app.route('/api/v1', auditRoute)
 app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)
 app.route('/api/v1', integration)
+app.route('/api/v1', analytics)
 
 // Friendly root.
 app.get('/', (c) =>
@@ -162,6 +165,9 @@ app.onError((err, c) => {
 if (env.pbAdminEmail && env.pbAdminPassword) {
   ensureCollections().catch((err) => console.error('[ensureCollections] failed', err))
   startAgentJobReconciler()
+  // GF-113 — periodic Postiz analytics pull. Conservative by construction:
+  // Postiz returns no rate-limit headers, so there is nothing to react to.
+  startAnalyticsSync()
 }
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
