@@ -532,7 +532,7 @@ notes:
 ## Verification
 
 ### TASK-014: Local verification and regression tests
-status: todo
+status: done
 owner: claude
 agent: claude
 reviewer: codex
@@ -551,7 +551,7 @@ notes:
 - Rule from GF-26: `postiz.test.ts` stayed green while shipping a broken payload because it asserted our own wrong shape. Fixtures must come from real responses.
 
 ### TASK-015: Design approval, independent review, staging merge
-status: todo
+status: in_progress
 owner: martin
 agent: claude
 reviewer: codex
@@ -569,6 +569,38 @@ acceptance:
 notes:
 - UI approval gate applies: this is a non-trivial UI change, so Martin's yes comes before the merge, not after.
 - Production promotion is a separate step (`promote-staging-to-prod`), not part of this plan.
+
+## Layer-5 independent review record
+
+Reviewer: **GLM 5.2** (`z-ai/glm-5.2`, high reasoning) via OpenRouter - a different
+vendor from the implementer, given only the diff, the acceptance criteria and this
+plan. Three rounds, verdicts under `.claude/review/`.
+
+| Round | Verdict | Outcome |
+|---|---|---|
+| 1 | FINDINGS (10) | 8 accepted and fixed; 2 rejected with reasons |
+| 2 | FINDINGS (3) | Both rejections accepted by the reviewer; 8 fixes confirmed resolved; 1 MAJOR bug found that round 1's own fix had introduced |
+| 3 | **PASS** | All findings resolved, no new defects |
+
+The two round-1 rejections, both upheld in round 2:
+
+- *"`fmtDateTime`/`fmtDateShort` may not exist"* - both are exported from
+  `app-v2/src/lib/format.ts:73,77`. The file was simply not in the diff.
+- *"`analytics_cache` may not be access-locked"* - omitting rules IS the deny
+  mechanism here: `ensureCollections.ts` writes `spec.listRule ?? null`, and a
+  null PB rule means admin-only. `integration_secrets` locks itself identically.
+
+The single most valuable finding, and the argument for a 3-round cap rather than
+one pass: **round 1's fix introduced a MAJOR bug that round 2 caught.**
+`payloadAfterFailure` keyed retention on `previous.status === 'ok'`, so on the
+sequence ok -> 429 (stale, data kept) -> 500 it concluded there was nothing worth
+keeping and blanked a tab still holding real numbers. The round-1 test masked it
+by only firing a 429 at step 3, which short-circuits before the check. Retention
+is now keyed on whether data exists at all - a stale payload must be able to stay
+stale.
+
+Final verification: API typecheck clean, **184/184 API tests pass**, SPA `tsc -b`
+clean, `vite build` clean, eslint clean on every changed file.
 
 ## Blockers and Dependencies
 
