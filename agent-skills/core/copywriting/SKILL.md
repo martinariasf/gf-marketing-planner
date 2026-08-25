@@ -1,6 +1,6 @@
 ---
 name: copywriting
-description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice first and make it VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés) plus the craft bar the copy must clear to be worth posting. Every post also needs a one-line visual caption describing what the viewer will see. Covers where the voice lives and how to write changes back via the API.
+description: Writing or editing ANY marketing text — post copy, captions, CTAs, headlines. ALWAYS read the brand voice AND the client's uploaded source material first, and make the voice VISIBLE in the text. Hard rules against AI-sounding writing (no em dashes, no AI clichés) plus the craft bar the copy must clear to be worth posting. Every post also needs a one-line visual caption describing what the viewer will see. Covers where the voice lives, where the client's own facts live, and how to write changes back via the API.
 tags: [marketing, copy, voice]
 ---
 
@@ -8,14 +8,16 @@ tags: [marketing, copy, voice]
 
 For the client `$CLIENT_SLUG` on the Marketing-Planner server.
 
-## STEP 0 — READ THE VOICE FIRST (non-negotiable)
+## STEP 0 — READ THE VOICE AND THE SOURCES FIRST (non-negotiable)
 
-Never write or edit copy before you know the voice. If you have not already read
-the brief this conversation, your first action is:
+Never write or edit copy before you know the voice and the client's own facts.
+If you have not already read these this conversation, your first action is:
 
 ```
 GET /clients/$CLIENT_SLUG/brief    →  use data.branding.toneKeywords + tone/voice + boundaries
 GET /clients/$CLIENT_SLUG/plan     →  the post's pillar / campaign / monthly focus
+GET /clients/$CLIENT_SLUG/information-sources?approved=true
+                                   →  documents the client uploaded for you to use
 ```
 
 From the brief take:
@@ -27,6 +29,22 @@ From the brief take:
 
 From the plan take the post's **pillar** and **campaign** so the copy serves the
 strategy, not a generic message.
+
+**From the information sources take the facts.** This is the client's own
+material — brand guidelines, product details, a transcript, a press release —
+uploaded through the dashboard's Assets tab specifically so you would use it.
+Each item carries the full document text in `summary`, a name in `title`, and
+instructions for its use in `prompt`.
+
+- These facts **outrank your own knowledge**. Where a source contradicts what
+  you assumed about the client, the source is right and you are wrong.
+- Quote and reuse the source's actual wording for names, numbers, product
+  claims and dates. Do not paraphrase a specific from memory.
+- An empty list is a legitimate answer — write from the brief. A list you never
+  fetched is not. Never tell a user a document does not exist until you have
+  called this endpoint.
+
+One call per conversation is enough; reuse the result rather than re-fetching.
 
 **The voice must be VISIBLE, not just consulted.** After writing, re-read your
 draft and point (to yourself) at where the toneKeywords show up. If a neutral
