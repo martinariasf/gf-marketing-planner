@@ -162,8 +162,25 @@ const InformationSource = z
   .passthrough()
   .openapi('InformationSource', {
     description:
-      'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. Create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
+      'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. `summary` carries the full text — for an uploaded file, the whole document. Read with GET /information-sources?approved=true; create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
   })
+
+// GF-116 — the information-sources list, plus the fields that appear only when
+// an empty result is explained rather than left ambiguous. Documented because a
+// client generated from this spec would otherwise drop `warning` on the floor.
+const InformationSourceList = z
+  .object({
+    items: z.array(InformationSource),
+    slug: z
+      .string()
+      .optional()
+      .openapi({ description: 'Echoed back only alongside `warning`.', example: 'ghost-client' }),
+    warning: z.string().optional().openapi({
+      description:
+        'Present only when `items` is empty AND no client with this slug is registered on this server \u2014 i.e. the list is empty because the workspace is wrong, not because it holds no source material. Absent on every normal response, including a real client with no sources.',
+    }),
+  })
+  .openapi('InformationSourceList')
 
 const InformationSourceCreate = z
   .object({
@@ -431,14 +448,17 @@ export function registerApiDocs(app: OpenAPIHono): void {
   })
 
   // ── Source material / information sources (agent read+write) ────────────────
-  // "Source material for post generation" in the dashboard. Agents post the
-  // facts/links/transcripts they want the planner grounded on here.
+  // "Source material for post generation" in the dashboard. Two directions, and
+  // the READ is the one that matters most (GF-116): humans upload documents in
+  // the Assets tab expecting the agent to write from them. Agents can also post
+  // facts/links/transcripts they want the planner grounded on.
   reg({
     method: 'get',
     path: '/api/v1/clients/{slug}/information-sources',
     tags: ['source material'],
-    summary: 'List source material (information sources)',
-    description: 'Pass `?approved=true` to get only the sources currently fed to the agent.',
+    summary: 'Read the source material a human uploaded for the agent',
+    description:
+      'The documents a human added in the dashboard’s Assets > Information Sources tab so the agent would use them: brand guidelines, product facts, transcripts. The full text of each is in `summary`, its name in `title`, and how to use it in `prompt`. **Agents should call this with `?approved=true` before drafting** — that filter returns exactly the sources the client has cleared for use, and an agent that skips it writes from its own assumptions instead of the client’s facts.',
     security: bearer,
     request: {
       params: slugParam,
@@ -447,7 +467,11 @@ export function registerApiDocs(app: OpenAPIHono): void {
       }),
     },
     responses: {
-      200: { description: 'Sources', content: json(ItemList(InformationSource, 'InformationSourceList')) },
+      200: {
+        description:
+          'Sources. An empty `items` with a `warning` means the slug matches no registered client \u2014 check the workspace before concluding the client has no source material.',
+        content: json(InformationSourceList),
+      },
       401: errs[401],
       403: errs[403],
     },
@@ -474,7 +498,7 @@ export function registerApiDocs(app: OpenAPIHono): void {
     tags: ['source material'],
     summary: 'Upload a transcript/notes file as source material (agent allowed)',
     description:
-      'multipart/form-data with a `file` part. Only text-based files (.txt, .md, .vtt, .srt, .csv, .json) up to 15 MB — the text is extracted into `summary`. Created un-approved; approve it afterwards.',
+      'multipart/form-data with a `file` part. Only text-based files (.txt, .md, .vtt, .srt, .csv, .json) up to 15 MB — the text is extracted into `summary`. Approved on arrival (GF-110), so `GET /information-sources?approved=true` returns it immediately.',
     security: bearer,
     request: {
       params: slugParam,

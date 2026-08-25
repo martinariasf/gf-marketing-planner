@@ -1,6 +1,6 @@
 ---
 name: post-drafting
-description: Draft brand-voice social posts from a brief, idea, or user prompt. Handles angle selection, boundary-safe reframing, image selection/generation, and creation of in-review posts for approval.
+description: Draft brand-voice social posts from a brief, idea, or user prompt. Always loads the client's approved information sources as factual grounding first. Handles angle selection, boundary-safe reframing, image selection/generation, and creation of in-review posts for approval.
 trigger:
   - telegram: "^(create|draft|new post|make a post)\\b.*$"
   - telegram: "^(about|write about|post about)\\b.*$"
@@ -18,8 +18,18 @@ Create a post that sounds like the brand, stays inside the client's boundaries, 
 
 - `brief.json` for voice, audience, boundaries, and allowed topics.
 - `plan.json` for pillars, campaigns, and current quarter focus.
+- **`GET /clients/$CLIENT_SLUG/information-sources?approved=true` — non-negotiable,
+  every draft.** The documents the client uploaded through the dashboard's Assets
+  tab for you to write from: brand guidelines, product facts, transcripts, press
+  releases. Full text is in each item's `summary`, the name in `title`, and how to
+  use it in `prompt`. Where a source disagrees with what you assumed about the
+  client, the source wins — take names, numbers, dates and product claims from its
+  wording rather than from memory. An empty list is a fine answer; skipping the
+  call is not, and you must never tell a user a document does not exist without
+  having made it. One call per conversation, then reuse it.
 - `posts/index.json` and nearby `posts/*.json` to avoid duplicates.
-- `assets/manifest.json` to reuse approved images/logos before generating anything new.
+- `assets/manifest.json` to reuse approved images/logos before generating anything
+  new. This is the IMAGE store — it is not where information sources live.
 - **Language note:** Interact with the user in the user's own language, but draft the marketing output in the language the client brief specifies (unless explicitly told otherwise).
 
 > Client-specific strategy references (if any) live in the client skills folder

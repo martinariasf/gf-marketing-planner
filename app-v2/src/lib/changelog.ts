@@ -34,6 +34,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    date: '2026-08-25',
+    title: 'Viktor now actually reads the documents you upload',
+    items: [
+      'A document you add under Assets > Information Sources is now something Viktor reads before he writes. Until now it was stored correctly but he was never told it existed, so asked to use it he would report — honestly — that no such document was there.',
+      'He now loads your approved sources as a normal part of drafting a post or writing copy, not only when you ask him about a file by name. Where one of your documents contradicts what he assumed about your business, your document wins.',
+      'Each source now says plainly whether Viktor can see it. The badge reads "Viktor is using this" once a source is approved, and "Viktor cannot see it yet" until then, instead of only showing an approval state.',
+    ],
+  },
+  {
     date: '2026-08-24',
     title: 'Long documents no longer fail to save',
     items: [
