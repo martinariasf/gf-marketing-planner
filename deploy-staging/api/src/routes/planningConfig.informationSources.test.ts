@@ -18,6 +18,8 @@ process.env.BOOTSTRAP_TOKENS = 'admin_test:admin:*,agent_test:agent:acme'
 let sources: Record<string, Array<Record<string, unknown>>> = {}
 /** Slugs the fake PB `clients` collection knows about. */
 let pbClients: string[] = []
+/** When true, the fake PB fails the `clients` lookup (PB unreachable). */
+let pbClientsFails = false
 /** Slugs the fake disk index knows about, or null for "index unreadable". */
 let diskClients: string[] | null = []
 /** Every filter string the fake PB was asked for, in order. */
@@ -49,6 +51,7 @@ mock.module('../pb.js', {
             filtersSeen.push({ collection: name, filter })
             const slug = slugFromFilter(filter)
             if (name === 'clients') {
+              if (pbClientsFails) throw new Error('pb unreachable')
               return pbClients.includes(slug) ? [{ slug }] : []
             }
             if (name === 'information_sources') {
@@ -69,6 +72,7 @@ const { planningConfig } = await import('./planningConfig.js')
 function reset() {
   sources = {}
   pbClients = []
+  pbClientsFails = false
   diskClients = []
   filtersSeen.length = 0
 }
@@ -94,7 +98,7 @@ test('a slug no client owns says so instead of looking like an empty workspace',
   assert.equal(res.status, 200, 'stays 200 — a slug can be live without a clients row')
   assert.deepEqual(body.items, [])
   assert.equal(body.slug, 'ghost')
-  assert.match(String(body.warning), /No client "ghost" exists/)
+  assert.match(String(body.warning), /Slug "ghost" matches no client/)
   assert.match(String(body.warning), /workspace is wrong/)
 })
 
@@ -110,12 +114,25 @@ test('a client known only to PocketBase is not reported as unknown', async () =>
   assert.equal(body.warning, undefined)
 })
 
-test('neither lookup answering yields no warning rather than a confident wrong one', async () => {
+test('a client PocketBase alone knows about survives an unreadable disk index', async () => {
   reset()
-  diskClients = null // index unreadable; fake PB still answers, so this stays determinable
+  diskClients = null // index unreadable; PB still answers, so this stays determinable
   pbClients = ['acme']
   const { body } = await get('/clients/acme/information-sources')
   assert.equal(body.warning, undefined)
+})
+
+test('a PocketBase outage does not become a confident "no such client"', async () => {
+  // The disk index can say "not mine" while PB, the other half of the client
+  // list, is unreachable. That is not an absence, and claiming it is would put
+  // a false "wrong workspace" in front of a user during an outage.
+  reset()
+  diskClients = ['acme']
+  pbClientsFails = true
+  const { res, body } = await get('/clients/ghost/information-sources')
+  assert.equal(res.status, 200)
+  assert.deepEqual(body.items, [])
+  assert.equal(body.warning, undefined, 'undetermined must stay silent, not guess')
 })
 
 test('an uploaded document comes back with its full text in summary', async () => {

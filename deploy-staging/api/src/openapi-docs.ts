@@ -165,6 +165,23 @@ const InformationSource = z
       'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. `summary` carries the full text — for an uploaded file, the whole document. Read with GET /information-sources?approved=true; create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
   })
 
+// GF-116 — the information-sources list, plus the fields that appear only when
+// an empty result is explained rather than left ambiguous. Documented because a
+// client generated from this spec would otherwise drop `warning` on the floor.
+const InformationSourceList = z
+  .object({
+    items: z.array(InformationSource),
+    slug: z
+      .string()
+      .optional()
+      .openapi({ description: 'Echoed back only alongside `warning`.', example: 'ghost-client' }),
+    warning: z.string().optional().openapi({
+      description:
+        'Present only when `items` is empty AND no client with this slug is registered on this server \u2014 i.e. the list is empty because the workspace is wrong, not because it holds no source material. Absent on every normal response, including a real client with no sources.',
+    }),
+  })
+  .openapi('InformationSourceList')
+
 const InformationSourceCreate = z
   .object({
     title: z.string().openapi({ example: 'Q3 product launch press release' }),
@@ -441,7 +458,11 @@ export function registerApiDocs(app: OpenAPIHono): void {
       }),
     },
     responses: {
-      200: { description: 'Sources', content: json(ItemList(InformationSource, 'InformationSourceList')) },
+      200: {
+        description:
+          'Sources. An empty `items` with a `warning` means the slug matches no registered client \u2014 check the workspace before concluding the client has no source material.',
+        content: json(InformationSourceList),
+      },
       401: errs[401],
       403: errs[403],
     },

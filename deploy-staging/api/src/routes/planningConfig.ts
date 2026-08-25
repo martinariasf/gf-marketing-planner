@@ -201,9 +201,9 @@ planningConfig.get('/clients/:slug/information-sources', requireScope(), async (
       items,
       slug,
       warning:
-        `No client "${slug}" exists on this server. This list is empty because the ` +
-        `workspace is wrong, not because it has no source material — check the slug ` +
-        `you are querying against the one the document was uploaded under.`,
+        `Slug "${slug}" matches no client registered on this server. This list is ` +
+        `empty because the workspace is wrong, not because it holds no source ` +
+        `material — check this slug against the one the document was uploaded under.`,
     })
   }
   return c.json({ items })

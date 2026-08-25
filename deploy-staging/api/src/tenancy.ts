@@ -33,11 +33,17 @@ export async function resolveUserScope(userId: string): Promise<string[]> {
  * PocketBase outage into a confident "no such client".
  */
 export async function clientExists(slug: string): Promise<boolean | null> {
-  let answered = false
+  // Disk and PB are co-sources, not fallbacks: routes/clients.ts unions them, so
+  // a slug missing from one may still exist in the other. `false` therefore
+  // requires BOTH to have answered — one source replying 'not mine' is not an
+  // absence, and treating it as one is how a lookup outage turns into a
+  // confident, wrong 'no such client'.
+  let diskAnswered = false
+  let pbAnswered = false
   try {
     const idx = (await disk.clientIndex()) as { clients?: Array<{ slug?: string }> } | null
     if (idx) {
-      answered = true
+      diskAnswered = true
       if ((idx.clients ?? []).some((entry) => entry.slug === slug)) return true
     }
   } catch {
@@ -47,12 +53,12 @@ export async function clientExists(slug: string): Promise<boolean | null> {
     const rows = await withPb((pb) =>
       pb.collection('clients').getFullList<{ slug?: string }>({ filter: `slug="${slug}"` }),
     )
-    answered = true
+    pbAnswered = true
     if (rows.length > 0) return true
   } catch {
     /* PB unreachable or collection absent */
   }
-  return answered ? false : null
+  return diskAnswered && pbAnswered ? false : null
 }
 
 const agencyCache = new Map<string, { agency: string | null; at: number }>()
