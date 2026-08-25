@@ -162,7 +162,7 @@ const InformationSource = z
   .passthrough()
   .openapi('InformationSource', {
     description:
-      'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. Create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
+      'A piece of "source material for post generation": a website, note, news item, or uploaded transcript the agent uses as factual grounding. `summary` carries the full text — for an uploaded file, the whole document. Read with GET /information-sources?approved=true; create with POST /information-sources (JSON) or POST /information-sources/upload (text file).',
   })
 
 const InformationSourceCreate = z
@@ -422,14 +422,17 @@ export function registerApiDocs(app: OpenAPIHono): void {
   })
 
   // ── Source material / information sources (agent read+write) ────────────────
-  // "Source material for post generation" in the dashboard. Agents post the
-  // facts/links/transcripts they want the planner grounded on here.
+  // "Source material for post generation" in the dashboard. Two directions, and
+  // the READ is the one that matters most (GF-116): humans upload documents in
+  // the Assets tab expecting the agent to write from them. Agents can also post
+  // facts/links/transcripts they want the planner grounded on.
   reg({
     method: 'get',
     path: '/api/v1/clients/{slug}/information-sources',
     tags: ['source material'],
-    summary: 'List source material (information sources)',
-    description: 'Pass `?approved=true` to get only the sources currently fed to the agent.',
+    summary: 'Read the source material a human uploaded for the agent',
+    description:
+      'The documents a human added in the dashboard’s Assets > Information Sources tab so the agent would use them: brand guidelines, product facts, transcripts. The full text of each is in `summary`, its name in `title`, and how to use it in `prompt`. **Agents should call this with `?approved=true` before drafting** — that filter returns exactly the sources the client has cleared for use, and an agent that skips it writes from its own assumptions instead of the client’s facts.',
     security: bearer,
     request: {
       params: slugParam,
@@ -465,7 +468,7 @@ export function registerApiDocs(app: OpenAPIHono): void {
     tags: ['source material'],
     summary: 'Upload a transcript/notes file as source material (agent allowed)',
     description:
-      'multipart/form-data with a `file` part. Only text-based files (.txt, .md, .vtt, .srt, .csv, .json) up to 15 MB — the text is extracted into `summary`. Created un-approved; approve it afterwards.',
+      'multipart/form-data with a `file` part. Only text-based files (.txt, .md, .vtt, .srt, .csv, .json) up to 15 MB — the text is extracted into `summary`. Approved on arrival (GF-110), so `GET /information-sources?approved=true` returns it immediately.',
     security: bearer,
     request: {
       params: slugParam,

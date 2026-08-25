@@ -6,6 +6,7 @@ import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
 import { loadOrgSettings, DEFAULTS as ORG_SETTINGS_DEFAULTS, type OrgSettings } from '../orgSettings.js'
 import { isTextUpload } from '../textUpload.js'
+import { clientExists } from '../tenancy.js'
 
 export type CalendarRange = {
   startMonth: string
@@ -174,6 +175,12 @@ planningConfig.put(
   },
 )
 
+// GF-116 — the agent-facing read. An uploaded document's full text is in each
+// item's `summary`, so this one GET is how Viktor sees what a human put in the
+// Assets tab. `?approved=true` is the agent's filter: `approved` is the only
+// lever a human has to stop the AI using a draft or a misfiled document, so
+// unapproved sources stay invisible to it. Uploads auto-approve on arrival
+// (GF-110), so that gate costs the normal path nothing.
 planningConfig.get('/clients/:slug/information-sources', requireScope(), async (c) => {
   const slug = c.req.param('slug')
   const approvedOnly = c.req.query('approved') === 'true'
@@ -183,6 +190,22 @@ planningConfig.get('/clients/:slug/information-sources', requireScope(), async (
       sort: '-updatedAt',
     }),
   )
+  // GF-116 — an empty list has two very different causes: this client really has
+  // no source material, or the caller is asking under a slug no client owns (the
+  // wrong workspace). Both used to look identical, which is how an agent came to
+  // report "the document does not exist". Name the second case. Deliberately NOT
+  // a 404: a slug can be legitimately live without a `clients` row, and failing
+  // the read closed would break the very path this fixes.
+  if (items.length === 0 && (await clientExists(slug)) === false) {
+    return c.json({
+      items,
+      slug,
+      warning:
+        `No client "${slug}" exists on this server. This list is empty because the ` +
+        `workspace is wrong, not because it has no source material — check the slug ` +
+        `you are querying against the one the document was uploaded under.`,
+    })
+  }
   return c.json({ items })
 })
 
