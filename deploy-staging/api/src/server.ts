@@ -33,6 +33,7 @@ import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { startAgentJobReconciler } from './agentJobs.js'
 import { registerApiDocs } from './openapi-docs.js'
+import { buildApiServers, originFromApiBase } from './openapiServers.js'
 import { problem } from './problem.js'
 
 const app = new OpenAPIHono()
@@ -51,6 +52,11 @@ app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
 // only adds spec entries; the real handlers live in the route files.
 registerApiDocs(app)
 
+// GF-123: the spec must describe THIS deployment — see openapiServers.ts for
+// why a hardcoded staging URL broke every prod integration.
+const publicOrigin = originFromApiBase(env.publicApiBase)
+const apiServers = buildApiServers(env.publicApiBase)
+
 // OpenAPI spec + docs UI are registered BEFORE the auth-gated subapps so
 // the clients router's wildcard requireAuth middleware doesn't swallow them.
 app.doc('/api/v1/openapi.json', {
@@ -59,7 +65,9 @@ app.doc('/api/v1/openapi.json', {
     title: 'Marketing Planner API',
     version: '1.0.0',
     description: [
-      'Staging API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
+      'REST API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
+      '',
+      `This spec describes the deployment at ${publicOrigin}. Agent tokens are per-deployment: a token minted on production will NOT authenticate against staging (and vice versa).`,
       '',
       '## For external agents',
       'These docs are the agent-facing integration reference (the human webapp only links here).',
@@ -72,23 +80,21 @@ app.doc('/api/v1/openapi.json', {
       '- **Images** are optional. When you do generate one, write it to `clients/{slug}/assets/` and append a manifest row; reference it via the public `/clients/{slug}/assets/files/{name}` URL.',
     ].join('\n'),
   },
-  servers: [
-    { url: 'https://staging.marketing.gfinnov.com', description: 'staging' },
-    { url: 'http://localhost:8080', description: 'local' },
-  ],
+  servers: apiServers,
 })
 
 app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
   type: 'http',
   scheme: 'bearer',
-  description: 'agent_* or dash_* token. See deploy-staging/api/README.md.',
+  description:
+    'agent_* or dash_* token, scoped to one client slug and to THIS deployment. See deploy-staging/api/README.md.',
 })
 
 app.get(
   '/api/v1/docs',
   apiReference({
     spec: { url: '/api/v1/openapi.json' },
-    pageTitle: 'Marketing Planner API — staging',
+    pageTitle: `Marketing Planner API — ${publicOrigin.replace(/^https?:\/\//, '')}`,
     theme: 'purple',
   }),
 )
