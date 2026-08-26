@@ -123,7 +123,14 @@ function buildAgentInput(message: string, slug: string, attachments: AttachmentF
       const url = chatAttachmentAgentUrl(slug, att.id)
       lines.push(
         `${n}. IMAGE: ${url}`,
-        `   (pass this URL directly as a reference_images entry if calling image_generate — do not describe it in words)`,
+        `   This is already a public URL. GF-120: if the user wants THIS exact`,
+        `   image used as-is (a post cover or a carousel slide) — not a new`,
+        `   AI-generated image — set this URL directly as the post's \`image\``,
+        `   (or \`slides[].image\`) field. Do not run image_generate for it and`,
+        `   do not search the assets manifest for it; it does not need to be`,
+        `   copied into /assets/files/ first. Only pass this URL into`,
+        `   image_generate's \`reference_images\` when you are instead`,
+        `   generating a NEW image that should match or incorporate this one.`,
       )
     } else {
       const text = att.text ?? ''
