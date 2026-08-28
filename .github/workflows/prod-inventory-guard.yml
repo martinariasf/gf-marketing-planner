@@ -28,6 +28,11 @@ name: Prod inventory guard
 on:
   pull_request:
     branches: [main]
+    # `labeled`/`unlabeled`/`edited` are NOT in the default type set. Without
+    # them, applying the escape-hatch label (or pasting the token into the PR
+    # body) does not re-run the check, and a manual re-run replays the OLD event
+    # payload — so the label would be invisible and the guard would keep failing.
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
   push:
     branches: [main]
   workflow_dispatch:
