@@ -1,0 +1,125 @@
+name: Prod inventory guard
+
+# Fails any change to `main` that would REMOVE production-only state which
+# already exists there: a live client (clients/index.json entry or
+# clients/<slug>/ dir) or a prod-only env key in deploy-prod/docker-compose.yml.
+#
+# Why: `main` is the only branch that carries live client workspaces (they are
+# created straight from main by the create-platform-workspace skill) and the
+# prod-only compose env (AUTH_EXCHANGE_ADMINS, HERMES_AGENTS_JSON, ...). A plain
+# 3-way merge of `experimental` preserves all of it. A conflict resolved toward
+# experimental, a force-push, a `git checkout experimental -- .`, or a
+# revert-of-a-merge does not.
+#
+# ADDITIVE-SAFE: adding clients or keys passes; only removals fail.
+# Escape hatch (intentional removal): add the PR label
+# `allow-prod-inventory-removal`, or put a line
+# `ALLOW-PROD-INVENTORY-REMOVAL: <reason>` in the PR body (for push events, in
+# the commit message).
+#
+# GitHub Actions note: for `pull_request`, the workflow definition is taken from
+# the PR's MERGE ref (base merged with head), not from the base branch. So this
+# file only has to live on `experimental` for it to run on the
+# experimental -> main promotion PR; it does not need to be on `main` first.
+# The `push: main` job is the post-merge tripwire for everything that bypasses a
+# PR (direct push, force-push, admin merge) - by then it is a klaxon, not a
+# gate, so pair it with branch protection in repo settings.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-inventory-guard-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout (merge result for PRs, pushed commit for pushes)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve base and result refs
+        id: refs
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # Pin main's current tip under a local ref so we never depend on
+          # actions/checkout's default refspec behaviour.
+          git fetch --no-tags --quiet origin main:refs/prod-guard/base
+          BASE=refs/prod-guard/base
+          RESULT=HEAD
+          if [ "$EVENT" = "push" ]; then
+            # Post-merge tripwire: compare what main WAS against what it now IS.
+            if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              BASE="$BEFORE"
+            else
+              echo "push event without a usable 'before' sha; comparing against main's tip instead"
+            fi
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE result=$RESULT"
+
+      - name: Detect escape hatch
+        id: hatch
+        env:
+          EVENT: ${{ github.event_name }}
+          # Read through env, never interpolated into the script body.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE: ${{ steps.refs.outputs.base }}
+          RESULT: ${{ steps.refs.outputs.result }}
+        run: |
+          set -euo pipefail
+          TOKEN='ALLOW-PROD-INVENTORY-REMOVAL'
+          LABEL='allow-prod-inventory-removal'
+          allow=false
+          note=''
+          case ",${PR_LABELS:-}," in
+            *",$LABEL,"*) allow=true; note="PR label $LABEL" ;;
+          esac
+          if [ "$allow" != true ] && printf '%s' "${PR_BODY:-}" | grep -qF "$TOKEN"; then
+            allow=true
+            note="$(printf '%s' "${PR_BODY:-}" | grep -F "$TOKEN" | head -n1)"
+          fi
+          if [ "$allow" != true ] && [ "$EVENT" = "push" ]; then
+            if git log --format=%B "${BASE}..${RESULT}" 2>/dev/null | grep -qF "$TOKEN"; then
+              allow=true
+              note="$(git log --format=%B "${BASE}..${RESULT}" | grep -F "$TOKEN" | head -n1)"
+            fi
+          fi
+          echo "allow=$allow" >> "$GITHUB_OUTPUT"
+          echo "note=$note" >> "$GITHUB_OUTPUT"
+          echo "escape hatch: allow=$allow note=$note"
+
+      - name: Guard
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+          RESULT: ${{ steps.refs.outputs.result }}
+          ALLOW: ${{ steps.hatch.outputs.allow }}
+          NOTE: ${{ steps.hatch.outputs.note }}
+        run: |
+          set -euo pipefail
+          if [ "$ALLOW" = "true" ]; then
+            python3 .github/scripts/prod_inventory_guard.py \
+              --base "$BASE" --result "$RESULT" \
+              --allow-removal --escape-hatch-note "$NOTE"
+          else
+            python3 .github/scripts/prod_inventory_guard.py \
+              --base "$BASE" --result "$RESULT"
+          fi
