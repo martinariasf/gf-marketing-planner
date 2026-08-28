@@ -26,7 +26,7 @@ import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
 // `message` is aliased: this route already has a local `message` (the user's
 // chat text), so the catalog helper comes in as `localized`.
-import { friendlyError, message as localized } from '../agentMessages.js'
+import { friendlyError, message as localized, type Lang } from '../agentMessages.js'
 import {
   createDashboardChatJob,
   finalizeAgentJob,
@@ -109,26 +109,97 @@ interface AttachmentForInput {
   text?: string
 }
 
+// Localized copy for the synthetic attachments block below.
+//
+// GF-122b: this block is appended to the SAME `input` string as the user's
+// typed message, so from the model's point of view it is part of "the latest
+// user message". Every agent's system prompt opens with a LANGUAGE RULE that
+// reads, verbatim: "Detect the language of the latest user message and write
+// your ENTIRE reply in that SAME language." Hardcoding this block in English
+// therefore hands a Spanish- or German-speaking client a turn whose bulk AND
+// trailing text is English, and the reply can flip language part-way through
+// — observed on Black Venture Farm (Spanish) on 2026-08-26, on the one turn
+// of that conversation that carried attachments (4 images, so the English
+// instruction line below repeated four times).
+//
+// What is localized and what is NOT:
+//
+//   The STRUCTURAL MARKERS — the "--- ATTACHMENTS ---" header, the "IMAGE:"
+//   and "DOCUMENT:" labels, and the <<< >>> delimiters — stay English in
+//   every language. They are a machine contract with the agents' own system
+//   prompts, whose "CHAT ATTACHMENTS (GF-68)" section keys off those literal
+//   strings (see deploy-staging/staging-demo-agent/config.yaml, and the same
+//   section in each client agent's config.yaml on the box). Translating them
+//   here without editing four agent configs in lockstep would break the
+//   reference_images path for exactly the clients this fix is for.
+//
+//   The PROSE — the instruction line under each image, and the unit noun in
+//   the document line — is localized. That is where essentially all of the
+//   English words are, and repeated per attachment it is what outweighs a
+//   short user message.
+//
+// Same shape as agentMessages.ts (the relay's other self-authored copy): one
+// row per key, one column per Lang, English as the fallback. Tool and
+// parameter names (`image_generate`, `reference_images`) stay English inside
+// the prose too — they are identifiers, and translating them would name a
+// tool that does not exist.
+const ATTACHMENTS_HEADER = '--- ATTACHMENTS ---'
+const IMAGE_LABEL = 'IMAGE'
+const DOCUMENT_LABEL = 'DOCUMENT'
+
+interface AttachmentBlockCopy {
+  /** The instruction line under an image entry (already indented). */
+  imageHint: string
+  /** Unit noun for the document's character count. */
+  characters: string
+}
+
+const ATTACHMENT_BLOCK: Record<Lang, AttachmentBlockCopy> = {
+  es: {
+    imageHint:
+      '   (pasa esta URL directamente como entrada de reference_images si llamas a image_generate — no la describas con palabras)',
+    characters: 'caracteres',
+  },
+  de: {
+    imageHint:
+      '   (gib diese URL direkt als reference_images-Eintrag weiter, wenn du image_generate aufrufst — beschreibe sie nicht in Worten)',
+    characters: 'Zeichen',
+  },
+  en: {
+    imageHint:
+      '   (pass this URL directly as a reference_images entry if calling image_generate — do not describe it in words)',
+    characters: 'characters',
+  },
+}
+
 // Build the transport `input` string sent to Hermes. When there are
-// attachments, appends a synthetic "--- ATTACHMENTS ---" block AFTER the
-// user's raw message. This block is ONLY added to the payload sent to the
+// attachments, appends the synthetic attachments block AFTER the user's raw
+// message, with its prose written in `lang` — the client's resolved
+// language, see `resolveClientLang()` — for the reason documented on
+// ATTACHMENT_BLOCK above. This block is ONLY added to the payload sent to the
 // agent — the chat_messages row persisted above keeps `content` as the raw
 // typed text, never this block (see the persist call just above).
-function buildAgentInput(message: string, slug: string, attachments: AttachmentForInput[]): string {
+//
+// Exported so tests can assert the real assembled string per language rather
+// than grepping chat.ts's source text.
+export function buildAgentInput(
+  message: string,
+  slug: string,
+  attachments: AttachmentForInput[],
+  lang: Lang,
+): string {
   if (attachments.length === 0) return message
-  const lines: string[] = ['--- ATTACHMENTS ---']
+  const copy = ATTACHMENT_BLOCK[lang] ?? ATTACHMENT_BLOCK.en
+  const lines: string[] = [ATTACHMENTS_HEADER]
   attachments.forEach((att, i) => {
     const n = i + 1
     if (att.kind === 'image') {
       const url = chatAttachmentAgentUrl(slug, att.id)
-      lines.push(
-        `${n}. IMAGE: ${url}`,
-        `   (pass this URL directly as a reference_images entry if calling image_generate — do not describe it in words)`,
-      )
+      lines.push(`${n}. ${IMAGE_LABEL}: ${url}`, copy.imageHint)
     } else {
       const text = att.text ?? ''
       lines.push(
-        `${n}. DOCUMENT: ${att.filename} (${text.length} characters)`,
+        `${n}. ${DOCUMENT_LABEL}: ${att.filename} (${text.length} ${copy.characters})`,
         `<<<`,
         text,
         `>>>`,
@@ -427,7 +498,7 @@ chat.post(
             'X-Hermes-Session-Key': `mp-${slug}-${thread}`,
           },
           body: JSON.stringify({
-            input: buildAgentInput(message, slug, attachmentRecords),
+            input: buildAgentInput(message, slug, attachmentRecords, lang),
             conversation_history: history.map((h) => ({ role: h.role, content: h.content })),
           }),
           signal: ac.signal,
