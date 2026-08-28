@@ -26,7 +26,7 @@ import { problem } from '../problem.js'
 import { rateLimit } from '../rateLimit.js'
 // `message` is aliased: this route already has a local `message` (the user's
 // chat text), so the catalog helper comes in as `localized`.
-import { friendlyError, message as localized } from '../agentMessages.js'
+import { friendlyError, message as localized, type Lang } from '../agentMessages.js'
 import {
   createDashboardChatJob,
   finalizeAgentJob,
@@ -109,33 +109,97 @@ interface AttachmentForInput {
   text?: string
 }
 
+// Localized copy for the synthetic attachments block below.
+//
+// GF-122b: this block is appended to the SAME `input` string as the user's
+// typed message, so from the model's point of view it is part of "the latest
+// user message". Every agent's system prompt opens with a LANGUAGE RULE that
+// reads, verbatim: "Detect the language of the latest user message and write
+// your ENTIRE reply in that SAME language." Hardcoding this block in English
+// therefore hands a Spanish- or German-speaking client a turn whose bulk AND
+// trailing text is English, and the reply can flip language part-way through
+// — observed on Black Venture Farm (Spanish) on 2026-08-26, on the one turn
+// of that conversation that carried attachments (4 images, so the English
+// instruction line below repeated four times).
+//
+// What is localized and what is NOT:
+//
+//   The STRUCTURAL MARKERS — the "--- ATTACHMENTS ---" header, the "IMAGE:"
+//   and "DOCUMENT:" labels, and the <<< >>> delimiters — stay English in
+//   every language. They are a machine contract with the agents' own system
+//   prompts, whose "CHAT ATTACHMENTS (GF-68)" section keys off those literal
+//   strings (see deploy-staging/staging-demo-agent/config.yaml, and the same
+//   section in each client agent's config.yaml on the box). Translating them
+//   here without editing four agent configs in lockstep would break the
+//   reference_images path for exactly the clients this fix is for.
+//
+//   The PROSE — the instruction line under each image, and the unit noun in
+//   the document line — is localized. That is where essentially all of the
+//   English words are, and repeated per attachment it is what outweighs a
+//   short user message.
+//
+// Same shape as agentMessages.ts (the relay's other self-authored copy): one
+// row per key, one column per Lang, English as the fallback. Tool and
+// parameter names (`image_generate`, `reference_images`) stay English inside
+// the prose too — they are identifiers, and translating them would name a
+// tool that does not exist.
+const ATTACHMENTS_HEADER = '--- ATTACHMENTS ---'
+const IMAGE_LABEL = 'IMAGE'
+const DOCUMENT_LABEL = 'DOCUMENT'
+
+interface AttachmentBlockCopy {
+  /** The instruction line under an image entry (already indented). */
+  imageHint: string
+  /** Unit noun for the document's character count. */
+  characters: string
+}
+
+const ATTACHMENT_BLOCK: Record<Lang, AttachmentBlockCopy> = {
+  es: {
+    imageHint:
+      '   Esta ya es una URL publica. Si el usuario quiere usar ESTA imagen tal cual (portada del post o slide del carrusel), pon la URL directamente en el campo `image` (o `slides[].image`) del post: no llames a image_generate y no la busques en el manifiesto de assets, no hace falta copiarla antes a /assets/files/. Pasala como entrada de reference_images solo cuando generes una imagen NUEVA que deba parecerse a esta o incorporarla.',
+    characters: 'caracteres',
+  },
+  de: {
+    imageHint:
+      '   Dies ist bereits eine oeffentliche URL. Wenn der Nutzer GENAU dieses Bild unveraendert verwenden will (Post-Titelbild oder Karussell-Slide), trage die URL direkt in das Feld `image` (bzw. `slides[].image`) des Posts ein: rufe dafuer nicht image_generate auf und suche sie nicht im Assets-Manifest, sie muss nicht erst nach /assets/files/ kopiert werden. Gib sie nur dann als reference_images-Eintrag weiter, wenn du stattdessen ein NEUES Bild erzeugst, das diesem entsprechen oder es einbeziehen soll.',
+    characters: 'Zeichen',
+  },
+  en: {
+    imageHint:
+      '   This is already a public URL. GF-120: if the user wants THIS exact image used as-is (a post cover or a carousel slide) — not a new AI-generated image — set this URL directly as the post\'s `image` (or `slides[].image`) field. Do not run image_generate for it and do not search the assets manifest for it; it does not need to be copied into /assets/files/ first. Only pass this URL into image_generate\'s `reference_images` when you are instead generating a NEW image that should match or incorporate this one.',
+    characters: 'characters',
+  },
+}
+
 // Build the transport `input` string sent to Hermes. When there are
-// attachments, appends a synthetic "--- ATTACHMENTS ---" block AFTER the
-// user's raw message. This block is ONLY added to the payload sent to the
+// attachments, appends the synthetic attachments block AFTER the user's raw
+// message, with its prose written in `lang` — the client's resolved
+// language, see `resolveClientLang()` — for the reason documented on
+// ATTACHMENT_BLOCK above. This block is ONLY added to the payload sent to the
 // agent — the chat_messages row persisted above keeps `content` as the raw
 // typed text, never this block (see the persist call just above).
-function buildAgentInput(message: string, slug: string, attachments: AttachmentForInput[]): string {
+//
+// Exported so tests can assert the real assembled string per language rather
+// than grepping chat.ts's source text.
+export function buildAgentInput(
+  message: string,
+  slug: string,
+  attachments: AttachmentForInput[],
+  lang: Lang,
+): string {
   if (attachments.length === 0) return message
-  const lines: string[] = ['--- ATTACHMENTS ---']
+  const copy = ATTACHMENT_BLOCK[lang] ?? ATTACHMENT_BLOCK.en
+  const lines: string[] = [ATTACHMENTS_HEADER]
   attachments.forEach((att, i) => {
     const n = i + 1
     if (att.kind === 'image') {
       const url = chatAttachmentAgentUrl(slug, att.id)
-      lines.push(
-        `${n}. IMAGE: ${url}`,
-        `   This is already a public URL. GF-120: if the user wants THIS exact`,
-        `   image used as-is (a post cover or a carousel slide) — not a new`,
-        `   AI-generated image — set this URL directly as the post's \`image\``,
-        `   (or \`slides[].image\`) field. Do not run image_generate for it and`,
-        `   do not search the assets manifest for it; it does not need to be`,
-        `   copied into /assets/files/ first. Only pass this URL into`,
-        `   image_generate's \`reference_images\` when you are instead`,
-        `   generating a NEW image that should match or incorporate this one.`,
-      )
+      lines.push(`${n}. ${IMAGE_LABEL}: ${url}`, copy.imageHint)
     } else {
       const text = att.text ?? ''
       lines.push(
-        `${n}. DOCUMENT: ${att.filename} (${text.length} characters)`,
+        `${n}. ${DOCUMENT_LABEL}: ${att.filename} (${text.length} ${copy.characters})`,
         `<<<`,
         text,
         `>>>`,
@@ -451,7 +515,7 @@ chat.post(
             'X-Hermes-Session-Key': hermesSessionId,
           },
           body: JSON.stringify({
-            input: buildAgentInput(message, slug, attachmentRecords),
+            input: buildAgentInput(message, slug, attachmentRecords, lang),
             conversation_history: history.map((h) => ({ role: h.role, content: h.content })),
             // GF-122: stable session_id so the gateway's system-prompt cache
             // (keyed by session_id, NOT by X-Hermes-Session-Key — see the

@@ -21,6 +21,60 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-25',
+    title: 'The Performance tab now shows real numbers',
+    items: [
+      'Every number on the Performance tab used to come from a file we filled in by hand. Nothing on that page had ever touched a social network. It now reads live figures from the account that actually publishes your posts, with a visible "last updated" stamp and a Refresh button.',
+      'Published posts are listed with their real state and a link straight through to the live post on Instagram or LinkedIn.',
+      'Per-post numbers (likes, comments and so on for one specific post) are not shown, because our publishing tool does not report them. We would rather show nothing than show a zero we cannot stand behind. Getting those numbers is being handled as separate work.',
+      'If your account is not connected, or is connected but has no channels linked, the tab now tells you exactly which of the two it is instead of showing an empty page.',
+      'The Google Analytics box has been removed. It announced that web analytics was not connected and then showed two made-up numbers underneath it.',
+      'On the Goals tab, the weekly wins and losses summary has been removed, and any goal we cannot actually measure now says so rather than showing an empty progress bar.',
+      'The Integration tab now lists which social channels your publishing key can see, so a missing channel is obvious at the point where you would fix it.',
+    ],
+  },
+  {
+    date: '2026-08-25',
+    title: 'Viktor now actually reads the documents you upload',
+    items: [
+      'A document you add under Assets > Information Sources is now something Viktor reads before he writes. Until now it was stored correctly but he was never told it existed, so asked to use it he would report — honestly — that no such document was there.',
+      'He now loads your approved sources as a normal part of drafting a post or writing copy, not only when you ask him about a file by name. Where one of your documents contradicts what he assumed about your business, your document wins.',
+      'Each source now says plainly whether Viktor can see it. The badge reads "Viktor is using this" once a source is approved, and "Viktor cannot see it yet" until then, instead of only showing an approval state.',
+    ],
+  },
+  {
+    date: '2026-08-24',
+    title: 'Long documents no longer fail to save',
+    items: [
+      'Uploading a longer text file — a brand book, a brief, a transcript — in the Information Sources section of the Assets tab used to fail with "Failed to create record" once the file passed about two pages. Any length up to roughly 1 MB now saves.',
+      'The same limit was silently cutting off other things: long chat messages from Viktor, the text of documents attached in the chat, and long review comments from your clients. All of them now hold the full text.',
+      'A file you upload in the Assets tab is now available to Viktor straight away. It used to need a second "approve" click before he could use it, which was easy to miss.',
+      'When something you upload really is invalid, the message now says which field was rejected and why, instead of a generic failure.',
+    ],
+  },
+  {
+    date: '2026-08-20',
+    title: 'The plan summary now opens the Strategy link instead of closing it',
+    items: [
+      'In the card view of a Strategy link, the month-by-month plan summary — the calendar grid plus the counts by topic, network and post type — now sits at the TOP, above the first card, so your client sees how the month is laid out before judging any single post.',
+      'The same summary now also sits at the top of the end screen, above the post-by-post recap, instead of below it.',
+      'It can be collapsed with one click, and it stays collapsed while your client swipes through the cards and reaches the end screen.',
+      'The list view is unchanged: there the summary still closes the page.',
+    ],
+  },
+  {
+    date: '2026-08-20',
+    title: 'Strategy links now review like the content link, and feedback is split by kind',
+    items: [
+      'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
+      'The Strategy link opens as a card deck by default — one post at a time, swipe right to approve and left to request changes — the same way the content review link works. The old list is still there behind the toggle in the header.',
+      'Requesting changes now asks for a reason: the send button stays disabled until your client writes one, so a change request never arrives without an explanation. Approving is still one click. This applies to content links too.',
+      'The post copy is now clearly labelled as the copy, and opening it continues the few lines already on screen instead of restarting the text from the beginning.',
+      'In the calendar, the "External feedback" box under a post now separates what the client said about the posts from what they said about the strategy, so you can tell which one they were reacting to.',
+      'Existing share links and all previous feedback are unchanged and keep working.',
+    ],
+  },
+  {
     date: '2026-08-19',
     title: 'New: share the plan for sign-off, without the artwork',
     items: [

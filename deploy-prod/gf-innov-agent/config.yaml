@@ -13,10 +13,19 @@
 model:
   provider: openrouter
   base_url: https://openrouter.ai/api/v1
-  default: anthropic/claude-opus-4.8
-  # Cap per-response output. Marketing chat doesn't need 65k tokens and
-  # OpenRouter rejects requests that exceed the API key's daily limit.
-  max_tokens: 4096
+  # Brain for the prod GF agent. This is the ONLY model lever the containerised
+  # gateway reads: HERMES_MODEL in .env is inert here (it is read only by the
+  # hermes_cli / tui_gateway / cron paths, never by the gateway). Switched
+  # anthropic/claude-opus-4.8 -> kimi-k3 on 2026-08-04, together with staging
+  # and biomas.
+  default: moonshotai/kimi-k3
+  # Cap per-response output. Raised 4096 -> 16384 on 2026-08-04 (GF-96): at 4096
+  # the model truncated mid-JSON while emitting a file inline as write_file
+  # arguments, producing an unparseable tool call. The conversation loop retries
+  # once and then returns no final response, so the user gets SILENCE rather than
+  # an error and the bot reads as dead while the container is healthy.
+  # This is a cap, not spend.
+  max_tokens: 16384
   # Total context window the agent will use before compressing history.
   context_length: 200000
 
@@ -34,6 +43,16 @@ plugins:
     - image_gen_openrouter
     - postiz
     - drive
+  # Hermes cores from base-v2026.7.1 on gate a plugin's override= of a built-in
+  # tool behind an explicit operator opt-in. image_gen_openrouter deliberately
+  # replaces the built-in image_generate (fidelity/post_id/reference_images/
+  # slide_index + asset-manifest publishing) and registers video_generate on the
+  # image_gen toolset (Seedance 2.0). Without this key the WHOLE plugin fails to
+  # load on a newer core and the agent silently falls back to the stock tools.
+  # Older cores ignore this key, so it is safe to carry everywhere.
+  entries:
+    image_gen_openrouter:
+      allow_tool_override: true
 
 image_gen:
   # Select our custom plugin (image_gen_openrouter) as the active backend.
@@ -41,8 +60,10 @@ image_gen:
 
 # System prompt — the agent's persona. German marketing assistant.
 agent:
-  # Thinking ON — Opus 4.8 adaptive reasoning. Levels: none|minimal|low|medium|high|xhigh. Runtime: /reasoning <level>
-  reasoning_effort: medium
+  # Thinking ON. Levels: none|minimal|low|medium|high|xhigh. Runtime: /reasoning <level>
+  # xhigh ("max thinking") since the 2026-08-04 move to kimi-k3 — verified
+  # accepted by OpenRouter for this model. Matches staging and biomas.
+  reasoning_effort: xhigh
   system_prompt: |
     LANGUAGE RULE (top priority, overrides everything below): Detect the language of the latest user message and write your ENTIRE reply in that SAME language. Supported: Spanish, German, English. If the user writes in English, reply ONLY in English; if in German, ONLY German; if in Spanish, ONLY Spanish. Re-check on EVERY message (the user may switch language mid-conversation). If the language is unclear or not one of these three, reply in English. Only exception: if the user explicitly asks for content in a specific language (e.g. post copy), produce that content in the requested language. This language rule also applies to greetings and self-introductions: never default to one language just because these instructions happen to be written in English.
 
@@ -82,11 +103,23 @@ agent:
         the tone/voice and `boundaries` from `GET /brief`, plus the post's
         `pillar`/campaign from `GET /plan`. Use words-to-use, avoid
         words-to-avoid, and respect every boundary.
+      • BEFORE writing copy or drafting a post → you MUST also load the SOURCE
+        MATERIAL the client uploaded for you:
+        `GET /clients/$CLIENT_SLUG/information-sources?approved=true`. Each item's
+        `summary` holds the FULL text of a document a human put there for you —
+        brand guidelines, product facts, a transcript — and `prompt` says how to
+        use it. These are the client's own facts: where they disagree with your
+        assumptions or your training data, THEY WIN, and you quote them rather
+        than paraphrase from memory. An empty list is a fine answer. A list you
+        never fetched is not. Read it once per conversation, like the brief.
       • BEFORE scheduling or publishing → re-check the post against the plan and
         goals.
     If you have NOT loaded the brief yet this conversation, your FIRST tool call
-    for any image or copy task is `GET /brief`. Reads are cheap — never act
-    blind. (The `image-generation` and `copywriting` skills hold the detail.)
+    for any image or copy task is `GET /brief`; for a copy or post task, follow
+    it with `GET /information-sources?approved=true`. Reads are cheap — never
+    act blind, and never tell a user a document does not exist without having
+    checked information-sources first. (The `image-generation`, `copywriting`
+    and `post-drafting` skills hold the detail.)
 
     How you work:
       • Bias to ACTION. If the request is clear enough to act on, DO IT
@@ -190,7 +223,25 @@ agent:
       POST   /clients/$CLIENT_SLUG/approvals     – set status {postId,decision,note}
       GET    /clients/$CLIENT_SLUG/suggestions   – read suggestions
       PATCH  /clients/$CLIENT_SLUG/suggestions/s001 – update a suggestion
-      GET    /clients/$CLIENT_SLUG/assets/manifest  – current asset list
+      GET    /clients/$CLIENT_SLUG/assets/manifest  – images/logos on file
+      GET    /clients/$CLIENT_SLUG/information-sources?approved=true
+                                                 – SOURCE MATERIAL A HUMAN
+                                                   UPLOADED FOR YOU TO USE:
+                                                   brand guidelines, product
+                                                   facts, transcripts, notes.
+                                                   The full document text is
+                                                   in each item's `summary`
+                                                   field; `title` names it and
+                                                   `prompt` says how to use it.
+                                                   This is what the dashboard's
+                                                   "Assets > Information
+                                                   Sources" tab writes to. It
+                                                   is NOT the assets manifest
+                                                   above — that holds images,
+                                                   this holds documents. Treat
+                                                   these as authoritative about
+                                                   the client, above your own
+                                                   assumptions.
 
     NEVER CLAIM A WRITE SUCCEEDED WITHOUT CALLING THE TOOL (GF-120): telling
     the user a post/approval/suggestion was created, updated, or confirmed is
@@ -452,7 +503,12 @@ platforms:
 
 platform_toolsets:
   telegram: [hermes-telegram]
-  api_server: [terminal, file, web, vision, image_gen, todo]
+  whatsapp_cloud: [hermes-telegram]  # GF-46: official Cloud API channel, same tools as Telegram
+  # `skills` (= skills_list/skill_view/skill_manage) is REQUIRED for dashboard
+  # chat to load any skill at all — without it "Ask Viktor" has no skill_view
+  # and runs on the system prompt alone, while Telegram (via hermes-telegram)
+  # gets the full skills tree. Added 2026-08-04 for dashboard/Telegram parity.
+  api_server: [terminal, file, web, vision, image_gen, todo, skills]
 
 # =============================================================================
 # Tool-progress display. Telegram defaults to "all" (one status line per tool

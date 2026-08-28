@@ -1,776 +1,489 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+// GF-113 — the Performance tab, rebuilt on real numbers.
+//
+// WHAT THIS REPLACED: 776 lines that rendered nine metrics per post, a weekly
+// reach chart, "top performer" cards and a Google Analytics panel — every one of
+// them read from a hand-authored `performance.json` marked `"source": "manual"`.
+// Real clients had no such file, so they saw an empty box. The tab was a stage set.
+//
+// THREE RULES THIS FILE FOLLOWS, and they are the whole point of the item:
+//
+//  1. NOTHING IS RENDERED THAT WE DID NOT MEASURE. No metric is defaulted to 0.
+//     An absent number means "unknown" and is shown as such or not at all. A zero
+//     is a claim, and we would not be able to back it up.
+//  2. METRICS ARE LABEL-DRIVEN. Postiz returns a different set per platform,
+//     decided at runtime. We render what it names; we never assert a fixed list.
+//  3. A ONE-POINT SNAPSHOT IS NOT A TREND. Postiz returns Reach as a daily series
+//     but Likes/Views/Comments/Shares/Saves/Replies as a single window total.
+//     Charting the latter would draw a flat, meaningless line, so `kind` decides
+//     the mark.
+//
+// PER-POST METRICS ARE DELIBERATELY ABSENT (TASK-018, Martin 2026-08-24).
+// `/analytics/post/{id}` returns an empty array for every published post, so the
+// nine-column table is gone rather than shown as zeros, and the "top performers"
+// cards are gone because there is nothing per-post to rank. They do not come back
+// as a channel-level fake. The Meta Graph route is folded into GF-21.
+
+import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router'
-import { postSeqMap } from '@/lib/post-status'
 import { motion } from 'framer-motion'
 import {
-  Line,
-  LineChart,
-  Legend,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip,
-  CartesianGrid,
   Area,
   AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { KpiCard } from '@/components/kpi-card'
-import { Pillar } from '@/components/pillar'
-import { Trophy, Clock, Bookmark, Eye, MessageSquare, Heart, Share2, MousePointer, Mail, SlidersHorizontal, BarChart3, LineChart as LineChartIcon } from 'lucide-react'
-import { fmtCompact, fmtDate } from '@/lib/format'
+  AlertCircle,
+  ExternalLink,
+  KeyRound,
+  Link2Off,
+  RefreshCw,
+  Unplug,
+} from 'lucide-react'
+import { postSeqMap } from '@/lib/post-status'
+import { fmtCompact, fmtDateShort, fmtDateTime, fmtNumber } from '@/lib/format'
 import { BRAND } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
+import { apiSyncAnalytics, isApiEnabled } from '@/lib/api-client'
 import type { ClientBundle } from '@/lib/client-data'
-import type { Post, PostMetrics } from '@/types'
+import type {
+  AnalyticsChannel,
+  AnalyticsPost,
+  ClientAnalytics,
+  MetricSeries,
+  RemotePostState,
+} from '@/types'
 
-// GV2 — period filter
-type PeriodKey = 'all' | 'last4w' | 'thisMonth' | 'thisQuarter'
-
-const PERIOD_KEYS: PeriodKey[] = ['all', 'last4w', 'thisMonth', 'thisQuarter']
-
-function periodBounds(key: PeriodKey): { from: Date; to: Date } | null {
-  if (key === 'all') return null
-  const now = new Date()
-  if (key === 'last4w') {
-    const from = new Date(now)
-    from.setDate(from.getDate() - 28)
-    return { from, to: now }
-  }
-  if (key === 'thisMonth') {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1)
-    return { from, to: now }
-  }
-  if (key === 'thisQuarter') {
-    const q = Math.floor(now.getMonth() / 3)
-    const from = new Date(now.getFullYear(), q * 3, 1)
-    return { from, to: now }
-  }
-  return null
+/**
+ * Postiz hands us English labels. This maps the ones actually OBSERVED in the
+ * TASK-001 probe to i18n keys; anything unmapped falls through to the raw label.
+ *
+ * The fallback matters: a new platform (or a Postiz change) must show its metric
+ * under the provider's own name rather than as a blank cell. Guessing a
+ * translation for a label we have never seen would be worse than showing English.
+ */
+const LABEL_KEYS: Record<string, string> = {
+  Reach: 'analytics.labelReach',
+  Likes: 'analytics.labelLikes',
+  Views: 'analytics.labelViews',
+  Comments: 'analytics.labelComments',
+  Shares: 'analytics.labelShares',
+  Saves: 'analytics.labelSaves',
+  Replies: 'analytics.labelReplies',
+  Followers: 'analytics.labelFollowers',
+  Impressions: 'analytics.labelImpressions',
+  Subscribers: 'analytics.labelSubscribers',
 }
 
-function isInPeriod(isoDate: string, bounds: { from: Date; to: Date } | null): boolean {
-  if (!bounds) return true
-  const d = new Date(isoDate)
-  return d >= bounds.from && d <= bounds.to
+const STATE_STYLE: Record<RemotePostState, string> = {
+  published: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  queued: 'bg-sky-50 text-sky-700 border-sky-200',
+  error: 'bg-rose-50 text-rose-700 border-rose-200',
+  draft: 'bg-slate-100 text-slate-600 border-slate-200',
+  unknown: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
-type MetricKey = keyof PostMetrics
-
-const METRIC_META: Record<MetricKey, { labelKey: string; Icon: typeof Eye }> = {
-  reach:         { labelKey: 'performance.colReach',   Icon: Eye },
-  impressions:   { labelKey: 'performance.colReach',   Icon: Eye },
-  saves:         { labelKey: 'performance.colSaves',   Icon: Bookmark },
-  shares:        { labelKey: 'performance.colShares',  Icon: Share2 },
-  comments:      { labelKey: 'performance.colComments',Icon: MessageSquare },
-  likes:         { labelKey: 'performance.colReach',   Icon: Heart },
-  profileVisits: { labelKey: 'performance.colProfile', Icon: Eye },
-  clicks:        { labelKey: 'performance.colClicks',  Icon: MousePointer },
-  dms:           { labelKey: 'performance.colDms',     Icon: Mail },
+/** Sum of a snapshot's single point, or the latest value of a series. Used only
+ *  for the headline figure next to a chart — never to invent a missing metric. */
+function headlineValue(s: MetricSeries): number | null {
+  if (s.points.length === 0) return null
+  if (s.kind === 'snapshot') return s.points[0]!.total
+  return s.points.reduce((acc, p) => acc + p.total, 0)
 }
 
-// All PostMetrics keys, in display order. Translated names for KPI picker /
-// comparison-chart controls live under `performance.metric<Key>` in i18n-dict.
-const METRIC_KEYS: MetricKey[] = [
-  'reach', 'impressions', 'saves', 'shares', 'comments', 'likes', 'profileVisits', 'clicks', 'dms',
-]
-
-const METRIC_NAME_KEY: Record<MetricKey, string> = {
-  reach:         'performance.metricReach',
-  impressions:   'performance.metricImpressions',
-  saves:         'performance.metricSaves',
-  shares:        'performance.metricShares',
-  comments:      'performance.metricComments',
-  likes:         'performance.metricLikes',
-  profileVisits: 'performance.metricProfileVisits',
-  clicks:        'performance.metricClicks',
-  dms:           'performance.metricDms',
-}
-
-const MAX_KPIS = 6
-const DEFAULT_KPIS: MetricKey[] = ['reach', 'saves', 'clicks', 'dms']
-const DEFAULT_COMPARE: [MetricKey, MetricKey] = ['reach', 'saves']
-
-function kpiStorageKey(slug: string) {
-  return `mp.perf.kpis.${slug}`
-}
-
-function isMetricKey(v: string): v is MetricKey {
-  return (METRIC_KEYS as string[]).includes(v)
-}
-
-function loadKpiSelection(slug: string): MetricKey[] {
-  if (typeof window === 'undefined') return DEFAULT_KPIS
-  try {
-    const raw = window.localStorage.getItem(kpiStorageKey(slug))
-    if (!raw) return DEFAULT_KPIS
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return DEFAULT_KPIS
-    const keys = parsed.filter((x): x is MetricKey => typeof x === 'string' && isMetricKey(x))
-    return keys.length ? keys.slice(0, MAX_KPIS) : DEFAULT_KPIS
-  } catch {
-    return DEFAULT_KPIS
-  }
-}
-
-// ISO-week number (1–53) for an ISO date string. Used to bucket per-post
-// metrics into a weekly series for ANY metric.
-function isoWeek(iso: string): number {
-  const d = new Date(iso)
-  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  const dayNr = (target.getUTCDay() + 6) % 7
-  target.setUTCDate(target.getUTCDate() - dayNr + 3)
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4))
-  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3)
-  return 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000))
-}
-
-const TOP_METRIC_PRESETS: Array<{ key: MetricKey; labelKey: string; subtitleKey: string }> = [
-  { key: 'saves', labelKey: 'performance.bestEducational', subtitleKey: 'performance.topSaves' },
-  { key: 'dms',   labelKey: 'performance.bestIntent',      subtitleKey: 'performance.qualifiedDms' },
-  { key: 'reach', labelKey: 'performance.furthestDist',    subtitleKey: 'performance.topReach' },
-]
-
-interface ChartTooltipPayload {
-  dataKey: string
-  value: number
-  color: string
-}
-interface ChartTooltipProps {
-  active?: boolean
-  payload?: ChartTooltipPayload[]
-  label?: string | number
-}
-
-function ReachTooltip({ active, payload, label }: ChartTooltipProps) {
-  if (!active || !payload?.length) return null
+function ChannelBadge({ identifier }: { identifier: string }) {
+  // `instagram-standalone` is what Postiz actually reports (probe finding). Show
+  // the human half without pretending the raw identifier is something else.
+  const pretty = identifier.replace(/-standalone$/, '').replace(/^\w/, (c) => c.toUpperCase())
   return (
-    <div className="rounded-md border border-border-subtle bg-paper px-3 py-2 shadow-md text-xs">
-      <p className="font-semibold mb-1">W{label}</p>
-      {payload.map((p) => (
-        <p key={p.dataKey} style={{ color: p.color }}>
-          {p.dataKey}: {fmtCompact(p.value ?? 0)}
-        </p>
-      ))}
+    <Badge variant="outline" className="text-[11px] font-medium">
+      {pretty}
+    </Badge>
+  )
+}
+
+function SeriesChart({ series, label }: { series: MetricSeries; label: string }) {
+  const data = series.points.map((p) => ({ date: p.date, value: p.total }))
+  return (
+    <div className="h-48 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`grad-${series.label}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={BRAND.blue} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={BRAND.blue} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.35} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={(v: string) => fmtDateShort(v)}
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            minTickGap={24}
+          />
+          <YAxis
+            tickFormatter={(v: number) => fmtCompact(v)}
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            width={44}
+          />
+          <Tooltip
+            formatter={(v) => [fmtNumber(Number(v)), label]}
+            labelFormatter={(v) => fmtDateShort(String(v))}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={BRAND.blue}
+            strokeWidth={2}
+            fill={`url(#grad-${series.label})`}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
+  )
+}
+
+function ChannelPanel({ channel }: { channel: AnalyticsChannel }) {
+  const t = useT()
+  const labelFor = (raw: string) => {
+    const key = LABEL_KEYS[raw]
+    // Fall back to the provider's own wording rather than an empty cell.
+    return key ? t(key) : raw
+  }
+
+  const trends = channel.series.filter((s) => s.kind === 'series' && s.points.length > 0)
+  const snapshots = channel.series.filter((s) => s.kind === 'snapshot' && s.points.length > 0)
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            {channel.picture ? (
+              <img
+                src={channel.picture}
+                alt=""
+                className="h-9 w-9 rounded-full object-cover border"
+              />
+            ) : null}
+            <div>
+              <p className="font-semibold text-ink leading-tight">{channel.name}</p>
+              <p className="text-xs text-ink-muted">
+                {channel.profile ? `@${channel.profile}` : channel.identifier}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ChannelBadge identifier={channel.identifier} />
+            {channel.disabled ? (
+              <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200">
+                {t('analytics.channelDisabled')}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+
+        {/* A channel that failed while its siblings succeeded says so, rather than
+            silently showing nothing and looking like "no activity". */}
+        {channel.error ? (
+          <p className="text-xs text-rose-600 flex items-start gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5 mt-px shrink-0" />
+            {t('analytics.channelError')}
+          </p>
+        ) : null}
+
+        {channel.series.length === 0 && !channel.error ? (
+          // The measured LinkedIn case: connected, enabled, 200, empty array.
+          // "This platform gives us nothing" — NOT "your numbers are zero".
+          <p className="text-sm text-ink-muted">{t('analytics.channelNoData')}</p>
+        ) : null}
+
+        {snapshots.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {snapshots.map((s) => {
+              const v = headlineValue(s)
+              if (v === null) return null
+              return (
+                <div key={s.label} className="rounded-lg border bg-surface-subtle px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-ink-muted">
+                    {labelFor(s.label)}
+                  </p>
+                  <p className="text-xl font-semibold text-ink tabular-nums">{fmtNumber(v)}</p>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {trends.map((s) => (
+          <div key={s.label} className="space-y-1.5">
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-medium text-ink">{labelFor(s.label)}</p>
+              <p className="text-xs text-ink-muted">
+                {t('analytics.overDays', { count: String(s.points.length) })}
+              </p>
+            </div>
+            <SeriesChart series={s} label={labelFor(s.label)} />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function PostLedgerRow({
+  post,
+  seq,
+  t,
+}: {
+  post: AnalyticsPost
+  seq: number | null
+  t: ReturnType<typeof useT>
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0 flex-wrap">
+      <div className="min-w-[7rem]">
+        <p className="text-sm font-medium text-ink">
+          {seq ? t('analytics.postN', { n: String(seq) }) : t('analytics.postUntracked')}
+        </p>
+      </div>
+      <div className="min-w-[6rem]">
+        {post.channel ? <ChannelBadge identifier={post.channel} /> : null}
+      </div>
+      <div className="min-w-[7rem] text-sm text-ink-muted tabular-nums">
+        {post.publishDate ? fmtDateShort(post.publishDate) : '—'}
+      </div>
+      <Badge variant="outline" className={cn('text-[11px]', STATE_STYLE[post.state])}>
+        {t(`analytics.state.${post.state}`)}
+      </Badge>
+      {/*
+        The payoff of this whole ledger: a real, verified click-through from our
+        dashboard to the live post. Only rendered when the provider gave us one —
+        a dead link would be worse than none.
+      */}
+      <div className="ml-auto">
+        {post.releaseURL ? (
+          <Button asChild variant="ghost" size="sm">
+            <a href={post.releaseURL} target="_blank" rel="noopener noreferrer">
+              {t('analytics.viewLive')}
+              <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
+            </a>
+          </Button>
+        ) : null}
+      </div>
+      {/*
+        GF-21 landing surface: when a per-post source exists, `metrics` fills and
+        these columns appear with no rebuild. Empty today, by decision, and never
+        rendered as zeros.
+      */}
+      {post.metrics.length > 0 ? (
+        <div className="w-full flex gap-4 pt-2">
+          {post.metrics.map((m) => {
+            const v = headlineValue(m)
+            return v === null ? null : (
+              <span key={m.label} className="text-xs text-ink-muted">
+                {m.label}: <span className="font-medium text-ink tabular-nums">{fmtNumber(v)}</span>
+              </span>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** The four non-`ok` states, each with its own explanation and its own next step.
+ *  This is the whole reason the contract carries an explicit `status`: the legacy
+ *  route collapsed all of these into `{}` and the tab rendered one blank box. */
+function StatusPanel({ analytics }: { analytics: ClientAnalytics }) {
+  const t = useT()
+  const map = {
+    no_key: { Icon: KeyRound, title: 'analytics.noKeyTitle', body: 'analytics.noKeyBody' },
+    no_channels: { Icon: Unplug, title: 'analytics.noChannelsTitle', body: 'analytics.noChannelsBody' },
+    error: { Icon: AlertCircle, title: 'analytics.errorTitle', body: 'analytics.errorBody' },
+    // `stale` normally means "showing retained real numbers", which never reaches
+    // this panel because there IS data to render. It can only land here if a
+    // payload is stale with nothing in it, and then the stale wording would
+    // promise numbers that are not on screen. Treat it as the failure it is.
+    stale: { Icon: AlertCircle, title: 'analytics.errorTitle', body: 'analytics.errorBody' },
+  } as const
+  // Never return null: this panel is the ONLY thing rendered when there is no
+  // data, so returning null would leave a blank page with no explanation - the
+  // exact failure the explicit `status` exists to prevent.
+  const entry = map[analytics.status as keyof typeof map] ?? map.error
+  const { Icon, title, body } = entry
+  return (
+    <Card>
+      <CardContent className="p-10 text-center">
+        <Icon className="h-8 w-8 mx-auto mb-3 text-ink-muted opacity-50" />
+        <p className="font-semibold text-ink mb-1">{t(title)}</p>
+        <p className="text-sm text-ink-muted max-w-md mx-auto">{t(body)}</p>
+        {/* The provider's own message, when there is one. Never a secret — the
+            API strips key material before this ever reaches the browser. */}
+        {analytics.error ? (
+          <p className="mt-3 text-xs text-ink-muted/80 font-mono break-words max-w-md mx-auto">
+            {analytics.error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
 
 export default function PerformanceView() {
   const t = useT()
-  const { performance, posts, plan, brief, slug } = useOutletContext<ClientBundle>()
-  const [sortBy, setSortBy] = useState<MetricKey>('reach')
+  const { analytics: initial, posts, slug } = useOutletContext<ClientBundle>()
+  const [analytics, setAnalytics] = useState<ClientAnalytics>(initial)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
-  // GV2 — period filter
-  const [period, setPeriod] = useState<PeriodKey>('all')
-
-  // PF1 — customizable KPI summary row (persisted per slug in localStorage)
-  const [kpiSelection, setKpiSelection] = useState<MetricKey[]>(() => loadKpiSelection(slug))
-  useEffect(() => {
-    setKpiSelection(loadKpiSelection(slug))
-  }, [slug])
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(kpiStorageKey(slug), JSON.stringify(kpiSelection))
-    } catch {
-      /* ignore */
-    }
-  }, [slug, kpiSelection])
-
-  const toggleKpi = (key: MetricKey) => {
-    setKpiSelection((prev) => {
-      if (prev.includes(key)) return prev.filter((k) => k !== key)
-      if (prev.length >= MAX_KPIS) return prev
-      return [...prev, key]
-    })
-  }
-
-  // PF1 — combine-two-KPIs comparison chart
-  const [compareA, setCompareA] = useState<MetricKey>(DEFAULT_COMPARE[0])
-  const [compareB, setCompareB] = useState<MetricKey>(DEFAULT_COMPARE[1])
-
-  const pillarColor = useMemo(() => {
-    const m: Record<string, string> = {}
-    plan.pillars.forEach((p) => (m[p.name] = p.color))
-    return m
-  }, [plan.pillars])
-
-  const postById = useMemo(() => {
-    const m: Record<string, Post> = {}
-    posts.forEach((p) => (m[p.id] = p))
-    return m
-  }, [posts])
-
-  // GF-44 — friendly per-client "Post N" name, computed from the full post set so
-  // it matches the calendar/approvals numbering.
+  // GF-44 — friendly "Post N" naming, computed from the FULL post set so the
+  // numbers match the calendar and approvals tabs.
   const seqMap = useMemo(() => postSeqMap(posts), [posts])
+  const postIdToSeq = (postId: string | null) => (postId ? (seqMap.get(postId) ?? null) : null)
 
-  if (!performance) {
-    return (
-      <Card>
-        <CardContent className="p-10 text-center text-ink-muted">
-          <Eye className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">
-            {t('performance.empty')}
-          </p>
-        </CardContent>
-      </Card>
-    )
+  const refresh = async () => {
+    setSyncing(true)
+    setSyncError(null)
+    try {
+      setAnalytics(await apiSyncAnalytics(slug))
+    } catch (err) {
+      // Most likely the server-side per-client limiter (6 per 5 min). Say so
+      // rather than leaving the button looking broken.
+      setSyncError(err instanceof Error ? err.message : t('analytics.refreshFailed'))
+    } finally {
+      setSyncing(false)
+    }
   }
 
-  // GV2 — compute period bounds once; filter measured posts
-  const periodBoundsValue = periodBounds(period)
-
-  const measuredPostIds = Object.keys(performance.posts)
-  const measuredPosts = measuredPostIds
-    .map((id) => ({ post: postById[id], metrics: performance.posts[id] }))
-    .filter((x): x is { post: Post; metrics: PostMetrics } => !!x.post && isInPeriod(x.post.date, periodBoundsValue))
-
-  const sorted = [...measuredPosts].sort(
-    (a, b) => b.metrics[sortBy] - a.metrics[sortBy],
-  )
-
-  const weeklyData = Object.entries(performance.aggregates.weekly)
-    .map(([w, v]) => ({ week: Number(w), reach: v.reach, topPost: v.topPost }))
-    .sort((a, b) => a.week - b.week)
-
-  const totals = measuredPosts.reduce(
-    (acc, { metrics }) => {
-      for (const k of Object.keys(METRIC_META) as MetricKey[]) {
-        acc[k] = (acc[k] ?? 0) + metrics[k]
-      }
-      return acc
-    },
-    {} as Record<MetricKey, number>,
-  )
-
-  // PF1 — bucket per-post metrics into ISO weeks for the comparison chart.
-  const compareData = (() => {
-    const byWeek: Record<number, Record<MetricKey, number>> = {}
-    for (const { post, metrics } of measuredPosts) {
-      const wk = isoWeek(post.date)
-      if (!byWeek[wk]) {
-        byWeek[wk] = { reach: 0, impressions: 0, saves: 0, shares: 0, comments: 0, likes: 0, profileVisits: 0, clicks: 0, dms: 0 }
-      }
-      for (const k of METRIC_KEYS) byWeek[wk][k] += metrics[k]
-    }
-    return Object.entries(byWeek)
-      .map(([w, m]) => ({ week: Number(w), [compareA]: m[compareA], [compareB]: m[compareB] }))
-      .sort((a, b) => a.week - b.week)
-  })()
-
-  const nameA = t(METRIC_NAME_KEY[compareA])
-  const nameB = t(METRIC_NAME_KEY[compareB])
-
-  // GA proxy metrics — on-platform signals we actually have, NOT invented GA data.
-  const analyticsTool = brief.tools?.analytics?.trim()
+  const hasData = analytics.channels.length > 0 || analytics.posts.length > 0
+  // Drafts never went anywhere, so they do not belong in a record of what was
+  // sent. Everything else does — INCLUDING failures, because a post that errored
+  // must be visible rather than sitting as "Programmed" forever. The heading says
+  // "Posts we sent", not "Published posts", precisely because this list is wider
+  // than the published ones.
+  const sent = analytics.posts.filter((p) => p.state !== 'draft')
 
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-muted mb-1">
-            {t('performance.eyebrow')}
+            {t('analytics.eyebrow')}
           </p>
-          <h1 className="text-3xl font-bold text-brand-blue">
-            {t('performance.heading')}
-          </h1>
+          <h1 className="text-3xl font-bold text-brand-blue">{t('analytics.heading')}</h1>
         </div>
+
         <div className="flex items-center gap-3 flex-wrap">
-          {/* GV2 — period filter */}
-          <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
-            <TabsList>
-              {PERIOD_KEYS.map((k) => (
-                <TabsTrigger key={k} value={k}>
-                  {t(`period.${k}`)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <div className="flex items-center gap-1.5 text-xs text-ink-muted">
-            <Clock className="h-3.5 w-3.5" />
-            {fmtDate(performance.lastSyncedAt)} &middot; {t('performance.from')} {performance.source}
+          {/* Provenance, always visible. A number with no "as of" is a number you
+              cannot act on. */}
+          <div className="text-right">
+            <p className="text-xs text-ink-muted">
+              {analytics.syncedAt
+                ? t('analytics.lastSynced', { when: fmtDateTime(analytics.syncedAt) })
+                : t('analytics.neverSynced')}
+            </p>
+            <p className="text-[11px] text-ink-muted/70">
+              {t('analytics.sourcedFrom', { provider: analytics.provider })}
+            </p>
           </div>
+          {/* File mode has no server to refresh against, so the button would be a
+              lie there. */}
+          {isApiEnabled ? (
+            <Button variant="outline" size="sm" onClick={refresh} disabled={syncing}>
+              <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', syncing && 'animate-spin')} />
+              {syncing ? t('analytics.refreshing') : t('analytics.refresh')}
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {/* PF1 — Customizable KPI summary row */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-lg font-semibold">{t('performance.kpiSummary')}</h2>
-            <p className="text-sm text-ink-muted">{t('performance.kpiSummaryHint')}</p>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                {t('performance.customize')}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>{t('performance.pickMetrics', { max: MAX_KPIS })}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {METRIC_KEYS.map((key) => {
-                const checked = kpiSelection.includes(key)
-                const atCap = !checked && kpiSelection.length >= MAX_KPIS
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={key}
-                    checked={checked}
-                    disabled={atCap}
-                    onCheckedChange={() => toggleKpi(key)}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {t(METRIC_NAME_KEY[key])}
-                  </DropdownMenuCheckboxItem>
-                )
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {kpiSelection.map((key) => {
-            const goal = performance.vsGoals[key]
-            // GV2: when period != 'all' use filtered totals so the cards reflect the selected range
-            const current = period === 'all' && goal ? goal.current : (totals[key] ?? 0)
-            return (
-              <KpiCard
-                key={key}
-                label={t(METRIC_NAME_KEY[key])}
-                current={current}
-                target={goal ? goal.target : current}
-                unit=""
-                pace={period === 'all' ? goal?.pace : undefined}
-                deltaPct={period === 'all' ? goal?.deltaPct : undefined}
-              />
-            )
-          })}
-        </div>
-      </section>
+      {syncError ? (
+        <p className="text-sm text-rose-600 flex items-center gap-1.5">
+          <AlertCircle className="h-4 w-4" />
+          {syncError}
+        </p>
+      ) : null}
 
-      <Separator />
+      {/* Stale is NOT an error state: it means a refresh was refused (usually a
+          429) and we are still showing the last real numbers. Blanking a working
+          tab because one refresh failed would be strictly worse. */}
+      {analytics.status === 'stale' && hasData ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{t('analytics.staleBody')}</span>
+        </div>
+      ) : null}
 
-      {/* Top performers */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t('performance.topPerformers')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TOP_METRIC_PRESETS.map(({ key, labelKey, subtitleKey }) => {
-            const label = t(labelKey)
-            const subtitle = t(subtitleKey)
-            const top = [...measuredPosts].sort(
-              (a, b) => b.metrics[key] - a.metrics[key],
-            )[0]
-            if (!top) return null
-            const Icon = METRIC_META[key].Icon
-            return (
-              <Card key={key} className="overflow-hidden">
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                        {subtitle}
-                      </p>
-                      <p className="text-sm font-semibold">{label}</p>
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-brand-blue text-white flex items-center justify-center">
-                      <Trophy className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center gap-3">
-                    {top.post.image && (
-                      <img
-                        src={top.post.image}
-                        alt=""
-                        loading="lazy"
-                        className="h-12 w-12 rounded object-cover shrink-0"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate" title={top.post.title}>
-                        {top.post.title}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Badge variant="outline" className="font-mono text-[10px]">
-                          {top.post.id}
-                        </Badge>
-                        <span className="text-[11px] text-ink-muted">
-                          {top.post.channel}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <Icon className="h-4 w-4 text-brand-blue" />
-                    <span className="text-2xl font-bold text-brand-blue">
-                      {fmtCompact(top.metrics[key])}
-                    </span>
-                    <span className="text-xs text-ink-muted">
-                      {t(METRIC_META[key].labelKey).toLowerCase()}
-                    </span>
-                  </div>
+      {!hasData ? (
+        <StatusPanel analytics={analytics} />
+      ) : (
+        <>
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold text-ink">{t('analytics.channelsHeading')}</h2>
+            <motion.div
+              className="grid gap-4 lg:grid-cols-2"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              {analytics.channels.map((ch) => (
+                <ChannelPanel key={ch.id} channel={ch} />
+              ))}
+            </motion.div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-4">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <h2 className="text-lg font-semibold text-ink">{t('analytics.ledgerHeading')}</h2>
+              <p className="text-xs text-ink-muted max-w-xl">
+                {/* Says out loud that per-post numbers are not available, so nobody
+                    reads the ledger as "these posts got zero engagement". */}
+                {t('analytics.ledgerNote')}
+              </p>
+            </div>
+
+            {sent.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-ink-muted">
+                  {t('analytics.ledgerEmpty')}
                 </CardContent>
               </Card>
-            )
-          })}
-        </div>
-      </section>
-
-      <Separator />
-
-      {/* Weekly reach trend */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t('performance.weeklyReach')}</h2>
-        <Card>
-          <CardContent className="p-5">
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={weeklyData}>
-                  <defs>
-                    <linearGradient id="reachGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={BRAND.blue} stopOpacity={0.4} />
-                      <stop offset="100%" stopColor={BRAND.blue} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BRAND.borderSubtle} vertical={false} />
-                  <XAxis
-                    dataKey="week"
-                    stroke={BRAND.inkMuted}
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => `W${v}`}
-                  />
-                  <YAxis
-                    stroke={BRAND.inkMuted}
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => fmtCompact(v)}
-                  />
-                  <Tooltip content={<ReachTooltip />} cursor={{ stroke: BRAND.inkMuted }} />
-                  <Area
-                    type="monotone"
-                    dataKey="reach"
-                    stroke={BRAND.blue}
-                    strokeWidth={2}
-                    fill="url(#reachGradient)"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="reach"
-                    stroke={BRAND.blue}
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: BRAND.blue }}
-                    activeDot={{ r: 6 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-xs text-ink-muted mt-2">
-              {t('performance.totalReach')} <span className="font-semibold text-ink">{fmtCompact(performance.aggregates.quarterly.reach)}</span> &middot;
-              {' '}{t('performance.followerDelta')} <span className="font-semibold text-ink">+{performance.aggregates.quarterly.followerDelta}%</span>
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-
-      <Separator />
-
-      {/* PF1 — Combine-two-KPIs comparison chart */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <LineChartIcon className="h-4 w-4 text-brand-blue" />
-              {t('performance.compareTitle')}
-            </h2>
-            <p className="text-sm text-ink-muted">{t('performance.compareHint')}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <MetricSelect
-              ariaLabel={t('performance.compareMetricA')}
-              value={compareA}
-              onChange={setCompareA}
-              t={t}
-            />
-            <span className="text-ink-muted text-sm">/</span>
-            <MetricSelect
-              ariaLabel={t('performance.compareMetricB')}
-              value={compareB}
-              onChange={setCompareB}
-              t={t}
-            />
-          </div>
-        </div>
-        <Card>
-          <CardContent className="p-5">
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={compareData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BRAND.borderSubtle} vertical={false} />
-                  <XAxis
-                    dataKey="week"
-                    stroke={BRAND.inkMuted}
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => `W${v}`}
-                  />
-                  <YAxis
-                    stroke={BRAND.inkMuted}
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => fmtCompact(v)}
-                  />
-                  <Tooltip content={<ReachTooltip />} cursor={{ stroke: BRAND.inkMuted }} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line
-                    type="monotone"
-                    dataKey={compareA}
-                    name={nameA}
-                    stroke={BRAND.blue}
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: BRAND.blue }}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey={compareB}
-                    name={nameB}
-                    stroke={BRAND.green}
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: BRAND.green }}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <Separator />
-
-      {/* PF1 — Google Analytics section (honest, no fabricated GA data) */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-brand-blue" />
-          {t('performance.gaTitle')}
-        </h2>
-        <Card>
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <p className="text-sm text-ink-muted max-w-xl">
-                {analyticsTool
-                  ? t('performance.gaConnected', { tool: analyticsTool })
-                  : t('performance.gaNotConnected')}
-                <br />
-                {t('performance.gaComingSoon')}
-              </p>
-              <Button variant="outline" size="sm" disabled className="opacity-70">
-                <BarChart3 className="h-3.5 w-3.5" />
-                {t('performance.gaConnectCta')}
-              </Button>
-            </div>
-            <Separator />
-            <p className="text-xs text-ink-muted">{t('performance.gaProxyHint')}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ProxyStat
-                icon={<MousePointer className="h-4 w-4 text-brand-blue" />}
-                label={t('performance.gaClicksProxy')}
-                value={totals.clicks ?? 0}
-              />
-              <ProxyStat
-                icon={<Eye className="h-4 w-4 text-brand-blue" />}
-                label={t('performance.gaVisitsProxy')}
-                value={totals.profileVisits ?? 0}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <Separator />
-
-      {/* Per-post metrics table */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-lg font-semibold">{t('performance.perPostMetrics')}</h2>
-            <p className="text-sm text-ink-muted">
-              {t('performance.perPostHint')}
-            </p>
-          </div>
-          <Tabs value={sortBy} onValueChange={(v) => setSortBy(v as MetricKey)}>
-            <TabsList>
-              <TabsTrigger value="reach">{t('performance.colReach')}</TabsTrigger>
-              <TabsTrigger value="saves">{t('performance.colSaves')}</TabsTrigger>
-              <TabsTrigger value="dms">{t('performance.colDms')}</TabsTrigger>
-              <TabsTrigger value="clicks">{t('performance.colClicks')}</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-paper-muted text-[10px] uppercase tracking-wider text-ink-muted">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">{t('performance.colPost')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colReach')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colSaves')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colShares')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colComments')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colProfile')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colClicks')}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t('performance.colDms')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map(({ post, metrics }, i) => (
-                    <motion.tr
-                      key={post.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.18, delay: i * 0.02 }}
-                      className="border-t border-border-subtle hover:bg-paper-muted/50 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {post.image && (
-                            <img
-                              src={post.image}
-                              alt=""
-                              loading="lazy"
-                              className="h-9 w-9 rounded object-cover shrink-0"
-                            />
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-medium truncate max-w-[260px]" title={post.title}>
-                              {post.title}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <Badge variant="outline" className="text-[10px]">
-                                {seqMap.get(post.id) ? t('post.nameN', { n: seqMap.get(post.id)! }) : post.id}
-                              </Badge>
-                              <Pillar
-                                name={post.pillar}
-                                color={pillarColor[post.pillar]}
-                                className="!text-[10px]"
-                              />
-                              <span className="text-[10px] text-ink-muted">
-                                {post.channel}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <MetricCell value={metrics.reach}         highlight={sortBy === 'reach'} />
-                      <MetricCell value={metrics.saves}         highlight={sortBy === 'saves'} />
-                      <MetricCell value={metrics.shares} />
-                      <MetricCell value={metrics.comments} />
-                      <MetricCell value={metrics.profileVisits} />
-                      <MetricCell value={metrics.clicks}        highlight={sortBy === 'clicks'} />
-                      <MetricCell value={metrics.dms}           highlight={sortBy === 'dms'} />
-                    </motion.tr>
+            ) : (
+              <Card className="overflow-hidden">
+                <CardContent className="p-0">
+                  {sent.map((p) => (
+                    <PostLedgerRow key={p.remoteId} post={p} seq={postIdToSeq(p.postId)} t={t} />
                   ))}
-                </tbody>
-                <tfoot className="border-t-2 border-border-subtle bg-paper-muted/30 text-[11px] uppercase tracking-wider text-ink-muted">
-                  <tr>
-                    <td className="px-4 py-2 font-semibold">{t('performance.total', { n: sorted.length })}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.reach)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.saves)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.shares)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.comments)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.profileVisits)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.clicks)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtCompact(totals.dms)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
+                </CardContent>
+              </Card>
+            )}
 
-    </div>
-  )
-}
-
-function MetricCell({ value, highlight = false }: { value: number; highlight?: boolean }) {
-  return (
-    <td
-      className={cn(
-        'px-3 py-3 text-right font-mono',
-        highlight ? 'text-brand-blue font-bold' : 'text-ink',
+            {/* Under-reporting is a form of lying too. While GF-26's payload bug is
+                unfixed most posts never reach Postiz, and the tab must say so. */}
+            {analytics.unlinked > 0 ? (
+              <p className="text-xs text-ink-muted flex items-start gap-1.5">
+                <Link2Off className="h-3.5 w-3.5 mt-px shrink-0" />
+                {t('analytics.unlinkedNote', { count: String(analytics.unlinked) })}
+              </p>
+            ) : null}
+          </section>
+        </>
       )}
-    >
-      {fmtCompact(value)}
-    </td>
-  )
-}
-
-// PF1 — compact metric picker for the comparison chart (native select keeps it
-// keyboard-accessible and TS-safe; styled to match the outline button look).
-function MetricSelect({
-  value,
-  onChange,
-  ariaLabel,
-  t,
-}: {
-  value: MetricKey
-  onChange: (k: MetricKey) => void
-  ariaLabel: string
-  t: (key: string, vars?: Record<string, string | number>) => string
-}) {
-  return (
-    <select
-      aria-label={ariaLabel}
-      value={value}
-      onChange={(e) => {
-        if (isMetricKey(e.target.value)) onChange(e.target.value)
-      }}
-      className="h-7 rounded-md border border-border-subtle bg-paper px-2 text-[0.8rem] text-ink focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-    >
-      {METRIC_KEYS.map((k) => (
-        <option key={k} value={k}>
-          {t(METRIC_NAME_KEY[k])}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-// PF1 — single on-platform proxy stat for the Google Analytics section.
-function ProxyStat({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border-subtle bg-paper-muted/40 px-4 py-3">
-      <div className="h-9 w-9 rounded-full bg-brand-blue/10 flex items-center justify-center shrink-0">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider text-ink-muted truncate">{label}</p>
-        <p className="text-xl font-bold text-brand-blue">{fmtCompact(value)}</p>
-      </div>
     </div>
   )
 }
-

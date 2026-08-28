@@ -14,7 +14,7 @@ import type {
   Learnings,
   ClientIndex,
   ClientIndexEntry,
-  Performance,
+  ClientAnalytics,
   Post,
   Channel,
   PostStatus,
@@ -252,12 +252,22 @@ export async function apiLoadClientIndex(): Promise<ClientIndex> {
   return { clients: r.items.map((c) => ({ ...c, status: c.status || 'active' })) }
 }
 
-export async function apiLoadPerformance(slug: string): Promise<Performance | null> {
-  try {
-    return await apiGet<Performance>(`/clients/${slug}/performance`)
-  } catch {
-    return null
-  }
+// GF-113 — real analytics, read from the server-side cache.
+//
+// NOTE the deliberate asymmetry with every other loader in this file: this one
+// does NOT swallow errors into `null`. The whole point of the endpoint is that it
+// always returns a well-formed payload with an explicit `status`, so a thrown
+// error here means the API itself is unreachable — which the tab must show as an
+// error, not as an empty Performance tab. Collapsing it to `null` would recreate
+// the exact ambiguity GF-113 exists to remove.
+export async function apiLoadAnalytics(slug: string): Promise<ClientAnalytics> {
+  return await apiGet<ClientAnalytics>(`/clients/${slug}/analytics`)
+}
+
+/** Trigger one client's analytics sync. Rate-limited server-side (6 per 5 min per
+ *  client) because each call spends real, unmeasurable Postiz quota. */
+export async function apiSyncAnalytics(slug: string): Promise<ClientAnalytics> {
+  return apiSend<ClientAnalytics>('POST', `/clients/${slug}/analytics/sync`, {})
 }
 
 export async function apiLoadPosts(slug: string): Promise<Post[]> {
@@ -1042,10 +1052,26 @@ export interface ReviewFeedbackComment {
   status?: 'open' | 'resolved'
   source: 'reviewer' | 'dashboard'
   createdAt?: string
+  /**
+   * GF-106 — which kind of review link this feedback came from, so the
+   * dashboard can split "what the client said about the posts" from "what they
+   * said about the strategy". OPTIONAL on purpose: an API that predates GF-106
+   * omits it entirely, and absent must be read as 'content' so the panel keeps
+   * rendering every row instead of blanking.
+   */
+  view?: ReviewLinkView
+}
+
+export interface ReviewFeedbackDecision {
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+  /** GF-106 — see ReviewFeedbackComment.view. Absent means 'content'. */
+  view?: ReviewLinkView
 }
 
 export interface ReviewPostFeedback {
-  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  decisions: ReviewFeedbackDecision[]
   comments: ReviewFeedbackComment[]
 }
 
