@@ -265,6 +265,23 @@ chat.post(
     const message = (body.message ?? '').trim()
     const thread = (body.thread ?? 'default').slice(0, 100)
     const history = (body.history ?? []).slice(-10)
+    // GF-122: stable per-thread identifier reused as BOTH the Hermes
+    // long-term-memory scope (X-Hermes-Session-Key) AND the short-term
+    // transcript/session_id below. Without an explicit `session_id` in the
+    // /v1/runs body, the gateway falls back to `session_id = run_id` — a
+    // fresh UUID every single turn (gateway/platforms/api_server.py's
+    // _handle_runs: `session_id = body.get("session_id") or stored_session_id
+    // or run_id`). That breaks the gateway's own system-prompt persistence
+    // (agent/conversation_loop.py's _restore_or_build_system_prompt reads
+    // `agent._session_db.get_session(agent.session_id)`, which never has a
+    // row for a session_id that's never been seen before), forcing a
+    // from-scratch system-prompt rebuild — and losing the prefix cache —
+    // on every non-first turn. This was confirmed on prod:
+    // `docker logs viktor-black-venture-farm` showed "Stored system prompt
+    // for session run_* is null; rebuilding from scratch this turn" once
+    // per dashboard turn, every run_* distinct. Telegram doesn't hit this
+    // because the native gateway passes its own stable per-chat session_id.
+    const hermesSessionId = `mp-${slug}-${thread}`
     // GF-68: only accept text OR at least one attachment (image/document
     // pre-uploaded via /chat/attachments) — an attachment-only turn is valid.
     const requestedAttachmentIds = Array.isArray(body.attachments)
@@ -431,11 +448,16 @@ chat.post(
             Authorization: `Bearer ${agent.apiKey}`,
             'Content-Type': 'application/json',
             // Scope long-term memory per client so different slugs don't bleed.
-            'X-Hermes-Session-Key': `mp-${slug}-${thread}`,
+            'X-Hermes-Session-Key': hermesSessionId,
           },
           body: JSON.stringify({
             input: buildAgentInput(message, slug, attachmentRecords),
             conversation_history: history.map((h) => ({ role: h.role, content: h.content })),
+            // GF-122: stable session_id so the gateway's system-prompt cache
+            // (keyed by session_id, NOT by X-Hermes-Session-Key — see the
+            // comment on `hermesSessionId` above) survives across turns of
+            // the same dashboard thread, matching Telegram's continuity.
+            session_id: hermesSessionId,
           }),
           signal: ac.signal,
         })
@@ -492,7 +514,26 @@ chat.post(
           } else if (ev.event === 'run.completed') {
             sawRunCompleted = true
             jobStatus = 'completed'
-            assistantFinalText = ev.output ?? ''
+            const rawOutput = ev.output ?? ''
+            // GF-122: Hermes' own conversation_loop.py uses the literal string
+            // "(empty)" as an internal terminal sentinel when the model
+            // returns no visible content after exhausting empty-response
+            // retries and fallback (agent/conversation_loop.py, the
+            // `_empty_terminal_sentinel` block — a real, reproduced-on-prod
+            // moonshotai/kimi-k3 flake, logged there as "Empty response (no
+            // content or reasoning) — retry N/3" then "Reasoning-only
+            // response ... after exhausting retries and fallback"). Treated
+            // as ordinary text, that literal "(empty)" string is non-blank,
+            // so neither this branch's fallback nor finalizeAgentJob's
+            // `output?.trim() || fallbackFor(...)` guard ever fired — the
+            // client saw a chat bubble containing the word "(empty)"
+            // verbatim (confirmed on prod: BVF dashboard thread
+            // dash-black-venture-farm, 2026-08-26T16:03:09Z). Normalize it to
+            // blank here, at the source, so the existing empty-output
+            // fallbacks below (and finalizeAgentJob's, for the
+            // !sawToolActivity case) apply exactly as they already do for a
+            // genuinely empty ev.output.
+            assistantFinalText = rawOutput.trim() === '(empty)' ? '' : rawOutput
             if (!assistantFinalText.trim() && sawToolActivity) {
               assistantFinalText = localized('completed_with_writes', lang)
             }
