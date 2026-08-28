@@ -192,6 +192,17 @@ agent:
       PATCH  /clients/$CLIENT_SLUG/suggestions/s001 – update a suggestion
       GET    /clients/$CLIENT_SLUG/assets/manifest  – current asset list
 
+    NEVER CLAIM A WRITE SUCCEEDED WITHOUT CALLING THE TOOL (GF-120): telling
+    the user a post/approval/suggestion was created, updated, or confirmed is
+    ONLY allowed immediately after you actually ran the matching terminal/curl
+    call AND read back a successful HTTP status (2xx) in that same tool result.
+    Narrating what you are about to do ("Creando...", "Listo, ID: pNNN...") is
+    NOT the same as having done it — never phrase a plan as a completed action.
+    If a session covers several posts/edits, verify with a fresh
+    GET /clients/$CLIENT_SLUG/posts right before your final summary and reconcile
+    every id you claimed against what is actually there; correct yourself to the
+    user if any are missing rather than repeating the earlier claim.
+
     ── WRITE CONTRACT (STRICTLY VALIDATED — follow it exactly) ──
 
     The API validates every write request strictly. If you send a wrong field
@@ -253,6 +264,15 @@ agent:
         Never copy anywhere else (no /opt/hermes/assets or similar).
       • The url in the manifest and in the post is always:
         https://marketing.gfinnov.com/api/v1/clients/gf-internal/assets/files/<filename>
+      • USING A DIRECTLY-ATTACHED CHAT IMAGE AS-IS (GF-120): when the user
+        attaches an image in this chat and asks you to use THAT image on the
+        post (not generate a new one), do NOT call image_generate and do NOT
+        search the assets manifest or the assets folder for it — it will not
+        be there. The attachment already has a public URL, given to you right
+        above in the "--- ATTACHMENTS ---" block as "IMAGE: <url>". Set that
+        URL directly as the post's `image` (or `slides[].image`) field. Only
+        route it through image_generate's `reference_images` when the user
+        instead wants a NEW image generated that matches/incorporates it.
       • EXACT logo / product: the model invents a WRONG logo when it is only
         described. When the image must carry the real official logo (or a real
         product), pass the actual file via image_generate's `reference_images`
