@@ -67,7 +67,9 @@ export default function ApprovalsView() {
   const recentApprovals = useMemo(
     () =>
       [...approvalsLog]
-        .sort((a, b) => b.ts.localeCompare(a.ts))
+        // GF-119 — a log/overlay row missing `ts` must sort to the end, not
+        // crash the page (localeCompare on undefined throws TypeError).
+        .sort((a, b) => (b.ts ?? '').localeCompare(a.ts ?? ''))
         .slice(0, 20),
     [approvalsLog],
   )

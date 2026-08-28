@@ -470,9 +470,23 @@ viktorOwned.get('/clients/:slug/approvals', requireScope(), async (c) => {
   const slug = c.req.param('slug')
   const raw = await disk.approvalsLog(slug)
   const items: ApprovalListEntry[] = []
+  // GF-119 — approvals.log starts with a `# …` header comment on every client
+  // (see e.g. clients/black-venture-farm/approvals.log, clients/biomas/approvals.log).
+  // The frontend's own file-mode parser (types/approval.ts parseApprovalLog)
+  // already skips comment lines and requires a known legacy verb; this
+  // server-side merge didn't, so the header line was pushed as a garbage entry
+  // (ts:"#", action:"approvals.log", …). That reached the dashboard as a real
+  // ApprovalLogEntry, and fmtDateTime(entry.ts) threw RangeError: Invalid time
+  // value on `new Date("#")`, which the app's top-level ErrorBoundary caught —
+  // surfacing as "Approvals shows an error" for any client with an
+  // otherwise-empty (header-only) log, e.g. Black Venture Farm. Mirror the
+  // frontend's filtering here so both parsers agree on what counts as a row.
+  const LEGACY_ACTIONS = new Set(['approve', 'reject', 'block', 'unblock'])
   if (raw) {
     for (const line of raw.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      if (line.startsWith('#')) continue
       const [ts, action, postId, actor, ...rest] = line.split(/\s+/)
+      if (!action || !LEGACY_ACTIONS.has(action)) continue
       const meta: Record<string, string> = {}
       for (const kv of rest) {
         if (kv.startsWith('note=')) continue
