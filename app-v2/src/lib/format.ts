@@ -66,19 +66,34 @@ export function fmtDelta(pct: number): string {
   return `${sign}${pct.toFixed(0)}%`
 }
 
+// GF-119 — Intl.DateTimeFormat#format throws RangeError: Invalid time value
+// on an Invalid Date. A malformed/garbage `iso` string (bad upstream data —
+// e.g. a stray non-date token from a log/import) must degrade to a visible
+// placeholder rather than crash the whole page via the app's ErrorBoundary.
+function safeDate(iso: string): Date | null {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 export function fmtDate(iso: string): string {
-  return df('long', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(iso))
+  const d = safeDate(iso)
+  if (!d) return '—'
+  return df('long', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
 }
 
 export function fmtDateShort(iso: string): string {
-  return df('short', { month: 'short', day: 'numeric' }).format(new Date(iso))
+  const d = safeDate(iso)
+  if (!d) return '—'
+  return df('short', { month: 'short', day: 'numeric' }).format(d)
 }
 
 export function fmtDateTime(iso: string): string {
+  const d = safeDate(iso)
+  if (!d) return '—'
   return df('datetime', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(iso))
+  }).format(d)
 }

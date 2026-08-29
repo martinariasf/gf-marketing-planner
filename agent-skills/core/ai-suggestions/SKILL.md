@@ -3,7 +3,6 @@ name: ai-suggestions
 description: Proactively propose next actions, post ideas, hook rewrites, pillar rebalances, and follow-ups based on the client's brief, plan, performance, and learnings. Writes to suggestions.json; humans accept or dismiss from the dashboard. Triggered after every analytics sync, after every weekly summary, on demand via "what should I do next" or "suggest" on Telegram, and on a soft schedule (Wednesday 10:00 local).
 trigger:
   - schedule: "0 10 * * 3"
-  - after_skill: ["sync-postiz-analytics", "weekly-summary"]
   - telegram: "^(suggest|what\\s+should\\s+i\\s+do\\s+next|ideas?)\\s*.*$"
 ---
 
@@ -15,7 +14,7 @@ This is the AI in "AI Marketing Assistant." Everything else Viktor does is patte
 
 ## When this runs
 
-- **Reactive (most common)**: chained after `sync-postiz-analytics` and after `weekly-summary`. If the data just changed, the recommendations should change too.
+- **Reactive**: chained after whatever last changed the client data. NOTE (GF-113, 2026-08-24): the old `sync-postiz-analytics` and `weekly-summary` skills were RETIRED - analytics are now pulled by the API server, not by Viktor, so there is no agent-side analytics event to chain from any more.
 - **Scheduled**: Wednesday 10:00 local. Mid-week is when humans most often ask "what's next?" and want a fresh batch.
 - **On-demand**: "suggest", "what should I do next", "ideas", "ideas for instagram", etc.
 
@@ -104,7 +103,7 @@ If no entries changed (`git diff --quiet`), skip the commit.
 
 ## Telegram delivery
 
-- **Reactive (after analytics sync / weekly summary)**: do NOT post to Telegram. The human sees them on the dashboard next visit, and the weekly-summary digest already has their attention.
+- **Reactive**: do NOT post to Telegram. The human sees them on the dashboard next visit.
 - **Scheduled (Wednesday 10:00)**: post a one-message digest of the top 3 highest-confidence open suggestions:
   ```
   💡 3 suggestions for <Client> this week:

@@ -107,6 +107,10 @@ mock.module('../pb.js', {
             pbCreateCalls.push({ collection: name, data })
             return data
           },
+          // No getFullList here — mirrors production's real approvals_v2
+          // overlay being empty for a client that has never used the
+          // dashboard kanban (e.g. Black Venture Farm): loadApprovalsV2's
+          // own try/catch swallows this and returns [].
         }),
       }),
     verifyUserToken: async () => null,
@@ -114,7 +118,26 @@ mock.module('../pb.js', {
   },
 })
 
+// GF-119 — approvals.log always starts with a `# …` header comment (see
+// clients/black-venture-farm/approvals.log, clients/biomas/approvals.log).
+// Mock only `approvalsLog`; every other disk.* export stays real since no
+// route exercised by this file's other tests reads from disk directly.
+let fakeApprovalsLog: string | null = null
+const { disk: realDisk } = await import('../diskData.js')
+mock.module('../diskData.js', {
+  namedExports: {
+    disk: {
+      ...realDisk,
+      approvalsLog: async (_slug: string) => fakeApprovalsLog,
+    },
+  },
+})
+
 const { viktorOwned } = await import('./viktorOwned.js')
+
+async function getApprovals(headers: Record<string, string> = { Authorization: 'Bearer dash_test' }) {
+  return viktorOwned.request('/clients/acme/approvals', { headers })
+}
 
 async function postApproval(decision: string, headers: Record<string, string> = { Authorization: 'Bearer dash_test' }) {
   return viktorOwned.request('/clients/acme/approvals', {
@@ -243,4 +266,39 @@ test('the agent-role PATCH /posts/:id path never auto-schedules, even with the t
   // behavior (that logic lives ONLY in the POST /approvals handler above).
   const callsAfter = applyStatusToSchedule.mock.calls.slice(before)
   assert.ok(callsAfter.every((call) => call.arguments[2] !== 'scheduled'))
+})
+
+test('GF-119: GET /clients/:slug/approvals skips the approvals.log header comment', async () => {
+  // Reproduces the exact Black Venture Farm / Biomas approvals.log shape: a
+  // single `# …` header line and nothing else (no decisions made yet).
+  fakeApprovalsLog = '# approvals.log - Black Venture Farm. Una linea por decision (approve/reject), agregada por Viktor.\n'
+
+  const res = await getApprovals()
+  const body = await res.json()
+  assert.equal(res.status, 200)
+  // Before the fix this contained a garbage entry parsed from the header
+  // line itself: { ts: "#", action: "approvals.log", postId: "-", actor:
+  // "Black", source: "log" }. The frontend then called
+  // fmtDateTime(entry.ts) -> new Date("#") -> Invalid Date, and
+  // Intl.DateTimeFormat#format threw RangeError: Invalid time value,
+  // which the app's top-level ErrorBoundary caught and rendered as a
+  // generic error screen ("Approvals shows an error").
+  assert.deepEqual(body.items, [])
+})
+
+test('GF-119: GET /clients/:slug/approvals still returns real log lines alongside a header comment', async () => {
+  fakeApprovalsLog = [
+    '# approvals.log - Acme. Una linea por decision (approve/reject), agregada por Viktor.',
+    '2026-04-01T16:30:00Z  approve  p001  Martin  via=telegram  note="v2 - tightened hook"',
+  ].join('\n')
+
+  const res = await getApprovals()
+  const body = await res.json()
+  assert.equal(res.status, 200)
+  assert.equal(body.items.length, 1)
+  assert.equal(body.items[0].ts, '2026-04-01T16:30:00Z')
+  assert.equal(body.items[0].action, 'approve')
+  assert.equal(body.items[0].postId, 'p001')
+  assert.equal(body.items[0].actor, 'Martin')
+  assert.equal(body.items[0].note, 'v2 - tightened hook')
 })
