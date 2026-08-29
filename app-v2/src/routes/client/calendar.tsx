@@ -514,8 +514,12 @@ export default function CalendarView() {
   // post's slides.
   const onUploadImages = useCallback(
     async (files: FileList | null) => {
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      // Copy the FileList BEFORE resetting the input. `files` is the input's
+      // LIVE FileList, so clearing `value` first empties it and the handler
+      // silently uploads nothing. Reset after the copy so re-picking the same
+      // file still fires a change event.
       const picked = files ? Array.from(files) : []
+      if (fileInputRef.current) fileInputRef.current.value = ''
       if (picked.length === 0 || !activePost) return
       const existing = baseSlides(activePost)
       if (existing.length + picked.length > MAX_SLIDES) {
@@ -1057,6 +1061,7 @@ export default function CalendarView() {
                               slideIndex={imageSlide}
                               onSlideChange={setImageSlide}
                               onZoom={() => setZoomOpen(true)}
+                              showFilmstrip={!(isApiEnabled && slidesOf(activePost).length > 0)}
                             />
                           )}
                         </motion.div>
@@ -1111,6 +1116,8 @@ export default function CalendarView() {
                           <SlideStrip
                             slides={slidesOf(activePost)}
                             busy={uploading || slideBusy}
+                            activeIndex={imageSlide}
+                            onSelect={setImageSlide}
                             onMove={onMoveSlide}
                             onRemove={onRemoveSlide}
                           />
@@ -1826,11 +1833,15 @@ function ExternalFeedbackPanel({
 function SlideStrip({
   slides,
   busy,
+  activeIndex,
+  onSelect,
   onMove,
   onRemove,
 }: {
   slides: Slide[]
   busy: boolean
+  activeIndex: number
+  onSelect: (index: number) => void
   onMove: (from: number, to: number) => void
   onRemove: (index: number) => void
 }) {
@@ -1847,8 +1858,22 @@ function SlideStrip({
         <div className="flex gap-2 pb-1 justify-center">
           {slides.map((s, i) => (
             <div key={`${s.image}-${i}`} className="shrink-0 w-16">
-              <div className="relative h-16 w-16 rounded-md overflow-hidden border border-border-subtle">
-                <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+              <div
+                className={cn(
+                  'relative h-16 w-16 rounded-t-md overflow-hidden border transition-all',
+                  i === activeIndex
+                    ? 'border-brand-blue shadow-sm'
+                    : 'border-border-subtle opacity-70 hover:opacity-100',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(i)}
+                  aria-label={t('calendar.goToSlide', { n: i + 1 })}
+                  className="absolute inset-0 h-full w-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue"
+                >
+                  <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                </button>
                 {i === 0 && (
                   <span className="absolute inset-x-0 bottom-0 bg-brand-blue/90 text-white text-[9px] leading-tight text-center py-0.5">
                     {t('calendar.cover')}
@@ -1865,7 +1890,12 @@ function SlideStrip({
                   <Trash2 className="h-3 w-3" />
                 </button>
               </div>
-              <div className="mt-1 flex items-center justify-between">
+              <div
+                className={cn(
+                  'flex items-center justify-between rounded-b-md border border-t-0 px-0.5 py-0.5',
+                  i === activeIndex ? 'border-brand-blue' : 'border-border-subtle',
+                )}
+              >
                 <button
                   type="button"
                   disabled={busy || i === 0}
@@ -1906,9 +1936,13 @@ function PicturePane({
   slideIndex,
   onSlideChange,
   onZoom,
+  // GF-118 — suppressed when the editable SlideStrip is rendered underneath,
+  // so the pane doesn't show two near-identical thumbnail rows.
+  showFilmstrip = true,
 }: {
   post: Post
   slideIndex: number
+  showFilmstrip?: boolean
   onSlideChange: (i: number) => void
   onZoom: () => void
 }) {
@@ -2015,6 +2049,7 @@ function PicturePane({
         </div>
 
         {/* Thumbnail filmstrip */}
+        {showFilmstrip && (
         <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
           <div className="flex gap-2 pb-1 justify-center">
             {slides.map((s, i) => (
@@ -2034,6 +2069,7 @@ function PicturePane({
             ))}
           </div>
         </div>
+        )}
       </div>
     )
   }
