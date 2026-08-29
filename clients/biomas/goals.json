@@ -1,0 +1,53 @@
+{
+  "quarterly": [
+    { "id": "g_excursion_leads", "label": "Consultas de excursiones",      "target": 120,    "unit": "consultas" },
+    { "id": "g_group_bookings",  "label": "Reservas de grupos",           "target": 40,     "unit": "reservas" },
+    { "id": "g_reach",           "label": "Alcance Instagram",            "target": 150000, "unit": "personas" },
+    { "id": "g_followers",       "label": "Nuevos seguidores (IG+FB)",    "target": 1500,   "unit": "seguidores" },
+    { "id": "g_save_rate",       "label": "Tasa de guardados promedio",   "target": 2.5,    "unit": "%" },
+    { "id": "g_family_visits",   "label": "Consultas de visitas familiares", "target": 200, "unit": "consultas" }
+  ],
+  "monthly": [
+    {
+      "month": "Julio",
+      "goals": [
+        { "ref": "g_family_visits", "target": 120 },
+        { "ref": "g_reach",         "target": 55000 },
+        { "ref": "g_followers",     "target": 500 },
+        { "ref": "g_save_rate",     "target": 2.5 }
+      ]
+    },
+    {
+      "month": "Agosto",
+      "goals": [
+        { "ref": "g_excursion_leads", "target": 50 },
+        { "ref": "g_group_bookings",  "target": 15 },
+        { "ref": "g_reach",           "target": 45000 },
+        { "ref": "g_followers",       "target": 500 }
+      ]
+    },
+    {
+      "month": "Septiembre",
+      "goals": [
+        { "ref": "g_excursion_leads", "target": 70 },
+        { "ref": "g_group_bookings",  "target": 25 },
+        { "ref": "g_reach",           "target": 50000 },
+        { "ref": "g_followers",       "target": 500 }
+      ]
+    }
+  ],
+  "weekly": [
+    { "week": 1,  "focus": "Vacaciones de julio: plan en familia + las 4 atracciones", "kpi": "consultas familiares" },
+    { "week": 2,  "focus": "Reel: un dia en Parque Biomas (recorrido completo)",       "kpi": "alcance + guardados" },
+    { "week": 3,  "focus": "Descubri un bioma: contenido educativo (Parque Biomas)",   "kpi": "guardados" },
+    { "week": 4,  "focus": "Cierre de vacaciones + apertura agenda excursiones",       "kpi": "consultas familiares" },
+    { "week": 5,  "focus": "Excursiones de primavera: por que elegir Parque Biomas",   "kpi": "consultas excursiones" },
+    { "week": 6,  "focus": "Valor curricular: Viaje Espacial + ciencias",              "kpi": "consultas excursiones" },
+    { "week": 7,  "focus": "Logistica para colegios (precios de grupo, transporte)",   "kpi": "reservas de grupo" },
+    { "week": 8,  "focus": "Testimonio de un colegio que ya visito",                   "kpi": "reservas de grupo" },
+    { "week": 9,  "focus": "Uruguay Aereo: geografia del pais para excursiones",       "kpi": "consultas excursiones" },
+    { "week": 10, "focus": "Parque Flora en flor: primavera que empieza",              "kpi": "alcance + guardados" },
+    { "week": 11, "focus": "Semana de la Primavera y el Estudiante (CTA fuerte)",      "kpi": "consultas + reservas" },
+    { "week": 12, "focus": "Cierre de trimestre + reservas de octubre",               "kpi": "reservas de grupo" }
+  ]
+}

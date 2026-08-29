@@ -1,0 +1,26 @@
+{
+  "id": "p001",
+  "date": "2026-07-02",
+  "channel": "instagram",
+  "format": "Reel",
+  "pillar": "Aprender jugando",
+  "campaign": "Vacaciones de julio en familia",
+  "title": "Un dia en Parque Biomas (vacaciones de julio)",
+  "image": null,
+  "copy": "En un solo dia, en familia:\n\n1. Caminas por 14 biomas que recrean los ecosistemas del mundo.\n2. Descubris la flora y fauna de Uruguay en Parque Flora.\n3. Viajas a la Estacion Espacial y el sistema solar en el simulador Viaje Espacial.\n4. Sobrevolas la geografia del pais en Uruguay Aereo.\n\nNo es solo un parque de plantas: es una experiencia educativa completa para estas vacaciones de julio.\n\nReserva tu visita por WhatsApp.",
+  "hashtags": ["#ParqueBiomas", "#VacacionesDeJulio", "#Montevideo", "#PlanEnFamilia", "#TurismoEducativo", "#Uruguay"],
+  "cta": "Reserva tu visita por WhatsApp: +598 95 718 501",
+  "status": "draft",
+  "approval": {
+    "status": "draft",
+    "approvedBy": null,
+    "approvedAt": null,
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": null,
+    "publishedAt": null,
+    "publicUrl": null
+  }
+}

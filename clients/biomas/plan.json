@@ -1,0 +1,125 @@
+{
+  "agency": {
+    "name": "GF Innovative Solutions",
+    "tagline": "Operaciones de marketing potenciadas por IA"
+  },
+  "client": {
+    "name": "Parque Biomas",
+    "industry": "Parques educativos / turismo educativo",
+    "handle": "@parquebiomas",
+    "logoInitials": "PB",
+    "primaryChannels": ["instagram", "facebook", "youtube"]
+  },
+  "quarter": {
+    "label": "Q3 2026",
+    "year": 2026,
+    "theme": "De vacaciones de julio a la temporada alta de excursiones de primavera",
+    "months": [
+      { "key": "jul", "name": "Julio",      "weeks": [1, 2, 3, 4] },
+      { "key": "ago", "name": "Agosto",     "weeks": [5, 6, 7, 8] },
+      { "key": "sep", "name": "Septiembre", "weeks": [9, 10, 11, 12] }
+    ]
+  },
+  "headline": "Llenar la agenda de excursiones escolares de primavera y las visitas familiares de vacaciones de julio.",
+  "positioningStatement": "Cada publicacion deberia hacer pensar a quien la ve: 'esto es una salida educativa de verdad, y ademas los chicos se divierten'.",
+  "strategy": "Julio: capturar las vacaciones de invierno con planes en familia (las cuatro atracciones en un dia). Agosto: arrancar la campana de excursiones escolares de primavera apuntando a docentes y coordinadores. Septiembre: pico de reservas escolares (Dia de la Primavera/Estudiante el 21/9) y consolidar el flujo de consultas entrantes.",
+  "strategicPriorities": [
+    { "label": "Excursiones escolares",   "description": "Llenar la agenda de set-nov: contenido dirigido a docentes con valor curricular + logistica clara (precios de grupo, transporte, propuesta pedagogica)." },
+    { "label": "Visitas en familia",      "description": "Posicionar Parque Biomas como el mejor plan educativo de las vacaciones de julio y los fines de semana." },
+    { "label": "Mostrar las 4 atracciones", "description": "Que la audiencia entienda que no es solo plantas: Biomas, Flora, Viaje Espacial y Uruguay Aereo, todo en un mismo predio." },
+    { "label": "Consultas entrantes",     "description": "Meta: un flujo constante de consultas de reserva por WhatsApp, Instagram y Facebook. Es el KPI que convierte." }
+  ],
+  "kpis": [
+    { "label": "Consultas de excursiones",   "value": "120" },
+    { "label": "Reservas de grupos",         "value": "40" },
+    { "label": "Alcance Instagram",          "value": "150K" },
+    { "label": "Nuevos seguidores",          "value": "+1500" }
+  ],
+  "pillars": [
+    { "name": "Excursiones escolares", "weight": 35, "color": "#211D58", "description": "Contenido para docentes: valor curricular de cada atraccion, logistica, testimonios de colegios. El motor de las reservas de grupo." },
+    { "name": "Aprender jugando",      "weight": 30, "color": "#8BC07C", "description": "Que se descubre en cada bioma y atraccion. Curiosidad, naturaleza, ciencia y asombro para familias." },
+    { "name": "Detras de escena",      "weight": 20, "color": "#fa7e1e", "description": "El parque por dentro: cuidado de las plantas, los biomas, el simulador espacial. Genera confianza y cercania." },
+    { "name": "Planes y temporada",    "weight": 15, "color": "#d62976", "description": "Vacaciones de julio, fines de semana, efemerides ambientales y fechas escolares. Llamados a la accion para reservar." }
+  ],
+  "campaigns": [
+    { "name": "Vacaciones de julio en familia",      "pillar": "Planes y temporada",    "startWeek": 1,  "endWeek": 4,  "color": "#d62976" },
+    { "name": "Excursiones de primavera (docentes)",  "pillar": "Excursiones escolares", "startWeek": 4,  "endWeek": 12, "color": "#211D58" },
+    { "name": "Descubri cada bioma",                  "pillar": "Aprender jugando",      "startWeek": 1,  "endWeek": 12, "color": "#8BC07C" },
+    { "name": "El parque por dentro",                 "pillar": "Detras de escena",      "startWeek": 2,  "endWeek": 11, "color": "#fa7e1e" },
+    { "name": "Semana de la Primavera y el Estudiante","pillar": "Planes y temporada",   "startWeek": 11, "endWeek": 12, "color": "#211D58" }
+  ],
+  "monthlyFocus": [
+    {
+      "month": "Julio",
+      "theme": "Vacaciones de invierno en familia",
+      "intent": "Capturar la demanda de las vacaciones de julio. Mostrar que en un dia se viven las cuatro atracciones. Cada post de julio invita a venir en familia.",
+      "priorities": ["Planes para vacaciones de julio", "Mostrar las 4 atracciones", "Reels con ninos viviendo la experiencia"],
+      "keyMoments": ["Inicio vacaciones de julio (semana 1)", "Fin de semana largo / mitad de vacaciones"],
+      "watch": "Consultas de familias y alcance de Reels. Metrica principal de julio."
+    },
+    {
+      "month": "Agosto",
+      "theme": "Arranca la campana de excursiones de primavera",
+      "intent": "Apuntar a docentes y coordinadores: por que Parque Biomas es la excursion del trimestre. Valor curricular por atraccion + logistica clara. Abrir agenda de reservas de set-nov.",
+      "priorities": ["Posts para docentes (valor curricular)", "Logistica de grupos (precios, transporte, propuesta pedagogica)", "Testimonios de colegios que ya vinieron"],
+      "keyMoments": ["Apertura de agenda de excursiones de primavera", "Comunicacion a docentes (vuelta de vacaciones)"],
+      "watch": "Consultas de excursiones escolares y reservas de grupo iniciadas."
+    },
+    {
+      "month": "Septiembre",
+      "theme": "Pico de reservas escolares y Primavera",
+      "intent": "Aprovechar el Dia de la Primavera y del Estudiante (21/9). Consolidar las reservas de excursiones y mantener el flujo de consultas familiares para los fines de semana de primavera.",
+      "priorities": ["Campana Semana de la Primavera", "Cierre de reservas de excursiones de set-oct", "Contenido de naturaleza en flor (Parque Flora)"],
+      "keyMoments": ["Dia de la Primavera y del Estudiante (21/9)", "Fines de semana de primavera"],
+      "watch": "Reservas de grupo confirmadas + crecimiento de seguidores."
+    }
+  ],
+  "keyDates": [
+    { "date": "2026-07-01", "title": "Inicio vacaciones de julio",            "type": "temporada", "relevance": "high",   "angle": "Planes en familia. Las cuatro atracciones en un solo dia. CTA a reservar." },
+    { "date": "2026-08-04", "title": "Apertura agenda excursiones primavera",   "type": "marca",     "relevance": "high",   "angle": "Primer mensaje a docentes: reserven la salida del trimestre con tiempo." },
+    { "date": "2026-09-21", "title": "Dia de la Primavera y del Estudiante",     "type": "efemeride", "relevance": "high",   "angle": "Pico estacional. Parque Flora en flor + planes para el fin de semana largo." },
+    { "date": "2026-09-27", "title": "Dia Mundial del Turismo",                  "type": "efemeride", "relevance": "medium", "angle": "Turismo educativo interno: descubrir Uruguay y el mundo en un parque." }
+  ],
+  "platforms": [
+    {
+      "name": "Instagram",
+      "channelKey": "instagram",
+      "role": "Principal - familias + descubrimiento de la propuesta",
+      "rationale": "Las familias y los docentes descubren planes aca. Reels de ninos viviendo la experiencia generan alcance y guardados; Stories sostienen la temporada y los CTA de reserva.",
+      "cadence": "4-5x/semana",
+      "formatMix": [
+        { "label": "Reels (experiencia real)", "weight": "50%" },
+        { "label": "Carruseles educativos",    "weight": "25%" },
+        { "label": "Stories (temporada + CTA)", "weight": "20%" },
+        { "label": "Posts simples",            "weight": "5%" }
+      ],
+      "watch": ["Consultas por DM e historias", "Alcance y guardados de Reels", "Crecimiento de seguidores"]
+    },
+    {
+      "name": "Facebook",
+      "channelKey": "facebook",
+      "role": "Secundario - docentes, grupos y familias adultas",
+      "rationale": "Docentes y organizadores de grupos siguen activos en Facebook. Ideal para informacion de excursiones, logistica y eventos de temporada.",
+      "cadence": "3x/semana",
+      "formatMix": [
+        { "label": "Posts informativos (excursiones)", "weight": "45%" },
+        { "label": "Albumes de fotos del parque",      "weight": "30%" },
+        { "label": "Eventos y temporada",              "weight": "25%" }
+      ],
+      "watch": ["Consultas de grupos", "Compartidos de docentes", "Alcance de publicaciones de excursiones"]
+    },
+    {
+      "name": "YouTube",
+      "channelKey": "youtube",
+      "role": "Apoyo - recorridos largos y testimonios",
+      "rationale": "Videos de recorrido por las atracciones y testimonios de colegios que sirven como prueba social y material para enviar a docentes que consultan.",
+      "cadence": "1-2/mes",
+      "formatMix": [
+        { "label": "Recorridos por atraccion", "weight": "50%" },
+        { "label": "Testimonios de colegios",  "weight": "30%" },
+        { "label": "Clips de experiencia",     "weight": "20%" }
+      ],
+      "watch": ["Tiempo de visualizacion", "Consultas que mencionan los videos", "Suscriptores"]
+    }
+  ]
+}

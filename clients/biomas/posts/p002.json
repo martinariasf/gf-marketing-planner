@@ -1,0 +1,26 @@
+{
+  "id": "p002",
+  "date": "2026-08-04",
+  "channel": "facebook",
+  "format": "Post informativo",
+  "pillar": "Excursiones escolares",
+  "campaign": "Excursiones de primavera (docentes)",
+  "title": "Reserva tu excursion de primavera (docentes)",
+  "image": null,
+  "copy": "Docentes: ya pueden reservar la excursion de primavera en Parque Biomas.\n\nUna salida didactica con valor curricular real:\n- Ciencias naturales y medio ambiente en los 14 biomas y en Parque Flora.\n- Astronomia y ciencia en el simulador Viaje Espacial.\n- Geografia de Uruguay en Uruguay Aereo.\n\nTarifas y recorridos especiales para grupos escolares. Coordinamos dia, horario y propuesta pedagogica segun el nivel.\n\nEscribinos para reservar la fecha de tu grupo.",
+  "hashtags": ["#ParqueBiomas", "#ExcursionEscolar", "#Docentes", "#EducacionUruguay", "#SalidaDidactica"],
+  "cta": "Consulta disponibilidad y tarifas de grupo por WhatsApp: +598 95 718 501",
+  "status": "draft",
+  "approval": {
+    "status": "draft",
+    "approvedBy": null,
+    "approvedAt": null,
+    "version": 1,
+    "blockerReason": null
+  },
+  "publishing": {
+    "postizJobId": null,
+    "publishedAt": null,
+    "publicUrl": null
+  }
+}

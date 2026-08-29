@@ -1,0 +1,33 @@
+{
+  "lastSyncedAt": null,
+  "source": "manual",
+  "posts": {},
+  "aggregates": {
+    "quarterly": { "reach": 0, "followerDelta": 0 },
+    "monthly": {
+      "Julio":      { "reach": 0, "followerDelta": 0 },
+      "Agosto":     { "reach": 0, "followerDelta": 0 },
+      "Septiembre": { "reach": 0, "followerDelta": 0 }
+    },
+    "weekly": {}
+  },
+  "vsGoals": {
+    "g_excursion_leads": { "target": 120,    "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_group_bookings":  { "target": 40,     "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_reach":           { "target": 150000, "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_followers":       { "target": 1500,   "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_save_rate":       { "target": 2.5,    "current": 0, "pace": "behind", "deltaPct": 0 },
+    "g_family_visits":   { "target": 200,    "current": 0, "pace": "behind", "deltaPct": 0 }
+  },
+  "weeklySummary": {
+    "week": 0,
+    "wins": [
+      "Workspace recien creado: estructura de marca, plan trimestral y objetivos cargados."
+    ],
+    "losses": [
+      "Sin datos de performance todavia: aun no hay publicaciones medidas.",
+      "Postiz aun no conectado: sin programacion automatica de posts."
+    ],
+    "nextTest": "Semana 1: publicar el primer Reel de vacaciones de julio (un dia en Parque Biomas) y medir alcance y guardados como linea de base."
+  }
+}
