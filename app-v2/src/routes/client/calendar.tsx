@@ -1856,8 +1856,13 @@ function SlideStrip({
       <p className="text-center text-xs text-ink-muted mb-2">
         {t('calendar.slideCount', { n: slides.length, max: MAX_SLIDES })}
       </p>
+      {/* `w-max mx-auto` rather than `justify-center`: a centred flex row that
+          overflows pushes its FIRST item past scrollLeft 0, where no scroll can
+          reach it — on mobile that hides the cover once there are ~6 slides.
+          Auto margins collapse to 0 on overflow, so this centres when it fits
+          and left-aligns (fully scrollable) when it does not. */}
       <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
-        <div className="flex gap-2 pb-1 justify-center">
+        <div className="flex gap-2 pb-1 w-max mx-auto">
           {slides.map((s, i) => (
             <div key={`${s.image}-${i}`} className="shrink-0 w-16">
               <div
