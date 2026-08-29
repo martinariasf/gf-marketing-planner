@@ -46,6 +46,10 @@ concurrency:
 
 jobs:
   guard:
+    # The branch-protection status check is named after the JOB, not the
+    # workflow. Without this the required check reads as a bare `guard` and is
+    # unfindable when you search the settings box for "Prod inventory guard".
+    name: Prod inventory guard
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
