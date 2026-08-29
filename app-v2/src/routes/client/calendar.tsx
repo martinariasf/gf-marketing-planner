@@ -476,16 +476,18 @@ export default function CalendarView() {
   // the SAME post stays masked until the user navigates away. Upgrade to
   // comparing against the refetched list if Viktor ever edits slides while a
   // user is on that post.
-  const pendingSlidesRef = useRef<{ postId: string; slides: Slide[] } | null>(null)
+  // State, not a ref: the strip must RENDER from this too. Rendering the
+  // stale list while the handlers act on the fresh one makes the indices the
+  // user clicks refer to a different slide than the one that gets moved or
+  // deleted — and a ref cannot be read during render under this repo's
+  // react-compiler rule. One source of truth for both, or neither.
+  const [pendingSlides, setPendingSlides] = useState<{ postId: string; slides: Slide[] } | null>(null)
 
-  // Handlers only — never call this during render: the react-compiler lint
-  // rule forbids reading a ref there. Display keeps using `slidesOf(post)`,
-  // which is one refetch behind for a moment; that is cosmetic and predates
-  // GF-118. What must not be stale is the base the NEXT edit is computed from.
-  const baseSlides = useCallback((post: Post): Slide[] => {
-    const pending = pendingSlidesRef.current
-    return pending && pending.postId === post.id ? pending.slides : slidesOf(post)
-  }, [])
+  const baseSlides = useCallback(
+    (post: Post): Slide[] =>
+      pendingSlides && pendingSlides.postId === post.id ? pendingSlides.slides : slidesOf(post),
+    [pendingSlides],
+  )
 
   // GF-118 — every slide-list change (upload, reorder, delete) goes through one
   // PATCH. `image` is always sent explicitly: an already-stored cover WINS over
@@ -503,7 +505,7 @@ export default function CalendarView() {
       await apiPatchPost(slug, postId, patch)
       // Only once the write actually landed: a rejected PATCH must leave the
       // base list exactly where it was.
-      pendingSlidesRef.current = { postId, slides: next }
+      setPendingSlides({ postId, slides: next })
     },
     [slug],
   )
@@ -595,10 +597,10 @@ export default function CalendarView() {
     [activePost, onSlideEdit, baseSlides],
   )
 
-  // Reset the image-slide cursor whenever the active post changes. GF-118:
-  // the pending-slides override belongs to one post, so it goes with it.
+  // Reset the image-slide cursor whenever the active post changes. The
+  // pending-slides override is keyed by post id, so it simply stops matching
+  // and needs no explicit clear here.
   useEffect(() => {
-    pendingSlidesRef.current = null
     setImageSlide(0)
   }, [activePost?.id])
 
@@ -1061,7 +1063,7 @@ export default function CalendarView() {
                               slideIndex={imageSlide}
                               onSlideChange={setImageSlide}
                               onZoom={() => setZoomOpen(true)}
-                              showFilmstrip={!(isApiEnabled && slidesOf(activePost).length > 0)}
+                              showFilmstrip={!(isApiEnabled && baseSlides(activePost).length > 0)}
                             />
                           )}
                         </motion.div>
@@ -1112,9 +1114,9 @@ export default function CalendarView() {
                         {/* GF-118 — editable slide strip. Kept out of PicturePane on
                             purpose: that filmstrip is navigation (and renders in the
                             lightbox too); this one owns order and deletion. */}
-                        {isApiEnabled && slidesOf(activePost).length > 0 && (
+                        {isApiEnabled && baseSlides(activePost).length > 0 && (
                           <SlideStrip
-                            slides={slidesOf(activePost)}
+                            slides={baseSlides(activePost)}
                             busy={uploading || slideBusy}
                             activeIndex={imageSlide}
                             onSelect={setImageSlide}
