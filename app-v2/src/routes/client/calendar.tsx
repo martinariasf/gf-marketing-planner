@@ -467,6 +467,26 @@ export default function CalendarView() {
     [plan.client.name, calendarRange, posts, rangeMonths, t],
   )
 
+  // GF-118 — the slide list we last wrote successfully. `refetch` from the
+  // client context is fire-and-forget (`() => void`), so `activePost` can still
+  // carry the PRE-patch slides when the user clicks again. Basing the next edit
+  // on this ref rather than on `activePost` is what stops a fast second click
+  // from computing against stale data and silently reverting the first move.
+  // ponytail: cleared only on post switch, so a concurrent server-side change to
+  // the SAME post stays masked until the user navigates away. Upgrade to
+  // comparing against the refetched list if Viktor ever edits slides while a
+  // user is on that post.
+  const pendingSlidesRef = useRef<{ postId: string; slides: Slide[] } | null>(null)
+
+  // Handlers only — never call this during render: the react-compiler lint
+  // rule forbids reading a ref there. Display keeps using `slidesOf(post)`,
+  // which is one refetch behind for a moment; that is cosmetic and predates
+  // GF-118. What must not be stale is the base the NEXT edit is computed from.
+  const baseSlides = useCallback((post: Post): Slide[] => {
+    const pending = pendingSlidesRef.current
+    return pending && pending.postId === post.id ? pending.slides : slidesOf(post)
+  }, [])
+
   // GF-118 — every slide-list change (upload, reorder, delete) goes through one
   // PATCH. `image` is always sent explicitly: an already-stored cover WINS over
   // the one coalescePost() would derive from slides[0], so a reorder or delete
@@ -481,6 +501,9 @@ export default function CalendarView() {
         patch.format = 'carousel'
       }
       await apiPatchPost(slug, postId, patch)
+      // Only once the write actually landed: a rejected PATCH must leave the
+      // base list exactly where it was.
+      pendingSlidesRef.current = { postId, slides: next }
     },
     [slug],
   )
@@ -494,7 +517,7 @@ export default function CalendarView() {
       if (fileInputRef.current) fileInputRef.current.value = ''
       const picked = files ? Array.from(files) : []
       if (picked.length === 0 || !activePost) return
-      const existing = slidesOf(activePost)
+      const existing = baseSlides(activePost)
       if (existing.length + picked.length > MAX_SLIDES) {
         toast.error(t('calendar.slideLimit', { max: MAX_SLIDES, have: existing.length }))
         return
@@ -524,7 +547,7 @@ export default function CalendarView() {
         setUploading(false)
       }
     },
-    [activePost, slug, t, refetch, writeSlides],
+    [activePost, slug, t, refetch, writeSlides, baseSlides],
   )
 
   // GF-118 — move a slide one position, or drop it. Both rewrite the whole list
@@ -538,7 +561,7 @@ export default function CalendarView() {
         setImageSlide(Math.max(0, Math.min(focus, next.length - 1)))
         refetch()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
+        toast.error(err instanceof Error ? err.message : t('calendar.slideEditFailed'))
       } finally {
         setSlideBusy(false)
       }
@@ -549,27 +572,29 @@ export default function CalendarView() {
   const onMoveSlide = useCallback(
     (from: number, to: number) => {
       if (!activePost) return
-      const list = slidesOf(activePost)
+      const list = baseSlides(activePost)
       if (to < 0 || to >= list.length) return
       const next = [...list]
       const [moved] = next.splice(from, 1)
       next.splice(to, 0, moved)
       void onSlideEdit(next, to)
     },
-    [activePost, onSlideEdit],
+    [activePost, onSlideEdit, baseSlides],
   )
 
   const onRemoveSlide = useCallback(
     (index: number) => {
       if (!activePost) return
-      const next = slidesOf(activePost).filter((_, i) => i !== index)
+      const next = baseSlides(activePost).filter((_, i) => i !== index)
       void onSlideEdit(next, index - 1)
     },
-    [activePost, onSlideEdit],
+    [activePost, onSlideEdit, baseSlides],
   )
 
-  // Reset the image-slide cursor whenever the active post changes.
+  // Reset the image-slide cursor whenever the active post changes. GF-118:
+  // the pending-slides override belongs to one post, so it goes with it.
   useEffect(() => {
+    pendingSlidesRef.current = null
     setImageSlide(0)
   }, [activePost?.id])
 
