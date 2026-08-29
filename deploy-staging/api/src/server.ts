@@ -12,6 +12,7 @@ import { apiReference } from '@scalar/hono-api-reference'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { env } from './env.js'
+import { errorResponse } from './pbError.js'
 import { health } from './routes/health.js'
 import { clients } from './routes/clients.js'
 import { userOwned } from './routes/userOwned.js'
@@ -32,7 +33,10 @@ import { agentJobsRoute } from './routes/agentJobs.js'
 import { rateLimit } from './rateLimit.js'
 import { ensureCollections } from './ensureCollections.js'
 import { startAgentJobReconciler } from './agentJobs.js'
+import { startAnalyticsSync } from './analyticsSync.js'
+import { analytics } from './routes/analytics.js'
 import { registerApiDocs } from './openapi-docs.js'
+import { buildApiServers, originFromApiBase } from './openapiServers.js'
 import { problem } from './problem.js'
 
 const app = new OpenAPIHono()
@@ -51,6 +55,11 @@ app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }, 'def'))
 // only adds spec entries; the real handlers live in the route files.
 registerApiDocs(app)
 
+// GF-123: the spec must describe THIS deployment — see openapiServers.ts for
+// why a hardcoded staging URL broke every prod integration.
+const publicOrigin = originFromApiBase(env.publicApiBase)
+const apiServers = buildApiServers(env.publicApiBase)
+
 // OpenAPI spec + docs UI are registered BEFORE the auth-gated subapps so
 // the clients router's wildcard requireAuth middleware doesn't swallow them.
 app.doc('/api/v1/openapi.json', {
@@ -59,36 +68,36 @@ app.doc('/api/v1/openapi.json', {
     title: 'Marketing Planner API',
     version: '1.0.0',
     description: [
-      'Staging API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
+      'REST API for the Viktor marketing operating dashboard. Single source of truth for agent <-> dashboard interactions.',
+      '',
+      `This spec describes the deployment at ${publicOrigin}. Agent tokens are per-deployment: a token minted on production will NOT authenticate against staging (and vice versa).`,
       '',
       '## For external agents',
       'These docs are the agent-facing integration reference (the human webapp only links here).',
       '',
       '- **Auth:** send `Authorization: Bearer <agent token>` on every request. The token is scoped to one client `slug` and cannot touch other clients.',
       '- **Get connected in one step:** the dashboard Integration screen offers a one-click JSON payload (`apiBase`, `slug`, `token`, `openapiUrl`, key `endpoints`) — ingest that and you are configured.',
-      '- **Source material for post generation:** POST factual grounding to `/clients/{slug}/information-sources` (JSON) or `/clients/{slug}/information-sources/upload` (text file). Role `agent` is allowed; set `approved: true` to make a source usable immediately. See the **source material** tag.',
+      '- **Source material for post generation — READ THIS BEFORE YOU DRAFT:** `GET /clients/{slug}/information-sources?approved=true` returns the documents a human uploaded through the dashboard for the agent to use (brand guidelines, product facts, transcripts). The full document text is in each item’s `summary`; `title` names it and `prompt` says how to use it. Treat these as authoritative about the client, above your own assumptions. You can also POST your own grounding to the same path (JSON) or `/clients/{slug}/information-sources/upload` (text file); role `agent` is allowed, and uploads are approved on arrival. See the **source material** tag.',
       '- **Posts / approvals / suggestions:** agent role has full read+write (see those tags).',
       '- **Strategy docs** (brief/plan/goals/learnings) are **read-only** for agents; only `branding` is agent-writable.',
       '- **Images** are optional. When you do generate one, write it to `clients/{slug}/assets/` and append a manifest row; reference it via the public `/clients/{slug}/assets/files/{name}` URL.',
     ].join('\n'),
   },
-  servers: [
-    { url: 'https://staging.marketing.gfinnov.com', description: 'staging' },
-    { url: 'http://localhost:8080', description: 'local' },
-  ],
+  servers: apiServers,
 })
 
 app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
   type: 'http',
   scheme: 'bearer',
-  description: 'agent_* or dash_* token. See deploy-staging/api/README.md.',
+  description:
+    'agent_* or dash_* token, scoped to one client slug and to THIS deployment. See deploy-staging/api/README.md.',
 })
 
 app.get(
   '/api/v1/docs',
   apiReference({
     spec: { url: '/api/v1/openapi.json' },
-    pageTitle: 'Marketing Planner API — staging',
+    pageTitle: `Marketing Planner API — ${publicOrigin.replace(/^https?:\/\//, '')}`,
     theme: 'purple',
   }),
 )
@@ -131,6 +140,7 @@ app.route('/api/v1', auditRoute)
 app.route('/api/v1', notifyRoute)
 app.route('/api/v1', chat)
 app.route('/api/v1', integration)
+app.route('/api/v1', analytics)
 
 // Friendly root.
 app.get('/', (c) =>
@@ -149,11 +159,11 @@ app.notFound((c) =>
 )
 app.onError((err, c) => {
   console.error('[api] unhandled', err)
-  return problem(c, {
-    title: 'Internal Server Error',
-    status: 500,
-    detail: err instanceof Error ? err.message : 'unknown',
-  })
+  // GF-110 — a PocketBase validation failure is the caller's problem, not a
+  // server fault. errorResponse reports PB's status and the field-level reason
+  // instead of flattening everything into a 500 whose detail said
+  // "Failed to create record."
+  return errorResponse(c, err)
 })
 
 // Best-effort PB collection bootstrap. Failures only log — the API still
@@ -161,6 +171,9 @@ app.onError((err, c) => {
 if (env.pbAdminEmail && env.pbAdminPassword) {
   ensureCollections().catch((err) => console.error('[ensureCollections] failed', err))
   startAgentJobReconciler()
+  // GF-113 — periodic Postiz analytics pull. Conservative by construction:
+  // Postiz returns no rate-limit headers, so there is nothing to react to.
+  startAnalyticsSync()
 }
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {

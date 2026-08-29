@@ -9,7 +9,6 @@
 //   clients/<slug>/brief.json | plan.json | goals.json | learnings.json
 //   clients/<slug>/posts/index.json + posts/p001.json...
 //   clients/<slug>/suggestions.json
-//   clients/<slug>/performance.json
 //   clients/<slug>/approvals.log    (text — one line per decision)
 //   clients/<slug>/assets/manifest.json
 //   index.json                       (slug catalog)
@@ -44,7 +43,6 @@ export const disk = {
   goals: (slug: string) => readJson<unknown>('clients', slug, 'goals.json'),
   learnings: (slug: string) => readJson<unknown>('clients', slug, 'learnings.json'),
   suggestions: (slug: string) => readJson<unknown>('clients', slug, 'suggestions.json'),
-  performance: (slug: string) => readJson<unknown>('clients', slug, 'performance.json'),
   assetsManifest: (slug: string) =>
     readJson<unknown>('clients', slug, 'assets', 'manifest.json'),
   postsIndex: (slug: string) =>

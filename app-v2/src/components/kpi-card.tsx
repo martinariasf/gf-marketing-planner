@@ -29,7 +29,14 @@ const NETWORK_COLOR: Record<SocialNetwork, string> = {
 
 interface Props {
   label: string
-  current: number
+  /** GF-113: `null` means we genuinely cannot measure this goal, and the card
+   *  says so instead of drawing a 0% bar. A zero would assert the client achieved
+   *  nothing, which is a different claim from "we have no source for this". */
+  current: number | null
+  /** GF-113: set when `current` covers a SHORTER window than `target` (our
+   *  measurements are 30-day; goals are quarterly). Displays the window and
+   *  SUPPRESSES the progress bar, because the two are not comparable. */
+  windowNote?: string
   target: number
   unit: string
   pace?: 'ahead' | 'on-track' | 'behind'
@@ -69,9 +76,14 @@ export function KpiCard({
   compact = true,
   channel,
   channelUrl,
+  windowNote,
 }: Props) {
   const t = useT()
-  const pct = target === 0 ? 0 : Math.min(100, (current / target) * 100)
+  const unmeasured = current === null
+  // No bar when the measured window does not cover the target period — see
+  // ANALYTICS_WINDOW_DAYS in lib/goal-actuals.ts.
+  const showBar = !unmeasured && !windowNote
+  const pct = target === 0 || current === null ? 0 : Math.min(100, (current / target) * 100)
   const paceColor = pace ? PACE_COLORS[pace] : '#6b6375'
   const Icon = !deltaPct ? Minus : deltaPct > 0 ? TrendingUp : TrendingDown
 
@@ -82,7 +94,7 @@ export function KpiCard({
           <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
             {label}
           </p>
-          {pace && (
+          {pace && !unmeasured && (
             <div
               className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
               style={{ backgroundColor: paceColor + '22', color: paceColor }}
@@ -94,23 +106,39 @@ export function KpiCard({
         </div>
 
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-brand-blue tracking-tight">
-            <CountUp to={current} compact={compact} />
-          </span>
+          {unmeasured ? (
+            <span className="text-lg font-medium text-ink-muted/80">
+              {t('goals.notMeasured')}
+            </span>
+          ) : (
+            <span className="text-3xl font-bold text-brand-blue tracking-tight">
+              <CountUp to={current} compact={compact} />
+            </span>
+          )}
           <span className="text-sm text-ink-muted">
-            / {compact ? fmtCompact(target) : fmtNumber(target)} {unit}
+            {unmeasured || windowNote ? t('goals.targetPrefix') : '/'}{' '}
+            {compact ? fmtCompact(target) : fmtNumber(target)} {unit}
           </span>
         </div>
 
-        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-paper-muted">
-          <motion.div
-            className={cn('h-full rounded-full')}
-            style={{ backgroundColor: paceColor }}
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 1.0, ease: 'easeOut' }}
-          />
-        </div>
+        {windowNote && !unmeasured && (
+          <p className="mt-1 text-[11px] text-ink-muted/80">{windowNote}</p>
+        )}
+
+        {showBar ? (
+          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-paper-muted">
+            <motion.div
+              className={cn('h-full rounded-full')}
+              style={{ backgroundColor: paceColor }}
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 1.0, ease: 'easeOut' }}
+            />
+          </div>
+        ) : (
+          // Deliberately no track either: an empty rail still reads as "0% done".
+          <div className="mt-4 h-1.5" />
+        )}
 
         {channelUrl && (
           <a

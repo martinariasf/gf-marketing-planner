@@ -6,7 +6,7 @@
  *     /data/<slug>/<file>.json served by Caddy. No backend needed.
  *   - **PocketBase mode** (when VITE_PB_URL is set): user-owned data
  *     (brief, plan, goals, learnings, client index) is loaded from PocketBase.
- *     Viktor-owned data (posts, suggestions, performance, approvals.log,
+ *     Viktor-owned data (posts, suggestions, approvals.log,
  *     assets) is STILL fetched as static JSON — preserving literal-approval.
  *
  * The switch is at build time via the `VITE_PB_URL` env var. Pages don't
@@ -17,7 +17,7 @@ import type {
   Brief,
   Plan,
   Goals,
-  Performance,
+  ClientAnalytics,
   Post,
   Learnings,
   ApprovalLogEntry,
@@ -42,7 +42,7 @@ import {
   apiLoadGoals,
   apiLoadLearnings,
   apiLoadClientIndex,
-  apiLoadPerformance,
+  apiLoadAnalytics,
   apiLoadPosts,
   apiLoadSuggestions,
   apiLoadAssetsManifest,
@@ -96,14 +96,27 @@ function fileClientIndex(): Promise<ClientIndex> {
 
 // ── Viktor-owned (always from files, both modes) ─────────────────────────────
 
-export async function loadPerformance(
-  slug: string,
-): Promise<Performance | null> {
-  if (isApiEnabled) return apiLoadPerformance(slug)
-  try {
-    return await fetchJson<Performance>(clientPath(slug, 'performance.json'))
-  } catch {
-    return null
+// GF-113 / TASK-011 — `loadPerformance` is GONE, along with every
+// `performance.json` on disk. It served hand-authored numbers marked
+// `"source": "manual"` to the Performance and Goals tabs, which is the fiction
+// this item removes. Martin's call (2026-08-24): delete ALL of it, including the
+// demo workspace's, rather than keep it behind a badge.
+//
+// Its replacement reads real, server-synced analytics.
+export async function loadAnalytics(slug: string): Promise<ClientAnalytics> {
+  if (isApiEnabled) return apiLoadAnalytics(slug)
+  // FILE MODE (the static build, no API): there is no server to sync from, so
+  // there are genuinely no analytics. Report that honestly with the same empty
+  // state a fresh client sees. This is exactly why the demo now looks empty too
+  // — showing invented numbers here is what made the tab a stage set.
+  return {
+    provider: 'postiz',
+    status: 'no_key',
+    syncedAt: null,
+    error: null,
+    channels: [],
+    posts: [],
+    unlinked: 0,
   }
 }
 
@@ -170,7 +183,7 @@ export interface ClientBundle {
   brief: Brief
   plan: Plan
   goals: Goals
-  performance: Performance | null
+  analytics: ClientAnalytics
   posts: Post[]
   learnings: Learnings | null
   approvalsLog: ApprovalLogEntry[]
@@ -226,7 +239,7 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     brief,
     plan,
     goals,
-    performance,
+    analytics,
     posts,
     learnings,
     approvalsLog,
@@ -237,7 +250,7 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     loadBrief(slug),
     loadPlan(slug),
     loadGoals(slug),
-    loadPerformance(slug),
+    loadAnalytics(slug),
     loadPosts(slug),
     loadLearnings(slug),
     loadApprovalsLog(slug),
@@ -250,7 +263,7 @@ export async function loadClient(slug: string): Promise<ClientBundle> {
     brief,
     plan,
     goals,
-    performance,
+    analytics,
     posts,
     learnings,
     approvalsLog,

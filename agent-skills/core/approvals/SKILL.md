@@ -125,8 +125,8 @@ API base + channel-id-per-platform live in environment vars on the agent (`POSTI
 
 - Draft posts. That's a separate `draft` skill.
 - Generate images. That's `nano-banana-image`.
-- Pull metrics. That's `sync-postiz-analytics`.
-- Send the weekly summary. That's `weekly-summary`.
+- Pull metrics. The API server does this now (GF-113); Viktor does not touch analytics.
+- Compose a weekly wins/losses digest. That block was removed from the dashboard (GF-113 / TASK-011); nothing renders it.
 
 Keep this skill small and laser-focused. It is the single most safety-critical part of Viktor — a buggy approval skill can leak unapproved content to the public.
 
