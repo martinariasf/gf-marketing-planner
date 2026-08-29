@@ -469,18 +469,21 @@ export default function CalendarView() {
 
   // GF-118 — the slide list we last wrote successfully. `refetch` from the
   // client context is fire-and-forget (`() => void`), so `activePost` can still
-  // carry the PRE-patch slides when the user clicks again. Basing the next edit
-  // on this ref rather than on `activePost` is what stops a fast second click
-  // from computing against stale data and silently reverting the first move.
-  // ponytail: cleared only on post switch, so a concurrent server-side change to
-  // the SAME post stays masked until the user navigates away. Upgrade to
-  // comparing against the refetched list if Viktor ever edits slides while a
-  // user is on that post.
-  // State, not a ref: the strip must RENDER from this too. Rendering the
-  // stale list while the handlers act on the fresh one makes the indices the
-  // user clicks refer to a different slide than the one that gets moved or
-  // deleted — and a ref cannot be read during render under this repo's
-  // react-compiler rule. One source of truth for both, or neither.
+  // carry the PRE-patch slides when the user clicks again; both the strip and
+  // the edit handlers read this instead, via `baseSlides`.
+  //
+  // State, not a ref, and deliberately so: the strip must RENDER from the same
+  // list the handlers edit. Rendering the stale list while the handlers act on
+  // the fresh one makes the index a user clicks refer to a different slide than
+  // the one that moves or gets deleted — and a ref cannot be read during render
+  // under this repo's react-compiler rule, which is what forced that split.
+  // One source of truth for both, or neither.
+  //
+  // ponytail: keyed by post id and never explicitly cleared, so returning to a
+  // post re-applies our last write and would mask a concurrent server-side
+  // change to that same post. Fine today — while a user sits on a post they are
+  // its only slide writer. Upgrade to comparing against the refetched list if
+  // Viktor ever edits slides underneath an open post.
   const [pendingSlides, setPendingSlides] = useState<{ postId: string; slides: Slide[] } | null>(null)
 
   const baseSlides = useCallback(
