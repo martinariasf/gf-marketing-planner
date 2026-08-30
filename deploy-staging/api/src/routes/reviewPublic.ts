@@ -78,8 +78,8 @@ function deny(c: Context) {
 
 /**
  * Display-only brand block so the reviewer page can render platform mockups.
- * Reads ONLY the client identity fields from plan.json — never brief, goals,
- * strategy or any other planning content.
+ * Reads ONLY the client identity fields — the PocketBase client record first,
+ * then plan.json. Never brief, goals, strategy or any other planning content.
  */
 async function buildBrand(slug: string): Promise<PublicBrand> {
   // GF-108 — PocketBase is the source of truth for the client's display name;

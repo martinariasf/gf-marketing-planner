@@ -50,7 +50,7 @@ public contract for a case that fires for zero clients today.
 ## Backend Implementation
 
 ### TASK-001: Resolve the review payload's brand name from PocketBase, with plan.json as fallback and no slug in the name
-status: pending
+status: done
 owner: martin
 agent: claude
 reviewer: kimi-k3
@@ -67,7 +67,7 @@ acceptance:
 - `brand.logoInitials` still resolves to a non-empty value for every client (PB, then plan.json, then the 2-letter slug prefix).
 - A PocketBase outage or a missing client record does not fail the request: `buildBrand` still returns a well-formed brand from disk, exactly as the current `try/catch` does.
 - The public payload object shape is unchanged - no field added, none removed.
-- A pure unit test in `deploy-staging/api/` covers the whole resolution table above, including the both-missing case and the PB-throws case.
+- A pure unit test in `deploy-staging/api/` covers the whole resolution table above, including the both-missing case, blank/non-string values, and the `pbClient: null` outcome a PocketBase failure produces. The `.catch(() => null)` in `buildBrand` itself is not directly tested - the route needs a live PocketBase and the api harness has no mock for it.
 - `npx tsc --noEmit` passes in `deploy-staging/api/`; `npm test` passes with the new test included.
 notes:
 - Source: GF-108 in Notion (page 3c2ae4b1-247e-81f5-ba3a-f4152a49eb94), status
