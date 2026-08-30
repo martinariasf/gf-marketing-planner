@@ -1,1 +1,46 @@
 agent-skills/**/*.sh text eol=lf
+
+# --- clients/index.json: main's catalog wins on a merge performed ON main -----
+#
+# `main` is the ONLY branch that lists the live clients (biomas,
+# black-venture-farm, ...) — they are created straight from main by the
+# create-platform-workspace skill and never exist on `experimental`. The array
+# tail is exactly where main appends new clients, which is exactly where an
+# experimental->main merge conflicts. Resolving that conflict toward
+# experimental silently drops live clients from the prod catalog.
+#
+# READ THIS BEFORE TRUSTING THE LINE BELOW — verified 2026-08-28, not folklore:
+#
+#   1. The attribute does NOTHING on its own. `ours` is a *custom* merge driver
+#      name; git only applies it if the clone also has
+#          git config merge.ours.driver true
+#      Without that config git silently falls back to the normal text merge and
+#      you get an ordinary conflict. (Tested: same two branches, same repo —
+#      without the config => CONFLICT, with it => clean, main's file kept.)
+#
+#   2. GitHub's SERVER-SIDE merge does NOT honour it. Probed against this repo
+#      with two scratch branches carrying this exact attribute:
+#          POST /repos/.../merges  ->  409 "Merge conflict"
+#      while the identical local merge with the config set succeeded. So the
+#      "Merge pull request" button, the web conflict editor, and the merge-queue
+#      get no protection from this line at all.
+#
+#   3. It reaches `main` only at the next promotion (this line lands on
+#      `experimental` first), and it only applies to a merge run WITH main
+#      checked out — i.e. the local `git checkout main && git merge experimental`
+#      resolution step, which is the step GitHub forces you into anyway once the
+#      PR reports a conflict.
+#
+#   4. Trade-off: when it fires, main's whole file wins, so a legitimate catalog
+#      edit made on `experimental` (e.g. a demo client's headline) is DISCARDED
+#      by the merge. Re-apply it on main by hand. That is deliberate — losing a
+#      headline is recoverable, un-listing a live client in prod is not.
+#
+# The real protection is .github/workflows/prod-inventory-guard.yml (blocks the
+# PR) plus the union-merge in .github/workflows/deploy.yml (the box never loses
+# a slug it already has). This line is a convenience on top of those, not a
+# substitute for either.
+#
+# One-time setup for anyone who resolves promotion merges locally:
+#     git config merge.ours.driver true
+clients/index.json merge=ours

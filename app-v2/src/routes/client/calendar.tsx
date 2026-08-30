@@ -95,6 +95,21 @@ import type { ClientBundle } from '@/lib/client-data'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
+// GF-118 — Instagram's carousel ceiling, mirrored by the API's
+// `slides` schema (`.max(10)` in deploy-staging/api/src/schemas/post.ts).
+// Checked in the UI so an over-sized pick fails before any file is uploaded.
+const MAX_SLIDES = 10
+
+/**
+ * GF-118 — a post's slides as one editable list. A post that only carries a
+ * cover `image` counts as a single slide, so uploading a second file turns it
+ * into a carousel instead of discarding the picture that was already there.
+ */
+function slidesOf(post: Post): Slide[] {
+  if (Array.isArray(post.slides) && post.slides.length > 0) return post.slides
+  return post.image ? [{ image: post.image }] : []
+}
+
 /** A post is a carousel when it carries more than one slide. */
 function isCarousel(post: Post): post is Post & { slides: Slide[] } {
   return Array.isArray(post.slides) && post.slides.length > 1
@@ -294,6 +309,9 @@ export default function CalendarView() {
   const [imageSlide, setImageSlide] = useState(0)
   // CAL2 — direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
+  // GF-118 — a reorder/delete write is in flight; separate from `uploading` so
+  // the upload button's spinner never fires for a slide the user only moved.
+  const [slideBusy, setSlideBusy] = useState(false)
   // GF-35 — collapsed by default; expands the recoverable rejected list.
   const [showRejected, setShowRejected] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -449,29 +467,142 @@ export default function CalendarView() {
     [plan.client.name, calendarRange, posts, rangeMonths, t],
   )
 
-  // CAL2 — upload an image straight onto the active post (no Viktor needed).
-  // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
-  // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
-  const onUploadImage = useCallback(
-    async (file: File | null | undefined) => {
-      if (!file || !activePost) return
+  // GF-118 — the slide list we last wrote successfully. `refetch` from the
+  // client context is fire-and-forget (`() => void`), so `activePost` can still
+  // carry the PRE-patch slides when the user clicks again; both the strip and
+  // the edit handlers read this instead, via `baseSlides`.
+  //
+  // State, not a ref, and deliberately so: the strip must RENDER from the same
+  // list the handlers edit. Rendering the stale list while the handlers act on
+  // the fresh one makes the index a user clicks refer to a different slide than
+  // the one that moves or gets deleted — and a ref cannot be read during render
+  // under this repo's react-compiler rule, which is what forced that split.
+  // One source of truth for both, or neither.
+  //
+  // ponytail: keyed by post id and never explicitly cleared, so returning to a
+  // post re-applies our last write and would mask a concurrent server-side
+  // change to that same post. Fine today — while a user sits on a post they are
+  // its only slide writer. Upgrade to comparing against the refetched list if
+  // Viktor ever edits slides underneath an open post.
+  const [pendingSlides, setPendingSlides] = useState<{ postId: string; slides: Slide[] } | null>(null)
+
+  const baseSlides = useCallback(
+    (post: Post): Slide[] =>
+      pendingSlides && pendingSlides.postId === post.id ? pendingSlides.slides : slidesOf(post),
+    [pendingSlides],
+  )
+
+  // GF-118 — every slide-list change (upload, reorder, delete) goes through one
+  // PATCH. `image` is always sent explicitly: an already-stored cover WINS over
+  // the one coalescePost() would derive from slides[0], so a reorder or delete
+  // would otherwise leave the calendar card showing the old cover forever.
+  const writeSlides = useCallback(
+    async (postId: string, format: string, next: Slide[]) => {
+      const patch: Record<string, unknown> = { slides: next, image: next[0]?.image ?? '' }
+      // 2+ slides IS a carousel, so keep `format` honest. GF-69 made `format` a
+      // user-editable field, so we only overwrite the default and never a
+      // deliberate "story" (and never flip back down on delete).
+      if (next.length >= 2 && (format || 'single image').trim().toLowerCase() === 'single image') {
+        patch.format = 'carousel'
+      }
+      await apiPatchPost(slug, postId, patch)
+      // Only once the write actually landed: a rejected PATCH must leave the
+      // base list exactly where it was.
+      setPendingSlides({ postId, slides: next })
+    },
+    [slug],
+  )
+
+  // CAL2/GF-118 — upload images straight onto the active post (no Viktor
+  // needed). Reuses the inspiration upload endpoint (the API mounts clients/
+  // read-only, so uploads are PB-backed), then appends the returned URLs to the
+  // post's slides.
+  const onUploadImages = useCallback(
+    async (files: FileList | null) => {
+      // Copy the FileList BEFORE resetting the input. `files` is the input's
+      // LIVE FileList, so clearing `value` first empties it and the handler
+      // silently uploads nothing. Reset after the copy so re-picking the same
+      // file still fires a change event.
+      const picked = files ? Array.from(files) : []
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (picked.length === 0 || !activePost) return
+      const existing = baseSlides(activePost)
+      if (existing.length + picked.length > MAX_SLIDES) {
+        toast.error(t('calendar.slideLimit', { max: MAX_SLIDES, have: existing.length }))
+        return
+      }
       setUploading(true)
       try {
-        const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
-        await apiPatchPost(slug, activePost.id, { image: item.url })
-        toast(t('calendar.imageUploaded'), { duration: 1600 })
+        // Sequential, not Promise.all: the endpoint takes one file per request,
+        // and this keeps the slide order identical to the order the user picked.
+        // The PATCH only happens once every upload succeeded, so a mid-way
+        // failure leaves the post exactly as it was.
+        const added: Slide[] = []
+        for (const file of picked) {
+          const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
+          added.push({ image: item.url })
+        }
+        await writeSlides(activePost.id, activePost.format, [...existing, ...added])
+        toast(
+          picked.length > 1
+            ? t('calendar.imagesUploaded', { n: picked.length })
+            : t('calendar.imageUploaded'),
+          { duration: 1600 },
+        )
         refetch()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
       } finally {
         setUploading(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
       }
     },
-    [activePost, slug, t, refetch],
+    [activePost, slug, t, refetch, writeSlides, baseSlides],
   )
 
-  // Reset the image-slide cursor whenever the active post changes.
+  // GF-118 — move a slide one position, or drop it. Both rewrite the whole list
+  // so the cover and the carousel format stay consistent with the new order.
+  const onSlideEdit = useCallback(
+    async (next: Slide[], focus: number) => {
+      if (!activePost) return
+      setSlideBusy(true)
+      try {
+        await writeSlides(activePost.id, activePost.format, next)
+        setImageSlide(Math.max(0, Math.min(focus, next.length - 1)))
+        refetch()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('calendar.slideEditFailed'))
+      } finally {
+        setSlideBusy(false)
+      }
+    },
+    [activePost, t, refetch, writeSlides],
+  )
+
+  const onMoveSlide = useCallback(
+    (from: number, to: number) => {
+      if (!activePost) return
+      const list = baseSlides(activePost)
+      if (to < 0 || to >= list.length) return
+      const next = [...list]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      void onSlideEdit(next, to)
+    },
+    [activePost, onSlideEdit, baseSlides],
+  )
+
+  const onRemoveSlide = useCallback(
+    (index: number) => {
+      if (!activePost) return
+      const next = baseSlides(activePost).filter((_, i) => i !== index)
+      void onSlideEdit(next, index - 1)
+    },
+    [activePost, onSlideEdit, baseSlides],
+  )
+
+  // Reset the image-slide cursor whenever the active post changes. The
+  // pending-slides override is keyed by post id, so it simply stops matching
+  // and needs no explicit clear here.
   useEffect(() => {
     setImageSlide(0)
   }, [activePost?.id])
@@ -935,6 +1066,7 @@ export default function CalendarView() {
                               slideIndex={imageSlide}
                               onSlideChange={setImageSlide}
                               onZoom={() => setZoomOpen(true)}
+                              showFilmstrip={!(isApiEnabled && baseSlides(activePost).length > 0)}
                             />
                           )}
                         </motion.div>
@@ -942,44 +1074,60 @@ export default function CalendarView() {
                     </div>
 
                     {rightView === 'picture' && (
-                      <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title, format: activePost.format || (isCarousel(activePost) ? 'carousel' : 'single image') }))}
-                          className="gap-1.5"
-                        >
-                          <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
-                          {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
-                        </Button>
-                        {/* CAL2 — direct upload (single-image posts only; carousels
-                            are preview-only in V3 so the cover isn't replaced here). */}
-                        {isApiEnabled && !isCarousel(activePost) && (
-                          <>
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp,image/gif"
-                              className="hidden"
-                              onChange={(e) => onUploadImage(e.target.files?.[0])}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={uploading}
-                              onClick={() => fileInputRef.current?.click()}
-                              className="gap-1.5"
-                            >
-                              {uploading ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Upload className="h-3.5 w-3.5 text-brand-blue" />
-                              )}
-                              {t('calendar.uploadImage')}
-                            </Button>
-                          </>
+                      <>
+                        <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title, format: activePost.format || (isCarousel(activePost) ? 'carousel' : 'single image') }))}
+                            className="gap-1.5"
+                          >
+                            <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
+                            {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
+                          </Button>
+                          {/* CAL2/GF-118 — direct upload of one or many images. Available
+                              on carousels too: the files append to the existing slides. */}
+                          {isApiEnabled && (
+                            <>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                className="hidden"
+                                onChange={(e) => onUploadImages(e.target.files)}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={uploading || slideBusy}
+                                onClick={() => fileInputRef.current?.click()}
+                                className="gap-1.5"
+                              >
+                                {uploading ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="h-3.5 w-3.5 text-brand-blue" />
+                                )}
+                                {t('calendar.uploadImages')}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                        {/* GF-118 — editable slide strip. Kept out of PicturePane on
+                            purpose: that filmstrip is navigation (and renders in the
+                            lightbox too); this one owns order and deletion. */}
+                        {isApiEnabled && baseSlides(activePost).length > 0 && (
+                          <SlideStrip
+                            slides={baseSlides(activePost)}
+                            busy={uploading || slideBusy}
+                            activeIndex={imageSlide}
+                            onSelect={setImageSlide}
+                            onMove={onMoveSlide}
+                            onRemove={onRemoveSlide}
+                          />
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1682,6 +1830,112 @@ function ExternalFeedbackPanel({
 
 
 /**
+ * GF-118 — the editable slide strip under the picture pane. One thumbnail per
+ * slide, each with move-left / move-right / remove. Ordering is explicit
+ * buttons rather than drag-and-drop so it works the same with a mouse, a
+ * finger and a keyboard.
+ */
+function SlideStrip({
+  slides,
+  busy,
+  activeIndex,
+  onSelect,
+  onMove,
+  onRemove,
+}: {
+  slides: Slide[]
+  busy: boolean
+  activeIndex: number
+  onSelect: (index: number) => void
+  onMove: (from: number, to: number) => void
+  onRemove: (index: number) => void
+}) {
+  const t = useT()
+  const controlClass =
+    'h-5 w-5 rounded flex items-center justify-center text-ink-muted transition-colors hover:bg-brand-blue hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-muted'
+
+  return (
+    <div className="mt-3">
+      <p className="text-center text-xs text-ink-muted mb-2">
+        {t('calendar.slideCount', { n: slides.length, max: MAX_SLIDES })}
+      </p>
+      {/* `w-max mx-auto` rather than `justify-center`: a centred flex row that
+          overflows pushes its FIRST item past scrollLeft 0, where no scroll can
+          reach it — on mobile that hides the cover once there are ~6 slides.
+          Auto margins collapse to 0 on overflow, so this centres when it fits
+          and left-aligns (fully scrollable) when it does not. */}
+      <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+        <div className="flex gap-2 pb-1 w-max mx-auto">
+          {slides.map((s, i) => (
+            <div key={`${s.image}-${i}`} className="shrink-0 w-16">
+              <div
+                className={cn(
+                  'relative h-16 w-16 rounded-t-md overflow-hidden border transition-all',
+                  i === activeIndex
+                    ? 'border-brand-blue shadow-sm'
+                    : 'border-border-subtle opacity-70 hover:opacity-100',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(i)}
+                  aria-label={t('calendar.goToSlide', { n: i + 1 })}
+                  className="absolute inset-0 h-full w-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue"
+                >
+                  <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                </button>
+                {i === 0 && (
+                  <span className="absolute inset-x-0 bottom-0 bg-brand-blue/90 text-white text-[9px] leading-tight text-center py-0.5">
+                    {t('calendar.cover')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onRemove(i)}
+                  aria-label={t('calendar.removeSlide', { n: i + 1 })}
+                  title={t('calendar.removeSlide', { n: i + 1 })}
+                  className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full bg-paper/90 text-ink-muted shadow flex items-center justify-center transition-colors hover:bg-red-500 hover:text-white disabled:opacity-40"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+              <div
+                className={cn(
+                  'flex items-center justify-between rounded-b-md border border-t-0 px-0.5 py-0.5',
+                  i === activeIndex ? 'border-brand-blue' : 'border-border-subtle',
+                )}
+              >
+                <button
+                  type="button"
+                  disabled={busy || i === 0}
+                  onClick={() => onMove(i, i - 1)}
+                  aria-label={t('calendar.moveSlideLeft', { n: i + 1 })}
+                  title={t('calendar.moveSlideLeft', { n: i + 1 })}
+                  className={controlClass}
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || i === slides.length - 1}
+                  onClick={() => onMove(i, i + 1)}
+                  aria-label={t('calendar.moveSlideRight', { n: i + 1 })}
+                  title={t('calendar.moveSlideRight', { n: i + 1 })}
+                  className={controlClass}
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Right pane picture. Single-image posts render exactly as before (full image,
  * click to zoom; placeholder when absent). Carousel posts add a slide viewer
  * with arrows, an "i / N" counter, dots and a thumbnail filmstrip. The active
@@ -1692,9 +1946,13 @@ function PicturePane({
   slideIndex,
   onSlideChange,
   onZoom,
+  // GF-118 — suppressed when the editable SlideStrip is rendered underneath,
+  // so the pane doesn't show two near-identical thumbnail rows.
+  showFilmstrip = true,
 }: {
   post: Post
   slideIndex: number
+  showFilmstrip?: boolean
   onSlideChange: (i: number) => void
   onZoom: () => void
 }) {
@@ -1801,6 +2059,7 @@ function PicturePane({
         </div>
 
         {/* Thumbnail filmstrip */}
+        {showFilmstrip && (
         <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
           <div className="flex gap-2 pb-1 justify-center">
             {slides.map((s, i) => (
@@ -1820,6 +2079,7 @@ function PicturePane({
             ))}
           </div>
         </div>
+        )}
       </div>
     )
   }

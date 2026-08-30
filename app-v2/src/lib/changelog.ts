@@ -21,6 +21,16 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-30',
+    title: 'Upload your own photos to a post, not just one at a time',
+    items: [
+      'The Upload button on a post now takes several pictures at once, so you can build a carousel from your own photos - an event, the team, real products - instead of only from pictures Viktor generates. Ten is the limit, the same as Instagram.',
+      'A strip of thumbnails under the picture lets you put them in the order you want and drop the ones you do not, with each move saved as you make it. The first one is always the cover, and it is the picture that shows on the calendar.',
+      'A post that already had one picture keeps it as the first image, and anything you upload lands after it.',
+      'The Upload button used to be hidden on posts that were already carousels, so there was no way to add to one by hand at all. It is available on every post now.',
+    ],
+  },
+  {
     date: '2026-08-29',
     title: 'Fixes: connecting your own tools, chat memory, and the Approvals tab',
     items: [
