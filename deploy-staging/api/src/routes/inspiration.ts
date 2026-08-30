@@ -28,6 +28,50 @@ function publicUrl(slug: string, id: string): string {
   return `/api/v1/clients/${slug}/inspiration/${id}/file`
 }
 
+const IMAGE_SIZE_LIMIT = 15_000_000
+const VIDEO_SIZE_LIMIT = 100_000_000
+
+// Videos are much bigger than images by nature, so they get a separate,
+// larger cap. Detected by mime type primarily, falling back to a known video
+// extension in case the browser sent a generic/empty mime.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
+
+function isVideoUpload(mime: string, filename: string): boolean {
+  return mime.startsWith('video/') || VIDEO_EXT_RE.test(filename)
+}
+
+export function sizeLimitFor(mime: string, filename: string): number {
+  return isVideoUpload(mime, filename) ? VIDEO_SIZE_LIMIT : IMAGE_SIZE_LIMIT
+}
+
+// assetFiles.ts can only set a correct Content-Type for these three video
+// types when serving the file back — anything else would get mis-served, so
+// reject it up front rather than accept an unplayable upload.
+const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+
+export function isAllowedVideoMime(mime: string): boolean {
+  return !mime.startsWith('video/') || ALLOWED_VIDEO_MIMES.has(mime)
+}
+
+const EXT_BY_MIME: Record<string, string> = {
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+}
+
+// PB (and assetFiles.ts, which reads the stored filename's extension to set
+// Content-Type) need a real extension. Keep an existing valid one; otherwise
+// derive it from the mime type, falling back to today's .png default.
+export function safeFilenameFor(mime: string, filename: string): string {
+  if (filename && /\.[a-z0-9]+$/i.test(filename)) return filename
+  const ext = EXT_BY_MIME[mime] ?? '.png'
+  return `${filename || 'upload'}${ext}`
+}
+
 export const inspiration = new OpenAPIHono<AppEnv>()
 inspiration.use('*', requireAuth)
 
@@ -74,8 +118,22 @@ inspiration.post(
     if (!(file instanceof File)) {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Missing "file" part' })
     }
-    if (file.size > 15_000_000) {
-      return problem(c, { title: 'Payload Too Large', status: 413, detail: 'Max 15 MB per image' })
+    const mime = file.type || 'application/octet-stream'
+    const limit = sizeLimitFor(mime, file.name)
+    if (file.size > limit) {
+      const limitMb = Math.round(limit / 1_000_000)
+      return problem(c, {
+        title: 'Payload Too Large',
+        status: 413,
+        detail: `Max ${limitMb} MB per ${limit === VIDEO_SIZE_LIMIT ? 'video' : 'image'}`,
+      })
+    }
+    if (!isAllowedVideoMime(mime)) {
+      return problem(c, {
+        title: 'Unsupported Media Type',
+        status: 415,
+        detail: 'Video uploads must be mp4, webm, or quicktime (mov)',
+      })
     }
     const note = (form.get('note') as string | null) ?? ''
     const principal = c.get('principal')
@@ -84,8 +142,8 @@ inspiration.post(
     // into the PB SDK's FormData proved unreliable under Node (stream already
     // consumed / incompatible File impl); a Blob built from the bytes works.
     const bytes = new Uint8Array(await file.arrayBuffer())
-    const blob = new Blob([bytes], { type: file.type || 'application/octet-stream' })
-    const safeName = file.name && /\.[a-z0-9]+$/i.test(file.name) ? file.name : 'upload.png'
+    const blob = new Blob([bytes], { type: mime })
+    const safeName = safeFilenameFor(mime, file.name)
 
     const pbForm = new FormData()
     pbForm.append('slug', slug)

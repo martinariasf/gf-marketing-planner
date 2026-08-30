@@ -100,6 +100,21 @@ import type { Slide } from '@/types/post'
 // Checked in the UI so an over-sized pick fails before any file is uploaded.
 const MAX_SLIDES = 10
 
+// GF-130 — mirror the server's video-size cap in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth) so an
+// over-sized video is rejected before any upload request goes out.
+const MAX_VIDEO_BYTES = 100_000_000
+
+// GF-130 — mirror the server's MIME-or-extension video detection in
+// deploy-staging/api/src/routes/inspiration.ts (`VIDEO_EXT_RE`, the source of
+// truth). A .mov picked on Windows commonly reports as
+// application/octet-stream (or nothing at all), so MIME alone would silently
+// route it into the images path and write a broken image into `slides[]`.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
+function isVideoFile(f: File): boolean {
+  return f.type.startsWith('video/') || VIDEO_EXT_RE.test(f.name)
+}
+
 /**
  * GF-118 — a post's slides as one editable list. A post that only carries a
  * cover `image` counts as a single slide, so uploading a second file turns it
@@ -526,8 +541,54 @@ export default function CalendarView() {
       const picked = files ? Array.from(files) : []
       if (fileInputRef.current) fileInputRef.current.value = ''
       if (picked.length === 0 || !activePost) return
+
+      // GF-130 — the widened <input accept> now lets video files through, but
+      // a post can only ever carry ONE video and it lives in `media`, never in
+      // `slides`. Split the pick by mime type up front so the two paths below
+      // never see the other kind's files.
+      const videos = picked.filter(isVideoFile)
+      const images = picked.filter((f) => !isVideoFile(f))
+
+      if (videos.length > 0 && images.length > 0) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+      if (videos.length > 1) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+
+      if (videos.length === 1) {
+        const [video] = videos
+        // Pre-flight size check — reject BEFORE the request goes out, mirroring
+        // the server's cap (see MAX_VIDEO_BYTES above).
+        if (video.size > MAX_VIDEO_BYTES) {
+          toast.error(t('calendar.videoTooLarge', { max: Math.floor(MAX_VIDEO_BYTES / 1_000_000) }))
+          return
+        }
+        setUploading(true)
+        try {
+          const item = await apiUploadInspiration(slug, video, `post ${activePost.id}`)
+          // A post carries one video: the new upload replaces any existing
+          // video entry, while any non-video `media` entries are preserved.
+          // `slides`/`image` are untouched on this path.
+          const keep = (activePost.media ?? []).filter((m) => m.type !== 'video')
+          await apiPatchPost(slug, activePost.id, {
+            media: [{ type: 'video', url: item.url }, ...keep],
+          })
+          toast(t('calendar.videoUploaded'), { duration: 1600 })
+          refetch()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
+        } finally {
+          setUploading(false)
+        }
+        return
+      }
+
+      // GF-118 image path — unchanged.
       const existing = baseSlides(activePost)
-      if (existing.length + picked.length > MAX_SLIDES) {
+      if (existing.length + images.length > MAX_SLIDES) {
         toast.error(t('calendar.slideLimit', { max: MAX_SLIDES, have: existing.length }))
         return
       }
@@ -538,14 +599,14 @@ export default function CalendarView() {
         // The PATCH only happens once every upload succeeded, so a mid-way
         // failure leaves the post exactly as it was.
         const added: Slide[] = []
-        for (const file of picked) {
+        for (const file of images) {
           const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
           added.push({ image: item.url })
         }
         await writeSlides(activePost.id, activePost.format, [...existing, ...added])
         toast(
-          picked.length > 1
-            ? t('calendar.imagesUploaded', { n: picked.length })
+          images.length > 1
+            ? t('calendar.imagesUploaded', { n: images.length })
             : t('calendar.imageUploaded'),
           { duration: 1600 },
         )
@@ -1093,7 +1154,7 @@ export default function CalendarView() {
                                 ref={fileInputRef}
                                 type="file"
                                 multiple
-                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                                 className="hidden"
                                 onChange={(e) => onUploadImages(e.target.files)}
                               />
@@ -1109,7 +1170,7 @@ export default function CalendarView() {
                                 ) : (
                                   <Upload className="h-3.5 w-3.5 text-brand-blue" />
                                 )}
-                                {t('calendar.uploadImages')}
+                                {t('calendar.uploadMedia')}
                               </Button>
                             </>
                           )}

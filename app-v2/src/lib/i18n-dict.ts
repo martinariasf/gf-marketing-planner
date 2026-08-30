@@ -488,10 +488,14 @@ const en: Dict = {
   'calendar.imageUploaded':   'Image uploaded',
   'calendar.uploadFailed':    'Upload failed',
   // GF-118 — manual multi-image upload into the post's slides.
-  'calendar.uploadImages':    'Upload images',
   'calendar.imagesUploaded':  '{n} images uploaded',
   'calendar.slideLimit':      'A post can hold at most {max} images (this one already has {have}).',
   'calendar.slideCount':      '{n} of {max} images',
+  // GF-130 — the upload control now takes one video as well as images.
+  'calendar.uploadMedia':     'Upload image or video',
+  'calendar.videoUploaded':   'Video uploaded',
+  'calendar.videoTooLarge':   'Video is too large (max {max} MB).',
+  'calendar.videoMixNotAllowed': 'Upload one video, or one or more images.',
   'calendar.cover':           'Cover',
   'calendar.moveSlideLeft':   'Move image {n} left',
   'calendar.moveSlideRight':  'Move image {n} right',
@@ -1483,10 +1487,14 @@ const de: Dict = {
   'calendar.imageUploaded':   'Bild hochgeladen',
   'calendar.uploadFailed':    'Upload fehlgeschlagen',
   // GF-118 — manueller Mehrfach-Upload in die Slides des Posts.
-  'calendar.uploadImages':    'Bilder hochladen',
   'calendar.imagesUploaded':  '{n} Bilder hochgeladen',
   'calendar.slideLimit':      'Ein Post kann höchstens {max} Bilder enthalten (dieser hat bereits {have}).',
   'calendar.slideCount':      '{n} von {max} Bildern',
+  // GF-130 — der Upload-Button nimmt jetzt auch ein Video statt nur Bilder.
+  'calendar.uploadMedia':     'Bild oder Video hochladen',
+  'calendar.videoUploaded':   'Video hochgeladen',
+  'calendar.videoTooLarge':   'Video ist zu groß (max. {max} MB).',
+  'calendar.videoMixNotAllowed': 'Lade ein Video oder ein oder mehrere Bilder hoch.',
   'calendar.cover':           'Titelbild',
   'calendar.moveSlideLeft':   'Bild {n} nach links verschieben',
   'calendar.moveSlideRight':  'Bild {n} nach rechts verschieben',
@@ -2468,10 +2476,14 @@ const es: Dict = {
   'calendar.imageUploaded':   'Imagen subida',
   'calendar.uploadFailed':    'Error al subir',
   // GF-118 — carga manual de varias imágenes en los slides del post.
-  'calendar.uploadImages':    'Subir imágenes',
   'calendar.imagesUploaded':  '{n} imágenes subidas',
   'calendar.slideLimit':      'Un post admite como máximo {max} imágenes (este ya tiene {have}).',
   'calendar.slideCount':      '{n} de {max} imágenes',
+  // GF-130 — el botón de carga ahora acepta también un video, no solo imágenes.
+  'calendar.uploadMedia':     'Subir imagen o video',
+  'calendar.videoUploaded':   'Video subido',
+  'calendar.videoTooLarge':   'El video es demasiado grande (máx. {max} MB).',
+  'calendar.videoMixNotAllowed': 'Sube un video, o una o más imágenes.',
   'calendar.cover':           'Portada',
   'calendar.moveSlideLeft':   'Mover la imagen {n} a la izquierda',
   'calendar.moveSlideRight':  'Mover la imagen {n} a la derecha',
