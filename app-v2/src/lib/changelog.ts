@@ -29,7 +29,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-29',
+    date: '2026-08-30',
     title: 'Upload your own photos to a post, not just one at a time',
     items: [
       'The Upload button on a post now takes several pictures at once, so you can build a carousel from your own photos - an event, the team, real products - instead of only from pictures Viktor generates. Ten is the limit, the same as Instagram.',
@@ -39,7 +39,17 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-25',
+    date: '2026-08-29',
+    title: 'Fixes: connecting your own tools, chat memory, and the Approvals tab',
+    items: [
+      'Connecting an outside tool to your account — a custom GPT, an automation like n8n, or the "Test request" button in our API docs — used to fail with "Unknown or revoked token" even though the token was correct. Those tools read the address to call out of our own API description, and that description named our test system instead of the live one, so a valid live token was being sent to the wrong place. Each system now names itself correctly.',
+      'The Approvals tab no longer fails to load for an account whose approval history is still empty.',
+      'Viktor now keeps the thread of a conversation across messages instead of starting fresh each time you write.',
+      'An image you attach in the chat is now something Viktor can use directly, and he no longer reports having saved a post when the save did not go through.',
+    ],
+  },
+  {
+    date: '2026-08-29',
     title: 'The Performance tab now shows real numbers',
     items: [
       'Every number on the Performance tab used to come from a file we filled in by hand. Nothing on that page had ever touched a social network. It now reads live figures from the account that actually publishes your posts, with a visible "last updated" stamp and a Refresh button.',
@@ -52,7 +62,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-25',
+    date: '2026-08-29',
     title: 'Viktor now actually reads the documents you upload',
     items: [
       'A document you add under Assets > Information Sources is now something Viktor reads before he writes. Until now it was stored correctly but he was never told it existed, so asked to use it he would report — honestly — that no such document was there.',
@@ -61,7 +71,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-24',
+    date: '2026-08-29',
     title: 'Long documents no longer fail to save',
     items: [
       'Uploading a longer text file — a brand book, a brief, a transcript — in the Information Sources section of the Assets tab used to fail with "Failed to create record" once the file passed about two pages. Any length up to roughly 1 MB now saves.',
@@ -71,7 +81,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-20',
+    date: '2026-08-21',
     title: 'The plan summary now opens the Strategy link instead of closing it',
     items: [
       'In the card view of a Strategy link, the month-by-month plan summary — the calendar grid plus the counts by topic, network and post type — now sits at the TOP, above the first card, so your client sees how the month is laid out before judging any single post.',
@@ -81,7 +91,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-20',
+    date: '2026-08-21',
     title: 'Strategy links now review like the content link, and feedback is split by kind',
     items: [
       'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
@@ -93,7 +103,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-19',
+    date: '2026-08-21',
     title: 'New: share the plan for sign-off, without the artwork',
     items: [
       'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
@@ -105,7 +115,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-15',
+    date: '2026-08-21',
     title: 'New: Instagram Story as a post type',
     items: [
       'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',
@@ -114,7 +124,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'New: a Configuration page with two per-client dashboard switches',
     items: [
       'A new "Configuration" tab lets you turn the "AI generated" label on posts on or off, and turn on auto-programming so an approved post is sent straight to your publishing tool instead of waiting for a separate "Programmed" step.',
@@ -122,7 +132,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
     items: [
       'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
@@ -130,63 +140,63 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Fixed garbled dashes and ellipses in the calendar export and placeholders',
     items: [
       'The export date-range label and the hashtag/CTA placeholder text in the calendar could show a garbled character sequence (mojibake) instead of a dash or ellipsis — those now render correctly.',
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Attach images and documents in chat',
     items: [
       'You can now attach images and text documents when chatting with Viktor — drag and drop them onto the chat composer or use the new paperclip button. Attached images can be used directly as a reference for image generation; attached documents (notes, transcripts, CSV, etc.) are read and used as context for the reply.',
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: "You'll now be told when a limit is hit, instead of silence",
     items: [
       "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'Status changes made by Viktor now show up on reload',
     items: [
       'When Viktor moves a post to another status (for example into Review), the calendar and kanban now reflect it as soon as you press the reload button — previously his change could stay invisible on posts that had already been approved or reviewed in the dashboard.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'Post media is now labelled as AI generated',
     items: [
       'Images and videos that Viktor generated now carry a small "AI generated" label in the Instagram and LinkedIn previews, so you can tell at a glance which media is AI-made before it goes out — and stay on the right side of the platforms\' disclosure rules.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'Video posts play right in the preview',
     items: [
       'A video post used to look like a still image with no way to play it. The preview now plays the real clip in place, and Instagram shows it in a vertical reel frame while LinkedIn keeps its landscape frame without cropping your vertical clips.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'General review comments are shown in full, next to every post',
     items: [
       'On the review link you share with clients and colleagues, a comment that applies to the whole set now appears in full underneath every post — not just once at the bottom, and no longer cut off mid-sentence. It is marked "Applies to all posts" so nobody mistakes it for feedback on a single item.',
     ],
   },
   {
-    date: '2026-07-04',
+    date: '2026-07-05',
     title: 'Every generated image and video now shows up in Assets',
     items: [
       'The Assets tab now also lists images and videos that are attached to your posts but were missing from the asset catalogue — nothing Viktor creates can silently disappear from the gallery anymore. This is what previously made some generated videos invisible.',
     ],
   },
   {
-    date: '2026-07-04',
+    date: '2026-07-05',
     title: 'Connect a Google Drive folder to Viktor',
     items: [
       'The Integration tab now shows Viktor’s own Google Drive address — the one you share your folders with so he can read your logos, briefs and reference files. Copy it with one click and share your folder with it as a Viewer in Google Drive.',
