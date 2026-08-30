@@ -77,7 +77,13 @@ function resolveKind(mime: string, filename: string): 'image' | 'video' | null {
     // fall back to the extension for a mime the browser was explicit about.
     return ALLOWED_VIDEO_MIMES.has(mime) ? 'video' : null
   }
-  if (mime in EXT_BY_MIME) return 'image' // the only non-video keys left in EXT_BY_MIME
+  // An explicit image/* MIME is authoritative too, even when we don't
+  // recognize the specific subtype (bmp, avif, heic, ...). Other screens
+  // upload through this endpoint with accept="image/*" and rely on
+  // assetFiles.ts's fallback to PB's stored Content-Type for formats we
+  // don't have an EXT_BY_MIME entry for — narrowing to only known image
+  // mimes would 415 uploads that worked before this task.
+  if (mime.startsWith('image/')) return 'image'
   // Generic/empty/unrecognized MIME — fall back to the filename extension.
   const ext = extensionOf(filename)
   if (VIDEO_EXTENSIONS.has(ext)) return 'video'
@@ -92,7 +98,7 @@ export function sizeLimitFor(mime: string, filename: string): number {
 // filename is required (not optional) because, unlike the old mime-only
 // check, refusing an upload now also depends on whether the extension can
 // identify a servable type when the mime is generic/empty — see resolveKind.
-export function isAllowedVideoMime(mime: string, filename: string): boolean {
+export function isAcceptableUpload(mime: string, filename: string): boolean {
   return resolveKind(mime, filename) !== null
 }
 
@@ -107,6 +113,14 @@ export function safeFilenameFor(mime: string, filename: string): string {
   const currentExt = extensionOf(filename)
   const currentExtKind = VIDEO_EXTENSIONS.has(currentExt) ? 'video' : IMAGE_EXTENSIONS.has(currentExt) ? 'image' : null
   if (currentExtKind === kind) return filename
+  // Explicit image/* mime we don't recognize the specific subtype for (bmp,
+  // avif, heic, ...): keep whatever extension the file already has, so PB
+  // stores it and assetFiles.ts falls back to PB's own Content-Type header,
+  // same as before this task. Only fall back to .png when there's no
+  // extension at all to keep. This does NOT apply to a generic/unrecognized
+  // mime like application/octet-stream that merely defaulted to 'image' —
+  // that case keeps today's .png fallback.
+  if (mime.startsWith('image/') && !(mime in EXT_BY_MIME) && currentExt) return filename
   const match = filename ? /\.([a-z0-9]+)$/i.exec(filename) : null
   const ext = EXT_BY_MIME[mime] ?? (kind === 'video' ? '.mp4' : '.png')
   const base = match ? filename.slice(0, -match[0].length) : filename || 'upload'
@@ -160,6 +174,14 @@ inspiration.post(
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Missing "file" part' })
     }
     const mime = file.type || 'application/octet-stream'
+    if (!isAcceptableUpload(mime, file.name)) {
+      return problem(c, {
+        title: 'Unsupported Media Type',
+        status: 415,
+        detail:
+          'Unsupported file type — images are accepted as image/*, and videos must be mp4, webm, or quicktime (mov)',
+      })
+    }
     const limit = sizeLimitFor(mime, file.name)
     if (file.size > limit) {
       const limitMb = Math.round(limit / 1_000_000)
@@ -167,13 +189,6 @@ inspiration.post(
         title: 'Payload Too Large',
         status: 413,
         detail: `Max ${limitMb} MB per ${limit === VIDEO_SIZE_LIMIT ? 'video' : 'image'}`,
-      })
-    }
-    if (!isAllowedVideoMime(mime, file.name)) {
-      return problem(c, {
-        title: 'Unsupported Media Type',
-        status: 415,
-        detail: 'Unsupported file type — video uploads must be mp4, webm, or quicktime (mov)',
       })
     }
     const note = (form.get('note') as string | null) ?? ''

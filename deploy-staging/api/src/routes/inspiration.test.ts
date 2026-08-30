@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sizeLimitFor, isAllowedVideoMime, safeFilenameFor } from './inspiration.js'
+import { sizeLimitFor, isAcceptableUpload, safeFilenameFor } from './inspiration.js'
 
 // --- sizeLimitFor -------------------------------------------------------------
 test('sizeLimitFor: image gets the 15 MB cap', () => {
@@ -25,27 +25,27 @@ test('sizeLimitFor: explicit video/mp4 mime with no/unusual extension still gets
   assert.equal(sizeLimitFor('video/mp4', 'upload'), 100_000_000)
 })
 
-// --- isAllowedVideoMime --------------------------------------------------------
-// NOTE: signature changed from isAllowedVideoMime(mime) to
-// isAllowedVideoMime(mime, filename) — refusing an upload now also depends
+// --- isAcceptableUpload --------------------------------------------------------
+// NOTE: signature changed from isAcceptableUpload(mime) to
+// isAcceptableUpload(mime, filename) — refusing an upload now also depends
 // on whether the extension can resolve a kind when the mime is generic.
-test('isAllowedVideoMime: the three servable video types pass', () => {
-  assert.equal(isAllowedVideoMime('video/mp4', 'clip.mp4'), true)
-  assert.equal(isAllowedVideoMime('video/webm', 'clip.webm'), true)
-  assert.equal(isAllowedVideoMime('video/quicktime', 'clip.mov'), true)
+test('isAcceptableUpload: the three servable video types pass', () => {
+  assert.equal(isAcceptableUpload('video/mp4', 'clip.mp4'), true)
+  assert.equal(isAcceptableUpload('video/webm', 'clip.webm'), true)
+  assert.equal(isAcceptableUpload('video/quicktime', 'clip.mov'), true)
 })
 
-test('isAllowedVideoMime: a disallowed explicit video mime is rejected even with a plausible extension', () => {
-  assert.equal(isAllowedVideoMime('video/x-msvideo', 'clip.avi'), false)
+test('isAcceptableUpload: a disallowed explicit video mime is rejected even with a plausible extension', () => {
+  assert.equal(isAcceptableUpload('video/x-msvideo', 'clip.avi'), false)
 })
 
-test('isAllowedVideoMime: non-video mimes are not subject to the allow-list', () => {
-  assert.equal(isAllowedVideoMime('image/png', 'photo.png'), true)
+test('isAcceptableUpload: non-video mimes are not subject to the allow-list', () => {
+  assert.equal(isAcceptableUpload('image/png', 'photo.png'), true)
 })
 
-test('isAllowedVideoMime: unrecognized mime + unrecognized extension is refused (defect A)', () => {
-  assert.equal(isAllowedVideoMime('application/octet-stream', 'movie.avi'), false)
-  assert.equal(isAllowedVideoMime('', 'clip.mkv'), false)
+test('isAcceptableUpload: unrecognized mime + unrecognized extension is refused (defect A)', () => {
+  assert.equal(isAcceptableUpload('application/octet-stream', 'movie.avi'), false)
+  assert.equal(isAcceptableUpload('', 'clip.mkv'), false)
 })
 
 // --- safeFilenameFor -----------------------------------------------------------
@@ -87,4 +87,56 @@ test('safeFilenameFor: an image mime keeps precedence over a misleading video-li
 
 test('safeFilenameFor: a .mov name with a video/quicktime mime is kept as-is', () => {
   assert.equal(safeFilenameFor('video/quicktime', 'clip.mov'), 'clip.mov')
+})
+
+// --- Round 3: regression fix (defect A widened too far) ------------------------
+// An explicit image/* mime must resolve to 'image' even when unrecognized —
+// other upload screens (assets.tsx, context.tsx, references.tsx) send
+// accept="image/*" and rely on formats like bmp/avif/heic working, because
+// assetFiles.ts falls back to PB's stored Content-Type when the extension is
+// unknown. Only refuse when NEITHER mime nor extension identifies anything.
+
+test('sizeLimitFor: an unrecognized but explicit image/* mime still gets the image cap', () => {
+  assert.equal(sizeLimitFor('image/bmp', 'photo.bmp'), 15_000_000)
+})
+
+test('isAcceptableUpload: an unrecognized but explicit image/* mime is accepted', () => {
+  assert.equal(isAcceptableUpload('image/bmp', 'photo.bmp'), true)
+})
+
+test('isAcceptableUpload: an unrecognized image/* mime with no extension is accepted', () => {
+  assert.equal(isAcceptableUpload('image/bmp', 'photo'), true)
+})
+
+test('isAcceptableUpload: movie.avi + application/octet-stream is still refused (round 2 fix must hold)', () => {
+  assert.equal(isAcceptableUpload('application/octet-stream', 'movie.avi'), false)
+})
+
+test('safeFilenameFor: an unrecognized image/* mime KEEPS the existing extension (photo.bmp stays .bmp)', () => {
+  assert.equal(safeFilenameFor('image/bmp', 'photo.bmp'), 'photo.bmp')
+})
+
+test('safeFilenameFor: an unrecognized image/* mime with no extension at all falls back to .png', () => {
+  assert.equal(safeFilenameFor('image/bmp', 'photo'), 'photo.png')
+})
+
+test('safeFilenameFor: scan.mov + image/png is still stored as .png (round 2 fix must not regress)', () => {
+  assert.equal(safeFilenameFor('image/png', 'scan.mov'), 'scan.png')
+})
+
+test('safeFilenameFor: a recognized image/* mime still overrides a misleading video-like extension', () => {
+  // image/png is a KNOWN EXT_BY_MIME key, so today's override behaviour holds.
+  assert.equal(safeFilenameFor('image/png', 'clip.mov'), 'clip.png')
+})
+
+test('safeFilenameFor: clip.mov + video/quicktime is kept as-is (video cap, unaffected by the image fix)', () => {
+  assert.equal(safeFilenameFor('video/quicktime', 'clip.mov'), 'clip.mov')
+})
+
+// --- Round 3: check-order fix (type check before size check) -------------------
+// A 20 MB .txt must be refused as an unsupported TYPE, not as oversize — pin
+// the ordering by asserting on the helper that decides it, independent of
+// which check the route runs first.
+test('isAcceptableUpload: a 20 MB-class .txt with a generic mime is refused as unsupported type', () => {
+  assert.equal(isAcceptableUpload('text/plain', 'notes.txt'), false)
 })

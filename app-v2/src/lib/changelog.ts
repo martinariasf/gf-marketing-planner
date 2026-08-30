@@ -22,6 +22,16 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-30',
+    title: 'Upload your own video to a post',
+    items: [
+      'The Upload button on a post now takes a video as well as pictures - an MP4, WebM or MOV up to 100 MB. Until now it only accepted images, so the only way to get a video onto a post was to ask Viktor for one.',
+      'An uploaded video plays everywhere a Viktor-made video already does: in the post preview, on the calendar card and in the thumbnail strip.',
+      'A post carries one video at a time, so uploading a new one replaces it. Pictures already on the post are left exactly as they are.',
+      'If you pick something that cannot be used - a file that is too large, a format we do not support, or a video and pictures together in one go - you get told before anything is uploaded, instead of the upload failing halfway.',
+    ],
+  },
+  {
+    date: '2026-08-30',
     title: 'Upload your own photos to a post, not just one at a time',
     items: [
       'The Upload button on a post now takes several pictures at once, so you can build a carousel from your own photos - an event, the team, real products - instead of only from pictures Viktor generates. Ten is the limit, the same as Instagram.',
