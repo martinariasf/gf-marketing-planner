@@ -115,6 +115,18 @@ function isVideoFile(f: File): boolean {
   return f.type.startsWith('video/') || VIDEO_EXT_RE.test(f.name)
 }
 
+// GF-130 — mirror the server's `ALLOWED_VIDEO_MIMES` in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth), so an
+// unsupported video type (e.g. an AVI) is refused before any upload request
+// goes out instead of round-tripping to the server's 415.
+const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+/** Only an EXPLICIT `video/*` MIME outside the allowlist is unsupported — an
+ * empty/generic MIME (e.g. application/octet-stream) falling back to the
+ * extension check is left alone, matching `isVideoFile` above. */
+function isUnsupportedVideoMime(f: File): boolean {
+  return f.type.startsWith('video/') && !ALLOWED_VIDEO_MIMES.has(f.type)
+}
+
 /**
  * GF-118 — a post's slides as one editable list. A post that only carries a
  * cover `image` counts as a single slide, so uploading a second file turns it
@@ -564,6 +576,13 @@ export default function CalendarView() {
         // the server's cap (see MAX_VIDEO_BYTES above).
         if (video.size > MAX_VIDEO_BYTES) {
           toast.error(t('calendar.videoTooLarge', { max: Math.floor(MAX_VIDEO_BYTES / 1_000_000) }))
+          return
+        }
+        // Pre-flight type check — reject an explicitly unsupported video MIME
+        // (e.g. AVI) BEFORE the request goes out, instead of letting the
+        // server's 415 surface a raw, untranslated error string.
+        if (isUnsupportedVideoMime(video)) {
+          toast.error(t('calendar.videoTypeNotAllowed'))
           return
         }
         setUploading(true)

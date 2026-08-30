@@ -47,3 +47,19 @@ test('safeFilenameFor: a filename with a valid extension is kept as-is', () => {
 test('safeFilenameFor: unknown mime with no extension falls back to .png', () => {
   assert.equal(safeFilenameFor('application/octet-stream', 'blob'), 'blob.png')
 })
+
+test('safeFilenameFor: a .txt name with a video/mp4 mime is not kept — assetFiles.ts cannot serve .txt as video', () => {
+  assert.equal(safeFilenameFor('video/mp4', 'clip.txt'), 'clip.mp4')
+})
+
+test('safeFilenameFor: a .mp4 name with a video/mp4 mime is kept as-is', () => {
+  assert.equal(safeFilenameFor('video/mp4', 'clip.mp4'), 'clip.mp4')
+})
+
+test('safeFilenameFor: a .jpg name with an image/jpeg mime is kept as-is', () => {
+  assert.equal(safeFilenameFor('image/jpeg', 'photo.jpg'), 'photo.jpg')
+})
+
+test('safeFilenameFor: an unknown extension with an unknown mime falls back to .png', () => {
+  assert.equal(safeFilenameFor('application/octet-stream', 'weird.xyz'), 'weird.png')
+})

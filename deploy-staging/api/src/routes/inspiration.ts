@@ -63,13 +63,25 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/gif': '.gif',
 }
 
+// assetFiles.ts picks the Content-Type it serves from the stored filename's
+// extension alone — it has no idea what these are actually servable as.
+// Only these extensions map to a Content-Type it can serve; anything else
+// (e.g. a video/mp4 upload named "clip.txt") must not be kept as-is or it
+// will be served with the wrong Content-Type and won't play/render.
+const SERVABLE_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'mp4', 'webm', 'mov',
+])
+
 // PB (and assetFiles.ts, which reads the stored filename's extension to set
-// Content-Type) need a real extension. Keep an existing valid one; otherwise
-// derive it from the mime type, falling back to today's .png default.
+// Content-Type) need a real, servable extension. Keep an existing one only
+// if assetFiles.ts can actually serve it; otherwise derive it from the mime
+// type, falling back to today's .png default.
 export function safeFilenameFor(mime: string, filename: string): string {
-  if (filename && /\.[a-z0-9]+$/i.test(filename)) return filename
+  const match = filename ? /\.([a-z0-9]+)$/i.exec(filename) : null
+  if (match && SERVABLE_EXTENSIONS.has(match[1]!.toLowerCase())) return filename
   const ext = EXT_BY_MIME[mime] ?? '.png'
-  return `${filename || 'upload'}${ext}`
+  const base = match ? filename.slice(0, -match[0].length) : filename || 'upload'
+  return `${base}${ext}`
 }
 
 export const inspiration = new OpenAPIHono<AppEnv>()
