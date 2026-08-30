@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-30',
+    title: 'Share links now show the right company name',
+    items: [
+      'A share link showed the company name stored in the workspace file on the server, which could be left over from whichever workspace it was copied from. One client could be shown another client’s name on the very page they were asked to sign off. The name on a share link now comes from the client record you see and edit in the dashboard, so the two can no longer disagree.',
+      'If a client has no proper name recorded anywhere, the strategy page falls back to the title of the link itself. It will never print the internal short name we use behind the scenes.',
+    ],
+  },
+  {
+    date: '2026-08-30',
     title: 'Upload your own photos to a post, not just one at a time',
     items: [
       'The Upload button on a post now takes several pictures at once, so you can build a carousel from your own photos - an event, the team, real products - instead of only from pictures Viktor generates. Ten is the limit, the same as Instagram.',
