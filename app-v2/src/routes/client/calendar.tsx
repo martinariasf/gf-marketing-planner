@@ -100,6 +100,56 @@ import type { Slide } from '@/types/post'
 // Checked in the UI so an over-sized pick fails before any file is uploaded.
 const MAX_SLIDES = 10
 
+// GF-130 — mirror the server's video-size cap in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth) so an
+// over-sized video is rejected before any upload request goes out.
+const MAX_VIDEO_BYTES = 100_000_000
+
+// GF-130 — mirror the server's MIME-or-extension kind detection in
+// deploy-staging/api/src/routes/inspiration.ts (`resolveKind`, the source of
+// truth). A .mov picked on Windows commonly reports as
+// application/octet-stream (or nothing at all), so MIME alone would silently
+// route it into the images path and write a broken image into `slides[]`.
+// Broadened (round 2) to also catch avi/mkv/m4v/wmv/flv forced through the
+// picker with a generic MIME — those must resolve to "video" (and then get
+// refused by isUnsupportedVideoMime below) instead of falling through as an
+// image. SUPPORTED_VIDEO_EXT_RE stays narrow: it names the three extensions
+// that pair with an ALLOWED_VIDEO_MIMES entry.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|avi|mkv|m4v|wmv|flv)$/i
+const SUPPORTED_VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i
+
+/**
+ * Resolve a picked file's kind. An EXPLICIT `image/*` or `video/*` MIME
+ * always wins, whatever the filename says — this is what keeps a PNG
+ * renamed to `scan.mov` (MIME `image/png`) classified as an image instead of
+ * a broken video. Only when the MIME is absent or generic (neither
+ * `image/*` nor `video/*`) does the extension decide. Neither match
+ * resolves to `null`, which callers must refuse outright.
+ */
+function resolveFileKind(f: File): 'image' | 'video' | null {
+  if (f.type.startsWith('image/')) return 'image'
+  if (f.type.startsWith('video/')) return 'video'
+  if (VIDEO_EXT_RE.test(f.name)) return 'video'
+  if (IMAGE_EXT_RE.test(f.name)) return 'image'
+  return null
+}
+// GF-130 — mirror the server's `ALLOWED_VIDEO_MIMES` in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth), so an
+// unsupported video type (e.g. an AVI) is refused before any upload request
+// goes out instead of round-tripping to the server's 415.
+const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+/** Called only on a file that `resolveFileKind` already resolved to
+ * "video". An EXPLICIT `video/*` MIME outside the allowlist is unsupported.
+ * A generic/empty MIME that resolved to video via the broadened
+ * VIDEO_EXT_RE extension fallback is unsupported unless the extension is
+ * one of the three the server actually accepts (mp4/webm/mov) — this is
+ * what still refuses an AVI/MKV/etc. forced through the picker. */
+function isUnsupportedVideoMime(f: File): boolean {
+  if (f.type.startsWith('video/')) return !ALLOWED_VIDEO_MIMES.has(f.type)
+  return !SUPPORTED_VIDEO_EXT_RE.test(f.name)
+}
+
 /**
  * GF-118 — a post's slides as one editable list. A post that only carries a
  * cover `image` counts as a single slide, so uploading a second file turns it
@@ -526,8 +576,70 @@ export default function CalendarView() {
       const picked = files ? Array.from(files) : []
       if (fileInputRef.current) fileInputRef.current.value = ''
       if (picked.length === 0 || !activePost) return
+
+      // GF-130 — the widened <input accept> now lets video files through, but
+      // a post can only ever carry ONE video and it lives in `media`, never in
+      // `slides`. Split the pick by mime type up front so the two paths below
+      // never see the other kind's files.
+      const videos = picked.filter((f) => resolveFileKind(f) === 'video')
+      const images = picked.filter((f) => resolveFileKind(f) === 'image')
+      const unresolved = picked.filter((f) => resolveFileKind(f) === null)
+
+      // A file that resolves to neither a recognized image nor a recognized
+      // video (e.g. a .txt, or an extension-less file with a generic MIME)
+      // must be refused outright, not silently dropped into either path.
+      if (unresolved.length > 0) {
+        toast.error(t('calendar.fileTypeNotAllowed'))
+        return
+      }
+
+      if (videos.length > 0 && images.length > 0) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+      if (videos.length > 1) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+
+      if (videos.length === 1) {
+        const [video] = videos
+        // Pre-flight size check — reject BEFORE the request goes out, mirroring
+        // the server's cap (see MAX_VIDEO_BYTES above).
+        if (video.size > MAX_VIDEO_BYTES) {
+          toast.error(t('calendar.videoTooLarge', { max: Math.floor(MAX_VIDEO_BYTES / 1_000_000) }))
+          return
+        }
+        // Pre-flight type check — reject an explicitly unsupported video MIME
+        // (e.g. AVI) BEFORE the request goes out, instead of letting the
+        // server's 415 surface a raw, untranslated error string.
+        if (isUnsupportedVideoMime(video)) {
+          toast.error(t('calendar.videoTypeNotAllowed'))
+          return
+        }
+        setUploading(true)
+        try {
+          const item = await apiUploadInspiration(slug, video, `post ${activePost.id}`)
+          // A post carries one video: the new upload replaces any existing
+          // video entry, while any non-video `media` entries are preserved.
+          // `slides`/`image` are untouched on this path.
+          const keep = (activePost.media ?? []).filter((m) => m.type !== 'video')
+          await apiPatchPost(slug, activePost.id, {
+            media: [{ type: 'video', url: item.url }, ...keep],
+          })
+          toast(t('calendar.videoUploaded'), { duration: 1600 })
+          refetch()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
+        } finally {
+          setUploading(false)
+        }
+        return
+      }
+
+      // GF-118 image path — unchanged.
       const existing = baseSlides(activePost)
-      if (existing.length + picked.length > MAX_SLIDES) {
+      if (existing.length + images.length > MAX_SLIDES) {
         toast.error(t('calendar.slideLimit', { max: MAX_SLIDES, have: existing.length }))
         return
       }
@@ -538,14 +650,14 @@ export default function CalendarView() {
         // The PATCH only happens once every upload succeeded, so a mid-way
         // failure leaves the post exactly as it was.
         const added: Slide[] = []
-        for (const file of picked) {
+        for (const file of images) {
           const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
           added.push({ image: item.url })
         }
         await writeSlides(activePost.id, activePost.format, [...existing, ...added])
         toast(
-          picked.length > 1
-            ? t('calendar.imagesUploaded', { n: picked.length })
+          images.length > 1
+            ? t('calendar.imagesUploaded', { n: images.length })
             : t('calendar.imageUploaded'),
           { duration: 1600 },
         )
@@ -1093,7 +1205,7 @@ export default function CalendarView() {
                                 ref={fileInputRef}
                                 type="file"
                                 multiple
-                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                                 className="hidden"
                                 onChange={(e) => onUploadImages(e.target.files)}
                               />
@@ -1109,7 +1221,7 @@ export default function CalendarView() {
                                 ) : (
                                   <Upload className="h-3.5 w-3.5 text-brand-blue" />
                                 )}
-                                {t('calendar.uploadImages')}
+                                {t('calendar.uploadMedia')}
                               </Button>
                             </>
                           )}
