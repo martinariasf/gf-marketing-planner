@@ -105,26 +105,49 @@ const MAX_SLIDES = 10
 // over-sized video is rejected before any upload request goes out.
 const MAX_VIDEO_BYTES = 100_000_000
 
-// GF-130 — mirror the server's MIME-or-extension video detection in
-// deploy-staging/api/src/routes/inspiration.ts (`VIDEO_EXT_RE`, the source of
+// GF-130 — mirror the server's MIME-or-extension kind detection in
+// deploy-staging/api/src/routes/inspiration.ts (`resolveKind`, the source of
 // truth). A .mov picked on Windows commonly reports as
 // application/octet-stream (or nothing at all), so MIME alone would silently
 // route it into the images path and write a broken image into `slides[]`.
-const VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
-function isVideoFile(f: File): boolean {
-  return f.type.startsWith('video/') || VIDEO_EXT_RE.test(f.name)
-}
+// Broadened (round 2) to also catch avi/mkv/m4v/wmv/flv forced through the
+// picker with a generic MIME — those must resolve to "video" (and then get
+// refused by isUnsupportedVideoMime below) instead of falling through as an
+// image. SUPPORTED_VIDEO_EXT_RE stays narrow: it names the three extensions
+// that pair with an ALLOWED_VIDEO_MIMES entry.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|avi|mkv|m4v|wmv|flv)$/i
+const SUPPORTED_VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i
 
+/**
+ * Resolve a picked file's kind. An EXPLICIT `image/*` or `video/*` MIME
+ * always wins, whatever the filename says — this is what keeps a PNG
+ * renamed to `scan.mov` (MIME `image/png`) classified as an image instead of
+ * a broken video. Only when the MIME is absent or generic (neither
+ * `image/*` nor `video/*`) does the extension decide. Neither match
+ * resolves to `null`, which callers must refuse outright.
+ */
+function resolveFileKind(f: File): 'image' | 'video' | null {
+  if (f.type.startsWith('image/')) return 'image'
+  if (f.type.startsWith('video/')) return 'video'
+  if (VIDEO_EXT_RE.test(f.name)) return 'video'
+  if (IMAGE_EXT_RE.test(f.name)) return 'image'
+  return null
+}
 // GF-130 — mirror the server's `ALLOWED_VIDEO_MIMES` in
 // deploy-staging/api/src/routes/inspiration.ts (the source of truth), so an
 // unsupported video type (e.g. an AVI) is refused before any upload request
 // goes out instead of round-tripping to the server's 415.
 const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
-/** Only an EXPLICIT `video/*` MIME outside the allowlist is unsupported — an
- * empty/generic MIME (e.g. application/octet-stream) falling back to the
- * extension check is left alone, matching `isVideoFile` above. */
+/** Called only on a file that `resolveFileKind` already resolved to
+ * "video". An EXPLICIT `video/*` MIME outside the allowlist is unsupported.
+ * A generic/empty MIME that resolved to video via the broadened
+ * VIDEO_EXT_RE extension fallback is unsupported unless the extension is
+ * one of the three the server actually accepts (mp4/webm/mov) — this is
+ * what still refuses an AVI/MKV/etc. forced through the picker. */
 function isUnsupportedVideoMime(f: File): boolean {
-  return f.type.startsWith('video/') && !ALLOWED_VIDEO_MIMES.has(f.type)
+  if (f.type.startsWith('video/')) return !ALLOWED_VIDEO_MIMES.has(f.type)
+  return !SUPPORTED_VIDEO_EXT_RE.test(f.name)
 }
 
 /**
@@ -558,8 +581,17 @@ export default function CalendarView() {
       // a post can only ever carry ONE video and it lives in `media`, never in
       // `slides`. Split the pick by mime type up front so the two paths below
       // never see the other kind's files.
-      const videos = picked.filter(isVideoFile)
-      const images = picked.filter((f) => !isVideoFile(f))
+      const videos = picked.filter((f) => resolveFileKind(f) === 'video')
+      const images = picked.filter((f) => resolveFileKind(f) === 'image')
+      const unresolved = picked.filter((f) => resolveFileKind(f) === null)
+
+      // A file that resolves to neither a recognized image nor a recognized
+      // video (e.g. a .txt, or an extension-less file with a generic MIME)
+      // must be refused outright, not silently dropped into either path.
+      if (unresolved.length > 0) {
+        toast.error(t('calendar.fileTypeNotAllowed'))
+        return
+      }
 
       if (videos.length > 0 && images.length > 0) {
         toast.error(t('calendar.videoMixNotAllowed'))

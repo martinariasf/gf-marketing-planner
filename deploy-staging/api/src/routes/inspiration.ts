@@ -32,26 +32,13 @@ const IMAGE_SIZE_LIMIT = 15_000_000
 const VIDEO_SIZE_LIMIT = 100_000_000
 
 // Videos are much bigger than images by nature, so they get a separate,
-// larger cap. Detected by mime type primarily, falling back to a known video
-// extension in case the browser sent a generic/empty mime.
-const VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
-
-function isVideoUpload(mime: string, filename: string): boolean {
-  return mime.startsWith('video/') || VIDEO_EXT_RE.test(filename)
-}
-
-export function sizeLimitFor(mime: string, filename: string): number {
-  return isVideoUpload(mime, filename) ? VIDEO_SIZE_LIMIT : IMAGE_SIZE_LIMIT
-}
+// larger cap. Which cap applies follows resolveKind() below: mime first,
+// filename extension only when the browser sent a generic/empty mime.
 
 // assetFiles.ts can only set a correct Content-Type for these three video
 // types when serving the file back — anything else would get mis-served, so
 // reject it up front rather than accept an unplayable upload.
 const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
-
-export function isAllowedVideoMime(mime: string): boolean {
-  return !mime.startsWith('video/') || ALLOWED_VIDEO_MIMES.has(mime)
-}
 
 const EXT_BY_MIME: Record<string, string> = {
   'video/mp4': '.mp4',
@@ -72,14 +59,56 @@ const SERVABLE_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'mp4', 'webm', 'mov',
 ])
 
-// PB (and assetFiles.ts, which reads the stored filename's extension to set
-// Content-Type) need a real, servable extension. Keep an existing one only
-// if assetFiles.ts can actually serve it; otherwise derive it from the mime
-// type, falling back to today's .png default.
-export function safeFilenameFor(mime: string, filename: string): string {
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov'])
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'])
+
+function extensionOf(filename: string): string {
   const match = filename ? /\.([a-z0-9]+)$/i.exec(filename) : null
-  if (match && SERVABLE_EXTENSIONS.has(match[1]!.toLowerCase())) return filename
-  const ext = EXT_BY_MIME[mime] ?? '.png'
+  return match ? match[1]!.toLowerCase() : ''
+}
+
+// Resolves the upload's real kind, MIME first, extension only as a fallback
+// when the MIME is missing/generic. Returns null when neither the MIME nor
+// the extension identifies a type assetFiles.ts can actually serve back —
+// callers must refuse the upload in that case rather than store the bytes.
+function resolveKind(mime: string, filename: string): 'image' | 'video' | null {
+  if (mime.startsWith('video/')) {
+    // An explicit video/* MIME is authoritative even if disallowed — never
+    // fall back to the extension for a mime the browser was explicit about.
+    return ALLOWED_VIDEO_MIMES.has(mime) ? 'video' : null
+  }
+  if (mime in EXT_BY_MIME) return 'image' // the only non-video keys left in EXT_BY_MIME
+  // Generic/empty/unrecognized MIME — fall back to the filename extension.
+  const ext = extensionOf(filename)
+  if (VIDEO_EXTENSIONS.has(ext)) return 'video'
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
+  return null
+}
+
+export function sizeLimitFor(mime: string, filename: string): number {
+  return resolveKind(mime, filename) === 'video' ? VIDEO_SIZE_LIMIT : IMAGE_SIZE_LIMIT
+}
+
+// filename is required (not optional) because, unlike the old mime-only
+// check, refusing an upload now also depends on whether the extension can
+// identify a servable type when the mime is generic/empty — see resolveKind.
+export function isAllowedVideoMime(mime: string, filename: string): boolean {
+  return resolveKind(mime, filename) !== null
+}
+
+// PB (and assetFiles.ts, which reads the stored filename's extension to set
+// Content-Type) need a real, servable extension consistent with the upload's
+// resolved kind. Keep an existing extension only if it is both servable AND
+// matches the resolved kind (e.g. don't keep ".mov" on a MIME-resolved
+// image); otherwise derive the extension from the resolved kind/mime,
+// falling back to today's .png default.
+export function safeFilenameFor(mime: string, filename: string): string {
+  const kind = resolveKind(mime, filename) ?? 'image' // route rejects null kinds before ever calling this
+  const currentExt = extensionOf(filename)
+  const currentExtKind = VIDEO_EXTENSIONS.has(currentExt) ? 'video' : IMAGE_EXTENSIONS.has(currentExt) ? 'image' : null
+  if (currentExtKind === kind) return filename
+  const match = filename ? /\.([a-z0-9]+)$/i.exec(filename) : null
+  const ext = EXT_BY_MIME[mime] ?? (kind === 'video' ? '.mp4' : '.png')
   const base = match ? filename.slice(0, -match[0].length) : filename || 'upload'
   return `${base}${ext}`
 }
@@ -140,11 +169,11 @@ inspiration.post(
         detail: `Max ${limitMb} MB per ${limit === VIDEO_SIZE_LIMIT ? 'video' : 'image'}`,
       })
     }
-    if (!isAllowedVideoMime(mime)) {
+    if (!isAllowedVideoMime(mime, file.name)) {
       return problem(c, {
         title: 'Unsupported Media Type',
         status: 415,
-        detail: 'Video uploads must be mp4, webm, or quicktime (mov)',
+        detail: 'Unsupported file type — video uploads must be mp4, webm, or quicktime (mov)',
       })
     }
     const note = (form.get('note') as string | null) ?? ''
