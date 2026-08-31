@@ -434,8 +434,15 @@ export type OrgSettings = {
   // GF-37 residual — per-client IANA timezone (e.g. "Europe/Berlin"), used to
   // classify a post date as past/today/future by the CLIENT's calendar day
   // instead of whoever happens to be viewing the dashboard. Defaults to
-  // "UTC" so an existing client that has never set this keeps exactly the
-  // UTC-based behavior it has today.
+  // "UTC", matching the API's isPastDate() default (see orgSettings.ts on
+  // the server) — an existing client that has never set this keeps exactly
+  // the UTC-based classification the API has used since the original GF-37
+  // fix. Layer-5 review round 1, finding 2: this is NOT a pure no-op for the
+  // dashboard's OWN classification — before this change dateTiming() used
+  // whoever's browser was viewing it, which for a non-UTC viewer could differ
+  // from the API's UTC-day answer. Now both agree by default, which is the
+  // point: it closes that client/server mismatch rather than only relocating
+  // it.
   timezone: string
 }
 

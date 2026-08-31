@@ -108,6 +108,41 @@ test('PUT /config/settings with the dash role succeeds and persists all three ke
   })
 })
 
+// GF-37 follow-up, Layer-5 review round 1 finding 1 — the pre-existing
+// two-key payload (no `timezone`) must keep succeeding. Any caller still on
+// it (a cached pre-deploy SPA tab, a script, an integration) must not start
+// getting 422s just because this field was added.
+test('PUT /config/settings still accepts the pre-existing two-key payload (no timezone) and defaults it to UTC', async () => {
+  storedSettings = undefined
+  const res = await planningConfig.request('/clients/acme/config/settings', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer dash_test', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { showAiGeneratedLabel: false, autoScheduleOnApprove: true } }),
+  })
+  const body = await res.json()
+  assert.equal(res.status, 200)
+  assert.deepEqual(body.data, { showAiGeneratedLabel: false, autoScheduleOnApprove: true, timezone: 'UTC' })
+})
+
+// Complements the case above: a client that already configured a real
+// timezone must not have it silently reset to UTC by an unrelated toggle
+// save that happens to use the old two-key payload shape.
+test('PUT /config/settings with the two-key payload carries an already-configured timezone forward, not resets it', async () => {
+  storedSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'America/Montevideo' }
+  const res = await planningConfig.request('/clients/acme/config/settings', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer dash_test', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { showAiGeneratedLabel: false, autoScheduleOnApprove: false } }),
+  })
+  const body = await res.json()
+  assert.equal(res.status, 200)
+  assert.deepEqual(body.data, {
+    showAiGeneratedLabel: false,
+    autoScheduleOnApprove: false,
+    timezone: 'America/Montevideo',
+  })
+})
+
 test('PUT /config/settings rejects a missing/non-boolean key with 422', async () => {
   storedSettings = undefined
   const res = await planningConfig.request('/clients/acme/config/settings', {

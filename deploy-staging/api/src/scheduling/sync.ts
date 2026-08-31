@@ -147,7 +147,12 @@ function calendarDayKeyInTimezone(date: Date, timezone: string): string {
  * pin an exact instant instead of racing the wall clock at a day boundary.
  */
 export function isPastDate(when: string, ts: number, timezone: string, now: Date = new Date()): boolean {
-  if (!DATE_ONLY.test(when)) return ts <= Date.now()
+  // GF-37 follow-up, Layer-5 review round 1 finding 3 — this branch must use
+  // the SAME instant as the caller's `now`, not the real wall clock. It used
+  // to read `Date.now()` directly, silently ignoring the `now` parameter this
+  // function accepts precisely so tests (and any future caller) can pin an
+  // exact instant instead of racing the clock at a day boundary.
+  if (!DATE_ONLY.test(when)) return ts <= now.getTime()
   const todayKey = calendarDayKeyInTimezone(now, timezone)
   const whenKey = when.slice(0, 10)
   return whenKey < todayKey

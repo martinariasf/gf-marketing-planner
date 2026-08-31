@@ -1312,7 +1312,19 @@ export default function CalendarView() {
             })}
           </DialogDescription>
           <div className="flex items-center justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setPastApproveTarget(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                // Layer-5 review round 1 finding 4 — this used to just close
+                // the dialog (a relabeled Cancel), while the copy promised
+                // "change the date". Actually take the user to the post's
+                // editable date field via the same jump-to-post navigation
+                // CompactPostCard/ReviewShareDialog already use.
+                const target = pastApproveTarget
+                setPastApproveTarget(null)
+                if (target) jumpToPost(target)
+              }}
+            >
               {t('calendar.pastApproveChangeDate')}
             </Button>
             <Button

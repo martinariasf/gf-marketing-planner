@@ -1,4 +1,4 @@
-import { getFormatLocale } from './format'
+import { getFormatLocale } from './format.ts'
 
 export interface CalendarRangeConfig {
   startMonth: string
@@ -96,14 +96,26 @@ export function isIsoInMonthRange(iso: string, range: CalendarRangeConfig): bool
 // once by ClientLayout (the single place that loads a client's OrgSettings)
 // so the many scattered dateTiming() call sites across calendar.tsx and
 // approval-kanban.tsx don't each need a timezone prop threaded down through
-// StatusSelect / CompactPostCard / the kanban card. Left `undefined` until a
-// client bundle loads, which preserves dateTiming's original browser-local-day
-// behavior for any caller (e.g. a future test) that never wires this up.
+// StatusSelect / CompactPostCard / the kanban card.
+//
+// Left `undefined` until a client bundle loads (or for a caller — e.g. a
+// test — that never wires this up at all), which falls back to dateTiming's
+// original browser-local-day comparison. In the running app this is only a
+// startup gap: ClientLayout always calls setDateTimingTimezone with a
+// concrete value once data loads (settings.timezone itself defaults to
+// 'UTC' — see api-client.ts), so in practice every real dateTiming() call
+// after the first render uses either the client's configured timezone or
+// 'UTC', matching the API's own default. That is an intentional change from
+// "whoever's browser is viewing this" to "the client's configured zone,
+// defaulting to UTC" — see the Layer-5 review round 1, finding 2 note on
+// OrgSettings.timezone in api-client.ts for why that's the fix, not a
+// regression.
 let activeTimezone: string | undefined
 
 /** Called by ClientLayout whenever the loaded client's settings change. */
 export function setDateTimingTimezone(timezone: string | undefined | null): void {
-  activeTimezone = timezone && timezone.trim() ? timezone : undefined
+  const trimmed = timezone?.trim()
+  activeTimezone = trimmed ? trimmed : undefined
 }
 
 /** Exposed for tests that want to assert on the currently-active value. */
@@ -115,15 +127,36 @@ export function getDateTimingTimezone(): string | undefined {
  * Format `date` as the `YYYY-MM-DD` calendar day it falls on within
  * `timezone`. `en-CA` is the standard trick for getting `Intl.DateTimeFormat`
  * to emit an ISO-shaped (and therefore lexicographically sortable) string.
+ *
+ * Falls back to UTC if `timezone` isn't resolvable by this browser's ICU
+ * (Layer-5 review round 1 finding 6 — mirrors sync.ts's server-side
+ * fallback). `dateTiming` runs inside render and drag/drop event handlers,
+ * so an uncaught `Intl` RangeError here would crash the React tree, not just
+ * fail one request.
  */
 function calendarDayKeyInTimezone(date: Date, timezone: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date)
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
+  }
 }
+
+/** A stored date carrying no time component, e.g. `2026-06-15` (GF-16).
+ *  Mirrors deploy-staging/api/src/scheduling/sync.ts's DATE_ONLY exactly —
+ *  the two must agree on which values get calendar-day vs exact-instant
+ *  treatment, or the client and server disagree about "past" (see below). */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
 
 /**
  * GF-37 — classify a post date as past/today/future by CALENDAR DAY.
@@ -144,6 +177,18 @@ function calendarDayKeyInTimezone(date: Date, timezone: string): string {
  * (param omitted AND activeTimezone unset) this falls back to the original
  * local-getters comparison, so existing callers/tests that don't pass one
  * keep their exact prior behavior.
+ *
+ * Layer-5 review round 1 finding 3 — a value that carries a real time
+ * component (not `DATE_ONLY`) commits to an exact instant, so "past" must
+ * mean "that instant has already happened" — exactly the API's
+ * `isPastDate()` rule (`ts <= now`) — not "earlier calendar day". Before this
+ * fix, a full-ISO post timestamped earlier today (e.g. 09:00, viewed at
+ * 15:00) still read as 'today' here, so Programmed stayed enabled in the UI
+ * while the API rejected the same post with a 422 — precisely the "client
+ * says allowed, API answers 422" symptom this whole fix exists to eliminate.
+ * A future instant on today's calendar day still falls through to the
+ * calendar-day comparison below, so it correctly reads as 'today' for
+ * styling purposes (not blocked, just highlighted).
  */
 export function dateTiming(
   iso: string,
@@ -152,6 +197,10 @@ export function dateTiming(
 ): 'past' | 'today' | 'future' {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
   if (!m) return 'future'
+  if (!DATE_ONLY.test(iso ?? '')) {
+    const ts = new Date(iso).getTime()
+    if (!Number.isNaN(ts) && ts <= now.getTime()) return 'past'
+  }
   const whenKey = `${m[1]}-${m[2]}-${m[3]}`
   if (timezone) {
     const todayKey = calendarDayKeyInTimezone(now, timezone)

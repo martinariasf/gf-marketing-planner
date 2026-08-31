@@ -122,7 +122,22 @@ planningConfig.get('/clients/:slug/config/settings', requireScope(), async (c) =
   return c.json({ data: settings })
 })
 
-function validateOrgSettings(data: unknown): OrgSettings | null {
+type OrgSettingsInput = {
+  showAiGeneratedLabel: boolean
+  autoScheduleOnApprove: boolean
+  timezone?: string
+}
+
+// GF-37 follow-up, Layer-5 review round 1 finding 1 — `timezone` is OPTIONAL
+// on write, unlike the two existing booleans. Requiring it broke backward
+// compatibility for exactly the case the default-UTC design exists to
+// protect: any existing caller (a cached pre-deploy SPA tab, a script, an
+// integration) still sending the old two-key payload got a hard 422 instead
+// of the save it used to get. When `timezone` IS present it must still be a
+// valid IANA name; when absent, the PUT handler below carries the client's
+// CURRENT timezone forward rather than silently resetting it to UTC every
+// time some other toggle is saved.
+function validateOrgSettings(data: unknown): OrgSettingsInput | null {
   if (!data || typeof data !== 'object') return null
   const raw = data as Record<string, unknown>
   const keys = Object.keys(raw)
@@ -130,11 +145,11 @@ function validateOrgSettings(data: unknown): OrgSettings | null {
   if (keys.some((k) => !allowed.has(k))) return null
   if (typeof raw.showAiGeneratedLabel !== 'boolean') return null
   if (typeof raw.autoScheduleOnApprove !== 'boolean') return null
-  if (!isValidIanaTimezone(raw.timezone)) return null
+  if ('timezone' in raw && !isValidIanaTimezone(raw.timezone)) return null
   return {
     showAiGeneratedLabel: raw.showAiGeneratedLabel,
     autoScheduleOnApprove: raw.autoScheduleOnApprove,
-    timezone: raw.timezone,
+    ...('timezone' in raw ? { timezone: raw.timezone as string } : {}),
   }
 }
 
@@ -150,14 +165,19 @@ planningConfig.put(
     } catch {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'Invalid JSON body' })
     }
-    const settings = validateOrgSettings(body.data)
-    if (!settings) {
+    const input = validateOrgSettings(body.data)
+    if (!input) {
       return problem(c, {
         title: 'Unprocessable Entity',
         status: 422,
-        detail: `Settings must include exactly showAiGeneratedLabel and autoScheduleOnApprove as booleans, plus timezone as a valid IANA time zone name (defaults: ${JSON.stringify(ORG_SETTINGS_DEFAULTS)}).`,
+        detail: `Settings must include showAiGeneratedLabel and autoScheduleOnApprove as booleans; timezone is optional but, when present, must be a valid IANA time zone name (defaults: ${JSON.stringify(ORG_SETTINGS_DEFAULTS)}).`,
       })
     }
+    // Carry the current timezone forward when the caller's payload omits it
+    // (see validateOrgSettings above) rather than defaulting to 'UTC' and
+    // silently overwriting a value the client already configured.
+    const current = await loadOrgSettings(slug)
+    const settings: OrgSettings = { ...current, ...input }
     const actor = principalLabel(c)
     const updatedAt = new Date().toISOString()
     const result = await withPb(async (pb) => {

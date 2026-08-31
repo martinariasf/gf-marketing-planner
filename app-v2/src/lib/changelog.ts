@@ -25,7 +25,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: 'New: a per-client time zone, so "today" means the client\'s today',
     items: [
       'The Configuration page has a new Time zone setting. It controls what "today" means for this client when approving or programming a post — for example, a post dated today for a client in Montevideo is no longer refused just because it is already tomorrow in UTC.',
-      'Existing clients keep working exactly as before: the time zone defaults to UTC until you change it.',
+      'The server-side rule is unchanged for anyone who has not set this: it already used UTC. The dashboard itself now matches that same UTC default too, instead of quietly following whatever time zone your own browser happens to be in — so the calendar and the approve/program checks agree with each other near a day boundary. Set the time zone once and both stay in sync with the client\'s actual day from then on.',
     ],
   },
   {

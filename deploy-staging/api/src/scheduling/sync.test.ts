@@ -288,6 +288,36 @@ test('GF-37 timezone: a positive-offset client\'s "today" can already be UTC\'s 
   assert.equal(isPastDate(when, ts, 'Australia/Sydney', now), true)
 })
 
+// Layer-5 review round 1, finding 7e — the day-key approach must not
+// misbehave right at a DST transition. Germany's spring-forward: at
+// 2026-03-29T01:00:00Z Europe/Berlin jumps from 02:00 CET (UTC+1) straight
+// to 03:00 CEST (UTC+2). Pin `now` on both sides of that exact instant and
+// confirm the calendar day resolved is March 29 either way — a wrong offset
+// calculation here would misclassify "today" for every Berlin-based client
+// on the two DST-transition days each year.
+test('GF-37 timezone: DST spring-forward instant in Europe/Berlin still resolves the correct calendar day', () => {
+  const justBeforeTransition = new Date('2026-03-29T00:59:00Z') // 01:59 CET local
+  const justAfterTransition = new Date('2026-03-29T01:01:00Z') // 03:01 CEST local
+  const today = '2026-03-29'
+  const yesterday = '2026-03-28'
+
+  for (const now of [justBeforeTransition, justAfterTransition]) {
+    assert.equal(isPastDate(today, new Date(today).getTime(), 'Europe/Berlin', now), false, now.toISOString())
+    assert.equal(isPastDate(yesterday, new Date(yesterday).getTime(), 'Europe/Berlin', now), true, now.toISOString())
+  }
+})
+
+// Layer-5 review round 1, finding 3 — a full-ISO (time-carrying) date must
+// use the SAME instant the caller pins via `now`, not the real wall clock.
+// Guards against silently regressing back to reading Date.now() directly.
+test('GF-37 timezone: a full-ISO date compares against the injected `now`, not the real wall clock', () => {
+  const now = new Date('2026-06-15T12:00:00Z')
+  const earlierToday = '2026-06-15T09:00:00Z'
+  const laterToday = '2026-06-15T15:00:00Z'
+  assert.equal(isPastDate(earlierToday, new Date(earlierToday).getTime(), 'UTC', now), true)
+  assert.equal(isPastDate(laterToday, new Date(laterToday).getTime(), 'UTC', now), false)
+})
+
 test('GF-37 timezone: an unset client timezone defaults to UTC end-to-end through applyStatusToSchedule', async () => {
   // No explicit timezone configured (mirrors an existing client's org_configs
   // row with no `settings.timezone` key — loadOrgSettings' DEFAULTS kicks in
