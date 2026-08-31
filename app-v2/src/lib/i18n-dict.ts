@@ -29,6 +29,7 @@ const en: Dict = {
   'login.signingIn':         'Signing in…',
   'login.signIn':            'Sign in',
   'login.failed':            'Login failed',
+  'login.sessionExpired':    'Your session expired. Please sign in again.',
   'login.trouble':           'Trouble signing in? Contact your GF administrator.',
   // Common
   'common.cancel':           'Cancel',
@@ -1048,6 +1049,7 @@ const de: Dict = {
   'login.signingIn':         'Anmeldung läuft…',
   'login.signIn':            'Anmelden',
   'login.failed':            'Anmeldung fehlgeschlagen',
+  'login.sessionExpired':    'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
   'login.trouble':           'Probleme bei der Anmeldung? Kontaktiere deinen GF-Administrator.',
   'common.cancel':        'Abbrechen',
   'common.aiGenerated':   'KI-generiert',
@@ -2039,6 +2041,7 @@ const es: Dict = {
   'login.signingIn':         'Iniciando sesión…',
   'login.signIn':            'Iniciar sesión',
   'login.failed':            'Error al iniciar sesión',
+  'login.sessionExpired':    'Tu sesión expiró. Por favor, inicia sesión de nuevo.',
   'login.trouble':           '¿Problemas para iniciar sesión? Contacta a tu administrador de GF.',
   'common.cancel':        'Cancelar',
   'common.aiGenerated':   'Generado con IA',
