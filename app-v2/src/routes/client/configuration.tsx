@@ -236,6 +236,7 @@ function TimezoneCard({
   const [activeIndex, setActiveIndex] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   const pinned = useMemo(() => {
     const seen = new Set<string>()
@@ -260,19 +261,32 @@ function TimezoneCard({
   // button and the popup), so `rootRef.current.contains(backdropClick)` was
   // always true and outside-click close never fired. closeMenu() is the
   // single source of truth for "close and reset search", used by the
-  // backdrop's own onClick, Escape, and this document-level listener alike
-  // — so a stray future edit to any one of them can't silently reopen this
-  // exact bug on a different path.
-  const closeMenu = () => {
+  // backdrop's own onClick, Escape, select, and the trigger's own toggle
+  // alike — so a stray future edit to any one of them can't silently
+  // regress this exact bug (or the round-5 leftover below) on another path.
+  //
+  // `returnFocus` defaults to true (Escape, a keyboard/click selection, and
+  // the trigger's own close all return focus to the trigger, matching
+  // standard combobox focus management — round 5, finding 2b). It is
+  // explicitly false for the two "the user clicked SOMEWHERE ELSE" paths
+  // (the backdrop and the outside-pointerdown listener), where yanking
+  // focus back to the trigger would fight whatever the user just clicked.
+  const closeMenu = (returnFocus = true) => {
     setOpen(false)
     setQuery('')
+    if (returnFocus) triggerRef.current?.focus()
+  }
+
+  const openMenu = () => {
+    setOpen(true)
+    setActiveIndex(0)
   }
 
   useEffect(() => {
     if (!open) return
     inputRef.current?.focus()
     const onPointerDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu()
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu(false)
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
@@ -283,11 +297,20 @@ function TimezoneCard({
     closeMenu()
   }
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
+  // Layer-5 review round 5, finding 2a — Escape only worked while the INPUT
+  // had focus (this was the input's own onKeyDown). With focus on an option
+  // button or the trigger (both reachable by Tab/Shift+Tab while open),
+  // Escape did nothing. Keydown bubbles, so one handler on the root wrapper
+  // catches it regardless of which descendant is focused; Arrow/Enter stay
+  // input-only below since list navigation only makes sense while typing.
+  const onRootKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (open && e.key === 'Escape') {
+      e.preventDefault()
       closeMenu()
-      return
     }
+  }
+
+  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
@@ -309,13 +332,20 @@ function TimezoneCard({
           <span className="text-sm font-medium truncate">{t('config.timezone.title')}</span>
           <InfoHint aria-label={t('config.timezone.title')}>{t('config.timezone.info')}</InfoHint>
         </div>
-        <div ref={rootRef} className="relative w-full sm:w-72">
+        <div ref={rootRef} className="relative w-full sm:w-72" onKeyDown={onRootKeyDown}>
           <button
+            ref={triggerRef}
             type="button"
-            onClick={() => {
-              setOpen((o) => !o)
-              setActiveIndex(0)
-            }}
+            // Layer-5 review round 5, finding 1 — this used to toggle with a
+            // raw `setOpen((o) => !o)`, which closed the menu WITHOUT going
+            // through closeMenu() (so `query` was never reset). Mouse clicks
+            // never hit this while open (the fixed backdrop sits above it
+            // and closes via its own onClick first), but Shift+Tab to the
+            // trigger while open, then Enter/Space, reached this raw
+            // toggle directly — a real, keyboard-only leftover of the same
+            // "every close path must call closeMenu()" bug this round's
+            // predecessor round was meant to close.
+            onClick={() => (open ? closeMenu() : openMenu())}
             disabled={disabled || saving}
             aria-haspopup="listbox"
             aria-expanded={open}
@@ -337,8 +367,10 @@ function TimezoneCard({
                   don't change DOM nesting), so the document `pointerdown`
                   listener's `rootRef.current.contains(e.target)` check is
                   always true for a click landing here — without this
-                  onClick, "click outside to close" silently never fires. */}
-              <div className="fixed inset-0 z-10" onClick={closeMenu} />
+                  onClick, "click outside to close" silently never fires.
+                  `closeMenu(false)` — the user explicitly clicked elsewhere,
+                  so don't yank focus back to the trigger (round 5, finding 2b). */}
+              <div className="fixed inset-0 z-10" onClick={() => closeMenu(false)} />
               <div className="absolute right-0 z-20 mt-1 w-full sm:w-80 rounded-md border border-border-subtle bg-paper shadow-md">
                 <div className="relative p-2 border-b border-border-subtle">
                   <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-muted pointer-events-none" />
@@ -354,7 +386,7 @@ function TimezoneCard({
                       setQuery(e.target.value)
                       setActiveIndex(0)
                     }}
-                    onKeyDown={onKeyDown}
+                    onKeyDown={onInputKeyDown}
                     placeholder={t('config.timezone.searchPlaceholder')}
                     className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                   />
