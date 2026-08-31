@@ -15,7 +15,7 @@
 
 import type { Context, MiddlewareHandler } from 'hono'
 import { env } from './env.js'
-import { withPb, verifyUserToken } from './pb.js'
+import { withPb, verifyUserToken, PbUnavailableError } from './pb.js'
 import { agencyForClient, resolveUserScope } from './tenancy.js'
 
 export type Role = 'agent' | 'dash' | 'admin'
@@ -136,11 +136,34 @@ const unauthorized = (c: Context, detail: string) =>
     401,
   )
 
+// GF-126 — a PB blip (restart, brief unavailability) must never look like a
+// bad token to the SPA: that would mass-log-out every dashboard user for an
+// infra hiccup. This is what requireAuth returns instead when lookupToken's
+// JWT branch throws PbUnavailableError.
+const serviceUnavailable = (c: Context, detail: string) =>
+  c.json(
+    {
+      type: 'about:blank',
+      title: 'Service Unavailable',
+      status: 503,
+      detail,
+    },
+    503,
+  )
+
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const header = c.req.header('Authorization') ?? ''
   const match = header.match(/^Bearer\s+(.+)$/)
   if (!match) return unauthorized(c, 'Missing or malformed Authorization header')
-  const principal = await lookupToken(match[1]!.trim())
+  let principal: TokenPrincipal | null
+  try {
+    principal = await lookupToken(match[1]!.trim())
+  } catch (err) {
+    if (err instanceof PbUnavailableError) {
+      return serviceUnavailable(c, 'PocketBase is temporarily unavailable')
+    }
+    throw err
+  }
   if (!principal) return unauthorized(c, 'Unknown or revoked token')
   c.set('principal', principal)
   await next()

@@ -30,6 +30,15 @@ mock.module('../pb.js', {
       }),
     verifyUserToken: async () => null,
     pb: {},
+    // GF-126 — mirror the real pb.js module shape so this mock doesn't
+    // silently diverge (auth.ts's requireAuth imports this from '../pb.js').
+    PbUnavailableError: class PbUnavailableError extends Error {
+      constructor(cause?: unknown) {
+        super('PocketBase is unavailable')
+        this.name = 'PbUnavailableError'
+        if (cause !== undefined) (this as { cause?: unknown }).cause = cause
+      }
+    },
   },
 })
 
