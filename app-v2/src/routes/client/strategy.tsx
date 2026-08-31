@@ -347,25 +347,30 @@ export default function StrategyView() {
         </p>
 
         {/* Headline */}
-        {editMode ? (
-          <EditableInlineText
-            slug={slug}
-            path={['headline']}
-            value={plan.headline}
-            placeholder={plan.quarter.theme ?? t('strategy.headlinePlaceholder')}
-            editMode={editMode}
-            onCommit={() => stampBlock('headline')}
-            className="text-3xl font-bold text-brand-blue tracking-tight max-w-3xl"
-          />
-        ) : (
-          <h1 className="text-3xl font-bold text-brand-blue tracking-tight max-w-3xl">
-            {plan.headline ?? plan.quarter.theme}
-          </h1>
-        )}
+        <h1 className="text-3xl font-bold text-brand-blue tracking-tight max-w-3xl">
+          {t('strategy.title')}
+        </h1>
 
-        {/* Strategy intro */}
-        {(plan.strategy || editMode) && (
+        {/* Strategy intro: per-client tagline (bold lead-in) + strategy body */}
+        {(plan.headline || plan.strategy || editMode) && (
           <div className="max-w-3xl">
+            {editMode ? (
+              <EditableInlineText
+                slug={slug}
+                path={['headline']}
+                value={plan.headline}
+                placeholder={plan.quarter.theme ?? t('strategy.headlinePlaceholder')}
+                editMode={editMode}
+                onCommit={() => stampBlock('headline')}
+                className="text-ink font-semibold text-base leading-relaxed mt-3"
+              />
+            ) : (
+              (plan.headline ?? plan.quarter.theme) && (
+                <p className="text-ink font-semibold mt-3 text-base leading-relaxed">
+                  {plan.headline ?? plan.quarter.theme}
+                </p>
+              )
+            )}
             {editMode ? (
               <EditableInlineTextarea
                 slug={slug}
@@ -375,12 +380,14 @@ export default function StrategyView() {
                 editMode={editMode}
                 rows={3}
                 onCommit={() => stampBlock('hero')}
-                className="text-ink-muted text-base leading-relaxed"
+                className="text-ink-muted text-base leading-relaxed mt-1"
               />
             ) : (
-              <p className="text-ink-muted mt-3 text-base leading-relaxed">
-                {plan.strategy}
-              </p>
+              plan.strategy && (
+                <p className="text-ink-muted mt-1 text-base leading-relaxed">
+                  {plan.strategy}
+                </p>
+              )
             )}
           </div>
         )}

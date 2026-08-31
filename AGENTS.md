@@ -77,7 +77,17 @@ next deploy.
    `deploy-staging/api/` in the same push, or the feature 500s/looks broken in
    production.
 
-6. **Don't leave secrets or env-specific values in source.** Build-time config
+6. **Non-trivial UI changes need human design approval before they merge into
+   `experimental`.** Run the feature branch locally, screenshot every changed
+   screen and state with real client data, send the images to Martin, and wait
+   for an explicit yes. Exempt: non-UI work, pure copy fixes, single-token
+   color/spacing/icon nudges. When unsure, screenshot - it costs minutes, and
+   staging is where behavior is tested, not where a design is seen for the
+   first time. Full policy: "UI Design Approval Policy" in
+   `08_Processes/Software development Process/process-decisions.md`
+   (under `C:/Users/Admin/gfinnov.com/GF Innov Team - General/`).
+
+7. **Don't leave secrets or env-specific values in source.** Build-time config
    (like the API base URL) comes from the CI workflow's `env:`, not from a
    committed `.env`. (`.env.staging` only carries `VITE_PB_URL`.)
 
@@ -158,6 +168,9 @@ grep -l "api/v1" app-dist/assets/api-client*.js   # match = API mode = good
 - [ ] Lint is no worse than before: `cd app-v2 && npx eslint <changed files>`
 - [ ] API typechecks: `cd deploy-staging/api && npx tsc --noEmit`
 - [ ] Any new UI that calls the API has its **route committed** too.
+- [ ] **Non-trivial UI change: design approved by a human.** Screenshots from
+      the branch running locally (real client data, desktop + mobile if layout
+      changed) were sent to Martin and he said yes. See section 2 rule 6.
 - [ ] You've read what you're about to overwrite/delete and it matches your
       expectation.
 - [ ] Everything is **committed** (no "I'll commit later").

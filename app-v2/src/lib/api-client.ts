@@ -14,7 +14,7 @@ import type {
   Learnings,
   ClientIndex,
   ClientIndexEntry,
-  Performance,
+  ClientAnalytics,
   Post,
   Channel,
   PostStatus,
@@ -252,12 +252,22 @@ export async function apiLoadClientIndex(): Promise<ClientIndex> {
   return { clients: r.items.map((c) => ({ ...c, status: c.status || 'active' })) }
 }
 
-export async function apiLoadPerformance(slug: string): Promise<Performance | null> {
-  try {
-    return await apiGet<Performance>(`/clients/${slug}/performance`)
-  } catch {
-    return null
-  }
+// GF-113 — real analytics, read from the server-side cache.
+//
+// NOTE the deliberate asymmetry with every other loader in this file: this one
+// does NOT swallow errors into `null`. The whole point of the endpoint is that it
+// always returns a well-formed payload with an explicit `status`, so a thrown
+// error here means the API itself is unreachable — which the tab must show as an
+// error, not as an empty Performance tab. Collapsing it to `null` would recreate
+// the exact ambiguity GF-113 exists to remove.
+export async function apiLoadAnalytics(slug: string): Promise<ClientAnalytics> {
+  return await apiGet<ClientAnalytics>(`/clients/${slug}/analytics`)
+}
+
+/** Trigger one client's analytics sync. Rate-limited server-side (6 per 5 min per
+ *  client) because each call spends real, unmeasurable Postiz quota. */
+export async function apiSyncAnalytics(slug: string): Promise<ClientAnalytics> {
+  return apiSend<ClientAnalytics>('POST', `/clients/${slug}/analytics/sync`, {})
 }
 
 export async function apiLoadPosts(slug: string): Promise<Post[]> {
@@ -899,6 +909,8 @@ export async function apiLoadAgentJobs(
 
 // ── GF-4: Content Creation review links (collaboration layer) ────────────────
 
+export type ReviewLinkView = 'content' | 'strategy'
+
 export interface ReviewLink {
   id: string
   publicId: string
@@ -907,6 +919,12 @@ export interface ReviewLink {
   rangeEnd: string
   /** GF-42 — selected month keys (YYYY-MM); empty = all months in the range. */
   months: string[]
+  /**
+   * GF-105 — which kind of review this link is for. 'content' shows the
+   * finished creative (the original behaviour); 'strategy' shows the text-only
+   * plan. Chosen by the sharer at creation and fixed for the life of the link.
+   */
+  view: ReviewLinkView
   status: 'active' | 'revoked'
   state: 'active' | 'revoked' | 'expired'
   expiresAt: string | null
@@ -944,7 +962,14 @@ export interface ReviewEvent {
 
 export async function apiCreateReviewLink(
   slug: string,
-  body: { title?: string; rangeStart: string; rangeEnd: string; months?: string[]; ttlDays?: number },
+  body: {
+    title?: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    view?: ReviewLinkView
+    ttlDays?: number
+  },
 ): Promise<ReviewLink> {
   return apiSend<ReviewLink>('POST', `/clients/${slug}/review-links`, body)
 }
@@ -1027,10 +1052,26 @@ export interface ReviewFeedbackComment {
   status?: 'open' | 'resolved'
   source: 'reviewer' | 'dashboard'
   createdAt?: string
+  /**
+   * GF-106 — which kind of review link this feedback came from, so the
+   * dashboard can split "what the client said about the posts" from "what they
+   * said about the strategy". OPTIONAL on purpose: an API that predates GF-106
+   * omits it entirely, and absent must be read as 'content' so the panel keeps
+   * rendering every row instead of blanking.
+   */
+  view?: ReviewLinkView
+}
+
+export interface ReviewFeedbackDecision {
+  decision: 'approved' | 'changes_requested' | string
+  reviewerName: string
+  createdAt: string
+  /** GF-106 — see ReviewFeedbackComment.view. Absent means 'content'. */
+  view?: ReviewLinkView
 }
 
 export interface ReviewPostFeedback {
-  decisions: { decision: 'approved' | 'changes_requested' | string; reviewerName: string; createdAt: string }[]
+  decisions: ReviewFeedbackDecision[]
   comments: ReviewFeedbackComment[]
 }
 
@@ -1056,7 +1097,10 @@ export async function apiLoadReviewFeedback(slug: string): Promise<ReviewFeedbac
 export interface PublicReviewPost {
   id: string
   date: string
+  /** Primary channel. Equals `channels[0]` when `channels` is present. */
   channel?: string
+  /** GF-105 — every target platform, not only the primary one. */
+  channels?: string[]
   format?: string
   pillar?: string
   campaign?: string
@@ -1064,10 +1108,18 @@ export interface PublicReviewPost {
   copy?: string
   hashtags?: string[]
   cta?: string
+  // GF-105 — every image-bearing field is optional because the API strips them
+  // server-side for a strategy link, leaving only the captions behind. Nothing
+  // here may be assumed present; a content link still populates them as before.
   image?: string
-  slides?: Array<{ image: string; caption?: string }>
-  media?: PostMedia[]
+  slides?: Array<{ image?: string; caption?: string }>
+  media?: PublicReviewMedia[]
   statusLabel?: string
+}
+
+/** Like PostMedia, but `url` is absent on a strategy link (stripped by the API). */
+export interface PublicReviewMedia extends Omit<PostMedia, 'url'> {
+  url?: string
 }
 
 export interface PublicReviewBrand {
@@ -1088,7 +1140,14 @@ export interface PublicReviewPayload {
   expiresAt?: string
   reviewerName: string
   canApprove: boolean
-  link: { title: string; rangeStart: string; rangeEnd: string; months?: string[] }
+  link: {
+    title: string
+    rangeStart: string
+    rangeEnd: string
+    months?: string[]
+    /** GF-105 — absent on an un-upgraded API response; treat as 'content'. */
+    view?: ReviewLinkView
+  }
   brand?: PublicReviewBrand
   // GF-92 (B/E) — optional so an older/un-upgraded API response never blanks
   // the AI-generated badge for external reviewers; absent => treat as true.

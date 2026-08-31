@@ -1,6 +1,6 @@
 ---
 name: post-drafting
-description: Draft brand-voice social posts from a brief, idea, or user prompt. Handles angle selection, boundary-safe reframing, image selection/generation, and creation of in-review posts for approval.
+description: Draft brand-voice social posts from a brief, idea, or user prompt. Always loads the client's approved information sources as factual grounding first. Handles angle selection, boundary-safe reframing, image selection/generation, and creation of in-review posts for approval.
 trigger:
   - telegram: "^(create|draft|new post|make a post)\\b.*$"
   - telegram: "^(about|write about|post about)\\b.*$"
@@ -18,8 +18,18 @@ Create a post that sounds like the brand, stays inside the client's boundaries, 
 
 - `brief.json` for voice, audience, boundaries, and allowed topics.
 - `plan.json` for pillars, campaigns, and current quarter focus.
+- **`GET /clients/$CLIENT_SLUG/information-sources?approved=true` — non-negotiable,
+  every draft.** The documents the client uploaded through the dashboard's Assets
+  tab for you to write from: brand guidelines, product facts, transcripts, press
+  releases. Full text is in each item's `summary`, the name in `title`, and how to
+  use it in `prompt`. Where a source disagrees with what you assumed about the
+  client, the source wins — take names, numbers, dates and product claims from its
+  wording rather than from memory. An empty list is a fine answer; skipping the
+  call is not, and you must never tell a user a document does not exist without
+  having made it. One call per conversation, then reuse it.
 - `posts/index.json` and nearby `posts/*.json` to avoid duplicates.
-- `assets/manifest.json` to reuse approved images/logos before generating anything new.
+- `assets/manifest.json` to reuse approved images/logos before generating anything
+  new. This is the IMAGE store — it is not where information sources live.
 - **Language note:** Interact with the user in the user's own language, but draft the marketing output in the language the client brief specifies (unless explicitly told otherwise).
 
 > Client-specific strategy references (if any) live in the client skills folder
@@ -32,6 +42,10 @@ Create a post that sounds like the brand, stays inside the client's boundaries, 
 3. **Stay on-voice.** Direct, specific, calm — as the brand voice dictates.
 4. **Use one clear angle.** One idea, one workflow, one takeaway.
 5. **Prefer narrow, real examples over broad claims.**
+6. **Always describe the visual.** Every post ships with a one-line caption of
+   what the viewer will see (see "Visual captions" below). It is a required
+   field, not a nice-to-have — a client signs off the plan from it before any
+   image or video exists.
 
 ## Drafting modes
 
@@ -74,6 +88,44 @@ Reframe to a safe adjacent topic when possible:
 
 A good reframing keeps the structure but changes the topic from identity to workflow.
 
+## Visual captions (required on every post)
+
+A post is not draftable-complete until the visual is described in words. Write
+the caption when you draft the copy, BEFORE the image or video is generated —
+the client reviews the plan (pillar, format, platforms, visual, date) and signs
+it off before creative is produced. If there is no caption, the reviewer sees
+the post copy instead, which tells them nothing about the visual.
+
+Where it goes depends on the format:
+
+| Post format | Field | How many |
+|---|---|---|
+| carousel | `slides[].caption` | one per slide, cover included |
+| single image / story | `media[].caption` | one, on the image entry |
+| video / reel | `media[].caption` | one, on the video entry |
+
+`slides[]` entries are `{image, caption}`; `media[]` entries are
+`{type, url, caption}` with `type` either `image` or `video`. Both objects are
+strict on the API — a typo'd key 422s the whole write, so do not invent field
+names.
+
+**The caption describes the picture, not the copy.** Name the subject, the shot,
+and what is on screen. One literal sentence.
+
+- Good: "Split screen: the old six-tab spreadsheet on the left, the single
+  planner view on the right, brand green line down the middle."
+- Good: "Close crop of the shop-floor terminal mid-scan, hands in frame, logo
+  bottom right."
+- Bad: "An image about saving time with automation." (nothing checkable)
+- Bad: "Stop losing hours to spreadsheets." (that is the copy, not the visual)
+
+On a carousel every slide caption must be different and must describe that
+slide. "Slide 3" or a repeat of the cover caption is not a caption.
+
+The caption is also the design brief you hand to `image-generation` /
+`video-generation`. Generating first and captioning afterwards inverts the
+review order — write it first, then generate against it.
+
 ## Image guidance
 
 If the post needs a visual:
@@ -104,8 +156,9 @@ When the user says to attach a visual to an existing draft (for example, "add it
 1. Update the existing `posts/pNNN.json` in place rather than creating a new post.
 2. Keep the current draft status unless the copy/title/campaign also changes.
 3. Set the post's `image` field to the new asset path or URL.
-4. Add or update the asset entry in `assets/manifest.json` and mark `usedInPosts` with the existing post id.
-5. Verify both the post JSON and the manifest after the write.
+4. Set the matching caption too: `media[0].caption` for a single image or video, or the `slides[].caption` of the slide you replaced. A visual swapped in without its caption leaves the review page with nothing to describe.
+5. Add or update the asset entry in `assets/manifest.json` and mark `usedInPosts` with the existing post id.
+6. Verify both the post JSON and the manifest after the write.
 
 ## File workflow
 
@@ -117,8 +170,10 @@ When drafting a new post on disk/API:
 1. Create the post via the API (e.g. `POST /clients/$CLIENT_SLUG/posts`). If on disk, create `posts/pNNN.json`.
 2. Set `status` to `in_review`.
 3. Provide the full payload in the API request, including `copy`, `date`, `title`, `channel`, `campaign`, etc.
-4. If an image is generated, do **not** try to write directly to `manifest.json` if you don't have permissions. Use the API (e.g. `PATCH /clients/$CLIENT_SLUG/posts/pNNN`) to update the post with the generated image URL if direct file access fails.
-5. Provide the draft and the image link directly in the chat for the user to review.
+4. **Include the visual caption in the same payload.** Carousel: `slides: [{image, caption}, ...]` with a caption on every slide. Single image, story, or video: `media: [{type, url, caption}]`. If the asset does not exist yet, still write the caption — send the `media`/`slides` entry once you have the URL, and never leave the entry captionless.
+5. If an image is generated, do **not** try to write directly to `manifest.json` if you don't have permissions. Use the API (e.g. `PATCH /clients/$CLIENT_SLUG/posts/pNNN`) to update the post with the generated image URL if direct file access fails.
+6. **After any tool wires an asset for you, re-check the caption.** `image_generate(post_id=)` PATCHes only the post's `image`, and `video_generate(post_id=)` appends a `media[]` entry with no caption. Neither tool writes one, so the caption you wrote in step 4 is what carries the visual — that is the point of writing it first. Only if it is genuinely missing, PATCH it on now, sending `media`/`slides` as whole arrays (a partial array drops the other entries).
+7. Provide the draft and the image link directly in the chat for the user to review.
 
 ## Approval handoff
 

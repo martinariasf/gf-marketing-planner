@@ -29,6 +29,10 @@ import {
   getReviewSession,
   parseMonthSelection,
   monthInSelection,
+  parseLinkView,
+  stripVisuals,
+  resolveBrand,
+  type PublicBrand,
   type ReviewLinkRecord,
   type ReviewSession,
 } from '../reviewLib.js'
@@ -74,30 +78,27 @@ function deny(c: Context) {
 
 /**
  * Display-only brand block so the reviewer page can render platform mockups.
- * Reads ONLY the client identity fields from plan.json — never brief, goals,
- * strategy or any other planning content.
+ * Reads ONLY the client identity fields — the PocketBase client record first,
+ * then plan.json. Never brief, goals, strategy or any other planning content.
  */
-async function buildBrand(slug: string): Promise<{ name: string; handle: string; logoInitials: string }> {
-  const fallback = {
-    name: slug,
-    handle: `@${slug}`,
-    logoInitials: slug.slice(0, 2).toUpperCase(),
-  }
-  try {
-    const plan = (await disk.plan(slug)) as { client?: Record<string, unknown> } | null
-    const client = plan?.client
-    if (!client || typeof client !== 'object') return fallback
-    return {
-      name: typeof client.name === 'string' && client.name ? client.name : fallback.name,
-      handle: typeof client.handle === 'string' && client.handle ? client.handle : fallback.handle,
-      logoInitials:
-        typeof client.logoInitials === 'string' && client.logoInitials
-          ? client.logoInitials
-          : fallback.logoInitials,
-    }
-  } catch {
-    return fallback
-  }
+async function buildBrand(slug: string): Promise<PublicBrand> {
+  // GF-108 — PocketBase is the source of truth for the client's display name;
+  // plan.json on disk had drifted and was showing one client another client's
+  // name. Both lookups are independent and neither is fatal: a disk-only client
+  // has no PB record (the SDK throws 404), and a PB-only client has no plan.
+  const [pbClient, planClient] = await Promise.all([
+    withPb((pb) =>
+      pb.collection('clients').getFirstListItem<Record<string, unknown>>(`slug="${slug}"`),
+    ).catch(() => null),
+    disk
+      .plan(slug)
+      .then((plan) => {
+        const client = (plan as { client?: unknown } | null)?.client
+        return client && typeof client === 'object' ? (client as Record<string, unknown>) : null
+      })
+      .catch(() => null),
+  ])
+  return resolveBrand({ slug, pbClient, planClient })
 }
 
 /** Latest per-post reviewer decision for a link, derived from review_events. */
@@ -144,9 +145,12 @@ async function listSharedPosts(link: ReviewLinkRecord) {
 
 /** Sanitized, reviewer-safe payload for a link's shared content + comments. */
 async function buildReviewPayload(link: ReviewLinkRecord) {
-  const posts = (await listSharedPosts(link)).map((p) =>
-    sanitizePost(p as Record<string, unknown>),
-  )
+  // GF-105 — a strategy link is a plan review, not a creative review: strip
+  // every image URL here, server-side, so no artwork ever reaches the reviewer.
+  const view = parseLinkView(link.view)
+  const posts = (await listSharedPosts(link))
+    .map((p) => sanitizePost(p as Record<string, unknown>))
+    .map((p) => (view === 'strategy' ? stripVisuals(p) : p))
   let comments: Array<Record<string, unknown>> = []
   try {
     const rows = await withPb((pb) =>
@@ -178,6 +182,7 @@ async function buildReviewPayload(link: ReviewLinkRecord) {
       rangeStart: link.rangeStart,
       rangeEnd: link.rangeEnd,
       months: parseMonthSelection(link.months),
+      view,
     },
     brand,
     // GF-92 (B) — hand-pick ONLY the reviewer-safe field. autoScheduleOnApprove

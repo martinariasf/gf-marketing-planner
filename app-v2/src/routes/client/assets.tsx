@@ -253,7 +253,7 @@ export default function AssetsView() {
             </TabsTrigger>
             <TabsTrigger value="information" className="flex items-center gap-1.5">
               <Globe2 className="h-3.5 w-3.5" />
-              Information Sources
+              {t('assets.folderInformation')}
             </TabsTrigger>
             <TabsTrigger value="brandkit" className="flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5" />
@@ -294,7 +294,7 @@ export default function AssetsView() {
               <Card>
                 <CardContent className="p-10 text-center text-ink-muted">
                   <Globe2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">Information Sources require the staging API.</p>
+                  <p className="text-sm">{t('assets.infoApiRequired')}</p>
                 </CardContent>
               </Card>
             )}
@@ -808,7 +808,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
     url: '',
     sourceType: 'website' as InformationSourceType,
     summary: '',
-    prompt: 'Use this approved source as factual context for post generation. Show source references.',
+    prompt: t('assets.info.defaultPrompt'),
   })
 
   const load = useCallback(() => {
@@ -844,10 +844,10 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
         url: '',
         sourceType: 'website',
         summary: '',
-        prompt: 'Use this approved source as factual context for post generation. Show source references.',
+        prompt: t('assets.info.defaultPrompt'),
       })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save source')
+      toast.error(err instanceof Error ? err.message : t('assets.info.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -861,7 +861,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
       setItems((cur) => cur.map((it) => (it.id === item.id ? updated : it)))
     } catch (err) {
       setItems(prev)
-      toast.error(err instanceof Error ? err.message : 'Could not update source')
+      toast.error(err instanceof Error ? err.message : t('assets.info.updateFailed'))
     }
   }
 
@@ -870,7 +870,7 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
       const updated = await apiApproveInformationSource(slug, item.id)
       setItems((cur) => cur.map((it) => (it.id === item.id ? updated : it)))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not approve source')
+      toast.error(err instanceof Error ? err.message : t('assets.info.approveFailed'))
     }
   }
 
@@ -894,9 +894,9 @@ function InformationSourcesBoard({ slug }: { slug: string }) {
           const item = await apiUploadInformationSourceFile(slug, file)
           setItems((cur) => [item, ...cur])
         }
-        toast(accepted.length === 1 ? 'Source uploaded.' : `${accepted.length} sources uploaded.`)
+        toast(accepted.length === 1 ? t('assets.sourceUploaded') : t('assets.sourcesUploaded', { n: accepted.length }))
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Upload failed')
+        toast.error(err instanceof Error ? err.message : t('assets.uploadFailedGeneric'))
       } finally {
         setUploading(false)
       }

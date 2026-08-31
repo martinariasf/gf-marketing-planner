@@ -39,6 +39,12 @@ services:
       # config.yaml extra.key). Until the prod agent exists, leave chat disabled.
       HERMES_BASE_URL: "${HERMES_BASE_URL:-}"
       HERMES_API_KEY: "${HERMES_API_KEY:-}"
+      # Absolute external base URL the API uses when building attachment file
+      # URLs sent to the agent (GF-68), and — since GF-123 — the origin the
+      # OpenAPI spec advertises in its `servers` list. The live box already had
+      # this set by hand; without the mapping here a CI redeploy would drop it
+      # and prod's spec would fall back to localhost.
+      PUBLIC_API_BASE: "${PUBLIC_API_BASE:-https://marketing.gfinnov.com/api/v1}"
       # AES-256-GCM key for integration secrets at rest (GF-11), e.g. the Postiz
       # API key. If empty the secret is stored UNENCRYPTED (with a warning), so
       # set INTEGRATION_SECRET_KEY in the box-only .env. See api/src/secrets.ts.

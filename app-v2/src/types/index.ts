@@ -10,12 +10,16 @@ export type {
   StrategicPriority,
 } from './plan'
 export type { Goals, QuarterlyGoal, MonthlyGoalRef, WeeklyFocus } from './goals'
+// GF-113 — the real, label-driven analytics contract that replaces `Performance`.
 export type {
-  Performance,
-  PostMetrics,
-  GoalProgress,
-  WeeklySummary,
-} from './performance'
+  AnalyticsStatus,
+  MetricPoint,
+  MetricSeries,
+  AnalyticsChannel,
+  RemotePostState,
+  AnalyticsPost,
+  ClientAnalytics,
+} from './analytics'
 export type { Post, PostStatus, Channel, PostMedia, PostMediaType } from './post'
 export type { Learning, Learnings } from './learning'
 export type { ApprovalLogEntry, ApprovalAction } from './approval'

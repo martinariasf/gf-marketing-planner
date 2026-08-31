@@ -123,10 +123,26 @@ jobs:
           # overwriting it with the repo seed erased those rows on every deploy
           # (bit prod on 2026-06-26 and again 2026-07-03). --ignore-existing
           # still ships the seed manifest to a brand-new client dir.
+          # clients/index.json is NOT overwritten. It is UNION-MERGED by slug
+          # into the copy already on the box (repo entries win for slugs present
+          # in both; box-only slugs are preserved), same defensive shape as the
+          # manifest handling above. A catalog that shrinks — a conflict resolved
+          # toward experimental, a revert, a force-push — would otherwise un-list
+          # a LIVE client in prod on the next deploy while its data sits intact
+          # on disk. See deploy-prod/merge-client-index.mjs.
+          # The box has /usr/bin/node (v22.22.0, verified 2026-08-28); no jq.
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            deploy-prod/merge-client-index.mjs \
+            "$USER@$HOST:/opt/marketing-planner/merge-client-index.mjs"
           rsync -avz \
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
             clients/index.json \
-            "$USER@$HOST:/opt/marketing-planner/clients/index.json"
+            "$USER@$HOST:/opt/marketing-planner/index.repo.json"
+          # (staged OUTSIDE clients/ — that dir is bind-mounted into mp-prod-api
+          #  and served by the inner Caddy, so no stray file belongs in it)
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'node /opt/marketing-planner/merge-client-index.mjs /opt/marketing-planner/clients/index.json /opt/marketing-planner/index.repo.json'
           for dir in clients/*/; do
             slug=$(basename "$dir")
             rsync -avz \

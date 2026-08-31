@@ -103,15 +103,19 @@ clients.get('/clients/:slug', requireScope(), async (c) => {
   const slug = c.req.param('slug')
   const all = await clientList()
   const summary = all.find((r) => r.slug === slug) ?? null
-  const [brief, plan, goals, learnings, suggestions, performance, manifest] = await Promise.all([
+  // GF-113: `performance` is no longer part of the bundle. It served the mock
+  // performance.json, which is deleted. Analytics are a separate, cached read
+  // (GET /clients/:slug/analytics) because they have their own freshness and
+  // their own status, and folding them in here would make every client-bundle
+  // fetch look like it had fresh numbers when it does not.
+  const [brief, plan, goals, learnings, suggestions, manifest] = await Promise.all([
     disk.brief(slug),
     disk.plan(slug),
     disk.goals(slug),
     disk.learnings(slug),
     disk.suggestions(slug),
-    disk.performance(slug),
     // GF-64: same merged manifest as /assets/manifest (derived rows included).
     buildMergedManifest(slug),
   ])
-  return c.json({ summary, brief, plan, goals, learnings, suggestions, performance, manifest })
+  return c.json({ summary, brief, plan, goals, learnings, suggestions, manifest })
 })

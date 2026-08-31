@@ -115,13 +115,17 @@ integration.get(
       openapiUrl,
       docsUrl,
       // Most-used endpoints, called out so an agent doesn't have to infer them.
-      // `sourceMaterial` is the "source material for post generation" surface
-      // (information_sources) — POST here to feed the planner factual grounding.
+      // The "source material for post generation" surface (information_sources)
+      // runs BOTH directions, and the read is the one agents miss (GF-116):
+      // `readSourceMaterial` returns what a HUMAN uploaded in the dashboard's
+      // Assets tab for the agent to write from; `sourceMaterial` POSTs the
+      // agent's own grounding back.
       endpoints: {
         readClient: `${apiBase}/clients/${slug}`,
         listPosts: `${apiBase}/clients/${slug}/posts`,
         createPost: `${apiBase}/clients/${slug}/posts`,
         setApproval: `${apiBase}/clients/${slug}/approvals`,
+        readSourceMaterial: `${apiBase}/clients/${slug}/information-sources?approved=true`,
         sourceMaterial: `${apiBase}/clients/${slug}/information-sources`,
         sourceMaterialUpload: `${apiBase}/clients/${slug}/information-sources/upload`,
       },
@@ -129,7 +133,10 @@ integration.get(
         `You are integrating with the GF Marketing Planner REST API for client "${slug}". ` +
         `Send "${`Authorization: Bearer ${agentToken ?? '<token>'}`}" on every request. ` +
         `Read ${openapiUrl} for the full, machine-readable route list and schemas. ` +
-        `To add source material for post generation, POST JSON {"title": "...", "summary": "...", "approved": true} ` +
+        `BEFORE drafting any copy, GET ${apiBase}/clients/${slug}/information-sources?approved=true — those are documents a human ` +
+        `uploaded through the dashboard for you to use as factual grounding. The full text of each is in its "summary" field, and ` +
+        `they outrank your own assumptions about this client. An empty list is a fine answer; not calling it is not. ` +
+        `To add source material of your own, POST JSON {"title": "...", "summary": "...", "approved": true} ` +
         `to ${apiBase}/clients/${slug}/information-sources (or upload a text file to .../information-sources/upload). ` +
         `Strategy docs (brief/plan/goals/learnings) are read-only for agents.`,
     }
