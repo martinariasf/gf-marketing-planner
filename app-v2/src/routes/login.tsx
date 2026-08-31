@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useLocation } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { GFLogo } from '@/components/gf-logo'
@@ -15,6 +15,8 @@ import { useT } from '@/lib/i18n'
 export default function Login() {
   const t = useT()
   const navigate = useNavigate()
+  const location = useLocation()
+  const expired = Boolean((location.state as { expired?: boolean } | null)?.expired)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +48,12 @@ export default function Login() {
             </p>
           </div>
         </div>
+
+        {expired && (
+          <p className="text-sm text-amber-800 bg-amber-50/60 border border-amber-200 rounded-md px-3 py-2">
+            {t('login.sessionExpired')}
+          </p>
+        )}
 
         <Card>
           <CardContent className="p-6">

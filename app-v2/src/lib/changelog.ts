@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-31',
+    title: 'A stale session now sends you back to login instead of a broken page',
+    items: [
+      'If your dashboard session was rejected by the server, you used to land on a broken red error card on the home page and had to know to reload it yourself. You now get sent straight to the login screen with a plain "your session expired, please sign in again" message, wherever in the dashboard it happened.',
+      'A brief hiccup on our end that made the server temporarily unreachable used to look identical to a bad session and could sign everyone out at once. The two are now told apart, so a passing server blip no longer logs anyone out.',
+    ],
+  },
+  {
     date: '2026-08-30',
     title: 'Upload your own video to a post',
     items: [

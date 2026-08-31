@@ -175,19 +175,25 @@ function authHeaders(extra: Record<string, string> = {}): HeadersInit {
   return h
 }
 
-// Wraps a fetch with the current bearer token. A 401 means the token is
-// missing/expired/revoked: drop the session so the app's auth gate routes the
-// user back to the login screen on the next render. Anything else surfaces
+// GF-126 — shared 401 handling. A 401 means the token is missing/expired/
+// revoked: drop the session and tell the rest of the app (via a window event
+// a router-mounted listener subscribes to) so it can redirect to /login
+// instead of leaving a stale, broken screen up. Anything else surfaces
 // normally so callers can show the real error.
+function handle401(res: Response, path: string): void {
+  if (res.status !== 401) return
+  console.warn('[api] 401 — clearing session', path)
+  clearSession()
+  window.dispatchEvent(new CustomEvent('mp:session-expired'))
+}
+
+// Wraps a fetch with the current bearer token.
 async function authedFetch(path: string, init: RequestInit): Promise<Response> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: { ...(init.headers as Record<string, string> | undefined), ...authHeaders() },
   })
-  if (res.status === 401) {
-    console.warn('[api] 401 — clearing session', path)
-    clearSession()
-  }
+  handle401(res, path)
   return res
 }
 
@@ -709,6 +715,7 @@ export async function* apiChatStream(args: {
     }),
     signal: args.signal,
   })
+  handle401(res, `/clients/${args.slug}/chat/stream`)
   if (!res.ok || !res.body) {
     yield { type: 'error', detail: `Chat ${res.status}` }
     return
