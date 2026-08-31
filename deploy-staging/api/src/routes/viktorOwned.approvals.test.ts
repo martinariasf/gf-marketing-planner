@@ -32,7 +32,7 @@ class FakeSchedulingError extends Error {
   }
 }
 
-let fakeSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false }
+let fakeSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
 let scheduleImpl: (
   slug: string,
   current: Record<string, unknown>,
@@ -58,7 +58,7 @@ let currentPost: Record<string, unknown> = {
 mock.module('../orgSettings.js', {
   namedExports: {
     loadOrgSettings: async () => ({ ...fakeSettings }),
-    DEFAULTS: { showAiGeneratedLabel: true, autoScheduleOnApprove: false },
+    DEFAULTS: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' },
   },
 })
 mock.module('../scheduling/sync.js', {

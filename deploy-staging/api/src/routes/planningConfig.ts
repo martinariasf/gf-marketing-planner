@@ -4,7 +4,12 @@ import { audit } from '../audit.js'
 import { requireAuth, requireRole, requireScope, type AppEnv } from '../auth.js'
 import { withPb } from '../pb.js'
 import { problem } from '../problem.js'
-import { loadOrgSettings, DEFAULTS as ORG_SETTINGS_DEFAULTS, type OrgSettings } from '../orgSettings.js'
+import {
+  loadOrgSettings,
+  DEFAULTS as ORG_SETTINGS_DEFAULTS,
+  isValidIanaTimezone,
+  type OrgSettings,
+} from '../orgSettings.js'
 import { isTextUpload } from '../textUpload.js'
 
 export type CalendarRange = {
@@ -121,13 +126,15 @@ function validateOrgSettings(data: unknown): OrgSettings | null {
   if (!data || typeof data !== 'object') return null
   const raw = data as Record<string, unknown>
   const keys = Object.keys(raw)
-  const allowed = new Set(['showAiGeneratedLabel', 'autoScheduleOnApprove'])
+  const allowed = new Set(['showAiGeneratedLabel', 'autoScheduleOnApprove', 'timezone'])
   if (keys.some((k) => !allowed.has(k))) return null
   if (typeof raw.showAiGeneratedLabel !== 'boolean') return null
   if (typeof raw.autoScheduleOnApprove !== 'boolean') return null
+  if (!isValidIanaTimezone(raw.timezone)) return null
   return {
     showAiGeneratedLabel: raw.showAiGeneratedLabel,
     autoScheduleOnApprove: raw.autoScheduleOnApprove,
+    timezone: raw.timezone,
   }
 }
 
@@ -148,7 +155,7 @@ planningConfig.put(
       return problem(c, {
         title: 'Unprocessable Entity',
         status: 422,
-        detail: `Settings must include exactly showAiGeneratedLabel and autoScheduleOnApprove as booleans (defaults: ${JSON.stringify(ORG_SETTINGS_DEFAULTS)}).`,
+        detail: `Settings must include exactly showAiGeneratedLabel and autoScheduleOnApprove as booleans, plus timezone as a valid IANA time zone name (defaults: ${JSON.stringify(ORG_SETTINGS_DEFAULTS)}).`,
       })
     }
     const actor = principalLabel(c)

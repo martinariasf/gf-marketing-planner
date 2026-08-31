@@ -104,6 +104,8 @@ const en: Dict = {
   'config.aiLabel.info':         'When on, posts and media that Viktor created carry a small "AI generated" label in the Instagram/LinkedIn previews and in the external review page. When off, the label is hidden everywhere.',
   'config.autoSchedule.title':   'Auto-program on approval',
   'config.autoSchedule.info':    'When on, approving a post immediately programs it and sends it to your connected publishing tool. When off, approval only marks the post ready — you still choose when to program it.',
+  'config.timezone.title':       'Time zone',
+  'config.timezone.info':        'The calendar and approvals use this time zone to decide what "today" means for this client — for example, whether a post dated for today can still be approved or programmed. Defaults to UTC until you set it.',
   'config.saved':                'Setting saved',
   'config.saveFailed':           'Could not save this setting',
 
@@ -1034,6 +1036,8 @@ const de: Dict = {
   'config.aiLabel.info':         'Wenn aktiviert, tragen von Viktor erstellte Beiträge und Medien eine kleine „KI-generiert"-Kennzeichnung in den Instagram-/LinkedIn-Vorschauen und in der externen Review-Seite. Wenn deaktiviert, wird die Kennzeichnung überall ausgeblendet.',
   'config.autoSchedule.title':   'Automatisch programmieren bei Freigabe',
   'config.autoSchedule.info':    'Wenn aktiviert, wird ein freigegebener Beitrag sofort programmiert und an dein verbundenes Veröffentlichungs-Tool gesendet. Wenn deaktiviert, markiert die Freigabe den Beitrag nur als bereit — du entscheidest weiterhin selbst, wann er programmiert wird.',
+  'config.timezone.title':       'Zeitzone',
+  'config.timezone.info':        'Kalender und Freigaben verwenden diese Zeitzone, um zu bestimmen, was „heute" für diesen Kunden bedeutet — zum Beispiel, ob ein für heute datierter Beitrag noch freigegeben oder programmiert werden kann. Standardmäßig UTC, bis du sie einstellst.',
   'config.saved':                'Einstellung gespeichert',
   'config.saveFailed':           'Diese Einstellung konnte nicht gespeichert werden',
   'nav.help':        'Hilfe · gfinnov.com',
@@ -1941,6 +1945,8 @@ const es: Dict = {
   'config.aiLabel.info':         'Cuando está activado, las publicaciones y medios creados por Viktor llevan una pequeña etiqueta "Generado por IA" en las vistas previas de Instagram/LinkedIn y en la página de revisión externa. Cuando está desactivado, la etiqueta se oculta en todas partes.',
   'config.autoSchedule.title':   'Programar automáticamente al aprobar',
   'config.autoSchedule.info':    'Cuando está activado, aprobar una publicación la programa de inmediato y la envía a tu herramienta de publicación conectada. Cuando está desactivado, la aprobación solo marca la publicación como lista — tú decides cuándo programarla.',
+  'config.timezone.title':       'Zona horaria',
+  'config.timezone.info':        'El calendario y las aprobaciones usan esta zona horaria para decidir qué significa "hoy" para este cliente — por ejemplo, si una publicación con fecha de hoy todavía se puede aprobar o programar. Por defecto es UTC hasta que la configures.',
   'config.saved':                'Ajuste guardado',
   'config.saveFailed':           'No se pudo guardar este ajuste',
 

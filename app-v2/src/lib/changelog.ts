@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-08-31',
+    title: 'New: a per-client time zone, so "today" means the client\'s today',
+    items: [
+      'The Configuration page has a new Time zone setting. It controls what "today" means for this client when approving or programming a post — for example, a post dated today for a client in Montevideo is no longer refused just because it is already tomorrow in UTC.',
+      'Existing clients keep working exactly as before: the time zone defaults to UTC until you change it.',
+    ],
+  },
+  {
     date: '2026-08-16',
     title: 'Posts dated today can be scheduled again',
     items: [

@@ -34,7 +34,30 @@ mock.module('./index.js', {
   },
 })
 
-const { refreshPublishStatus, applyStatusToSchedule } = await import('./sync.js')
+// GF-37 timezone follow-up — applyStatusToSchedule now loads the client's
+// configured timezone before checking isPastDate. Default to 'UTC' so every
+// pre-existing GF-37 test below (none of which touch timezone) keeps its
+// original, unchanged UTC-day behavior. Individual timezone tests overwrite
+// this before calling applyStatusToSchedule/isPastDate.
+let fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
+
+mock.module('../orgSettings.js', {
+  namedExports: {
+    loadOrgSettings: async () => fakeOrgSettings,
+    DEFAULTS: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' },
+    isValidIanaTimezone: (tz: unknown) => {
+      if (typeof tz !== 'string' || !tz.trim()) return false
+      try {
+        new Intl.DateTimeFormat(undefined, { timeZone: tz })
+        return true
+      } catch {
+        return false
+      }
+    },
+  },
+})
+
+const { refreshPublishStatus, applyStatusToSchedule, isPastDate } = await import('./sync.js')
 
 test('refreshPublishStatus polls when approval.status is scheduled but top-level status lags', async () => {
   const getStatus = mock.fn(async () => ({
@@ -173,6 +196,7 @@ function schedulingFake() {
 }
 
 test('GF-37: a date-only post dated today is schedulable', async () => {
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   const schedule = schedulingFake()
   const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(0) }
   const result = await applyStatusToSchedule('acme', current, 'scheduled')
@@ -181,6 +205,7 @@ test('GF-37: a date-only post dated today is schedulable', async () => {
 })
 
 test('GF-37: a date-only post dated tomorrow is schedulable', async () => {
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   const schedule = schedulingFake()
   const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(1) }
   await applyStatusToSchedule('acme', current, 'scheduled')
@@ -188,6 +213,7 @@ test('GF-37: a date-only post dated tomorrow is schedulable', async () => {
 })
 
 test('GF-37: a date-only post dated yesterday is rejected', async () => {
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   const schedule = schedulingFake()
   const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(-1) }
   await assert.rejects(
@@ -198,6 +224,7 @@ test('GF-37: a date-only post dated yesterday is rejected', async () => {
 })
 
 test('GF-37: a full-ISO timestamp keeps exact-instant comparison', async () => {
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   const schedule = schedulingFake()
   const past = { status: 'approved', approval: { status: 'approved' }, date: '2020-01-01T09:00:00Z' }
   await assert.rejects(() => applyStatusToSchedule('acme', past, 'scheduled'))
@@ -210,7 +237,64 @@ test('GF-37: a full-ISO timestamp keeps exact-instant comparison', async () => {
 })
 
 test('GF-37: a post with no date is still rejected', async () => {
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   schedulingFake()
   const current = { status: 'approved', approval: { status: 'approved' } }
   await assert.rejects(() => applyStatusToSchedule('acme', current, 'scheduled'))
+})
+
+// ── GF-37 follow-up: per-client timezone ────────────────────────────────────
+//
+// Both cases below use an EXPLICIT `now` (isPastDate's 4th param) rather than
+// the real wall clock, so they are deterministic regardless of when the test
+// suite actually runs — and both are constructed so the pre-fix, UTC-only
+// comparison gives the WRONG answer while the timezone-aware comparison gives
+// the right one.
+
+test('GF-37 timezone: a negative-offset client\'s "today" can already be UTC\'s "tomorrow" — must not be refused', () => {
+  // now = 2026-08-31T01:30:00Z. Uruguay has not observed DST since 2015, so
+  // America/Montevideo is a fixed UTC-3 year-round: local time at this instant
+  // is 2026-08-30T22:30, i.e. Montevideo's real "today" is Aug 30.
+  const now = new Date('2026-08-31T01:30:00Z')
+  const when = '2026-08-30'
+  const ts = new Date(when).getTime()
+
+  // The bug this closes: naive UTC comparison sees "today" as Aug 31 (from
+  // `now`), so a post dated Aug 30 reads as PAST and gets wrongly refused —
+  // exactly the residual documented in the old isPastDate() docstring.
+  assert.equal(isPastDate(when, ts, 'UTC', now), true, 'sanity: naive UTC would (wrongly) reject this')
+
+  // Timezone-aware: Montevideo's actual calendar day for `now` is Aug 30, so
+  // a post dated Aug 30 is TODAY for this client, not past — must be allowed.
+  assert.equal(isPastDate(when, ts, 'America/Montevideo', now), false)
+})
+
+test('GF-37 timezone: a positive-offset client\'s "today" can already be UTC\'s "yesterday" — must not be allowed', () => {
+  // now = 2026-08-31T23:30:00Z. Australia/Sydney is AEST (UTC+10, no DST in
+  // the southern-hemisphere winter month of August), so local time at this
+  // instant is 2026-09-01T09:30 — Sydney's real "today" is Sep 1, and Aug 31
+  // (still "today" by UTC's clock) is already YESTERDAY for this client.
+  const now = new Date('2026-08-31T23:30:00Z')
+  const when = '2026-08-31'
+  const ts = new Date(when).getTime()
+
+  // The bug this closes, in the opposite direction: naive UTC comparison
+  // sees "today" as Aug 31 (from `now`), so a post genuinely dated yesterday
+  // for the client reads as "today" and gets wrongly ALLOWED to schedule.
+  assert.equal(isPastDate(when, ts, 'UTC', now), false, 'sanity: naive UTC would (wrongly) allow this')
+
+  // Timezone-aware: Sydney's actual calendar day for `now` is Sep 1, so a
+  // post dated Aug 31 is genuinely in the past for this client — must reject.
+  assert.equal(isPastDate(when, ts, 'Australia/Sydney', now), true)
+})
+
+test('GF-37 timezone: an unset client timezone defaults to UTC end-to-end through applyStatusToSchedule', async () => {
+  // No explicit timezone configured (mirrors an existing client's org_configs
+  // row with no `settings.timezone` key — loadOrgSettings' DEFAULTS kicks in
+  // upstream of this call). Must behave exactly like the pre-timezone code.
+  fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
+  const schedule = schedulingFake()
+  const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(-1) }
+  await assert.rejects(() => applyStatusToSchedule('acme', current, 'scheduled'))
+  assert.equal(schedule.mock.calls.length, 0)
 })

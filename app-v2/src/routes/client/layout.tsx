@@ -58,6 +58,7 @@ import { useT } from '@/lib/i18n'
 import { useClient } from '@/hooks/use-client'
 import { useEdit, deepMerge } from '@/lib/edit-store'
 import type { ClientBundle } from '@/lib/client-data'
+import { setDateTimingTimezone } from '@/lib/planning-range'
 import { cn } from '@/lib/utils'
 
 // GF Innovative Solutions booking link (confirmed from gfinnov.com, 2026-06-19).
@@ -145,6 +146,17 @@ export default function ClientLayout() {
   useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname])
+
+  // GF-37 residual — keep dateTiming()'s active timezone in sync with this
+  // client's configured OrgSettings.timezone (mirrors LanguageProvider's
+  // setFormatLocale). Runs on every client switch/refetch so approving or
+  // scheduling always classifies past/today/future by the CLIENT's calendar
+  // day, not the browser's. Reset to undefined on unmount so a stale
+  // timezone can't leak into whichever client is viewed next.
+  useEffect(() => {
+    setDateTimingTimezone(mergedData?.settings.timezone)
+    return () => setDateTimingTimezone(undefined)
+  }, [mergedData?.settings.timezone])
 
   if (!slug) return <Navigate to="/fitvibe-demo/context" replace />
 

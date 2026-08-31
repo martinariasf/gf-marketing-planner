@@ -431,11 +431,18 @@ export async function apiSaveCalendarRange(
 export type OrgSettings = {
   showAiGeneratedLabel: boolean
   autoScheduleOnApprove: boolean
+  // GF-37 residual — per-client IANA timezone (e.g. "Europe/Berlin"), used to
+  // classify a post date as past/today/future by the CLIENT's calendar day
+  // instead of whoever happens to be viewing the dashboard. Defaults to
+  // "UTC" so an existing client that has never set this keeps exactly the
+  // UTC-based behavior it has today.
+  timezone: string
 }
 
 export const ORG_SETTINGS_DEFAULTS: OrgSettings = {
   showAiGeneratedLabel: true,
   autoScheduleOnApprove: false,
+  timezone: 'UTC',
 }
 
 export async function apiLoadOrgSettings(slug: string): Promise<OrgSettings> {

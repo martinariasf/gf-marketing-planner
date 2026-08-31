@@ -15,9 +15,20 @@ mock.module('../orgSettings.js', {
     loadOrgSettings: async () => ({
       showAiGeneratedLabel: true,
       autoScheduleOnApprove: false,
+      timezone: 'UTC',
       ...(storedSettings ?? {}),
     }),
-    DEFAULTS: { showAiGeneratedLabel: true, autoScheduleOnApprove: false },
+    DEFAULTS: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' },
+    // GF-37 follow-up — real implementation (no PB dependency to strip here).
+    isValidIanaTimezone: (tz: unknown) => {
+      if (typeof tz !== 'string' || !tz.trim()) return false
+      try {
+        new Intl.DateTimeFormat(undefined, { timeZone: tz })
+        return true
+      } catch {
+        return false
+      }
+    },
   },
 })
 mock.module('../audit.js', { namedExports: { audit: async () => {} } })
@@ -51,26 +62,35 @@ mock.module('../pb.js', {
 
 const { planningConfig } = await import('./planningConfig.js')
 
-test('GET /config/settings defaults showAiGeneratedLabel to true when unset', async () => {
+test('GET /config/settings defaults showAiGeneratedLabel and timezone when unset', async () => {
   storedSettings = undefined
   const res = await planningConfig.request('/clients/acme/config/settings', {
     headers: { Authorization: 'Bearer dash_test' },
   })
   const body = await res.json()
   assert.equal(res.status, 200)
-  assert.deepEqual(body.data, { showAiGeneratedLabel: true, autoScheduleOnApprove: false })
+  // GF-37 follow-up — an existing client that has never touched this screen
+  // must read back exactly 'UTC', proving the new field is additive and
+  // doesn't change behavior for anyone who hasn't set it.
+  assert.deepEqual(body.data, { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' })
 })
 
-test('PUT /config/settings with the dash role succeeds and persists both keys', async () => {
+test('PUT /config/settings with the dash role succeeds and persists all three keys', async () => {
   storedSettings = undefined
   const res = await planningConfig.request('/clients/acme/config/settings', {
     method: 'PUT',
     headers: { Authorization: 'Bearer dash_test', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: { showAiGeneratedLabel: false, autoScheduleOnApprove: true } }),
+    body: JSON.stringify({
+      data: { showAiGeneratedLabel: false, autoScheduleOnApprove: true, timezone: 'Europe/Berlin' },
+    }),
   })
   const body = await res.json()
   assert.equal(res.status, 200)
-  assert.deepEqual(body.data, { showAiGeneratedLabel: false, autoScheduleOnApprove: true })
+  assert.deepEqual(body.data, {
+    showAiGeneratedLabel: false,
+    autoScheduleOnApprove: true,
+    timezone: 'Europe/Berlin',
+  })
 
   // GF-92 Layer-5 review, finding 6 — the PUT response body alone doesn't
   // prove persistence (acceptance criterion 2: "survive reload"). Read the
@@ -81,7 +101,11 @@ test('PUT /config/settings with the dash role succeeds and persists both keys', 
   })
   const readBackBody = await readBack.json()
   assert.equal(readBack.status, 200)
-  assert.deepEqual(readBackBody.data, { showAiGeneratedLabel: false, autoScheduleOnApprove: true })
+  assert.deepEqual(readBackBody.data, {
+    showAiGeneratedLabel: false,
+    autoScheduleOnApprove: true,
+    timezone: 'Europe/Berlin',
+  })
 })
 
 test('PUT /config/settings rejects a missing/non-boolean key with 422', async () => {
@@ -94,12 +118,26 @@ test('PUT /config/settings rejects a missing/non-boolean key with 422', async ()
   assert.equal(res.status, 422)
 })
 
+test('PUT /config/settings rejects a made-up timezone name with 422', async () => {
+  storedSettings = undefined
+  const res = await planningConfig.request('/clients/acme/config/settings', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer dash_test', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'Not/A_Zone' },
+    }),
+  })
+  assert.equal(res.status, 422)
+})
+
 test('PUT /config/settings is forbidden for the agent role', async () => {
   storedSettings = undefined
   const res = await planningConfig.request('/clients/acme/config/settings', {
     method: 'PUT',
     headers: { Authorization: 'Bearer agent_test', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: { showAiGeneratedLabel: true, autoScheduleOnApprove: false } }),
+    body: JSON.stringify({
+      data: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' },
+    }),
   })
   assert.equal(res.status, 403)
 })
