@@ -171,6 +171,13 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    date: '2026-08-16',
+    title: 'Edited images update without a hard refresh',
+    items: [
+      'When Viktor edited an existing picture in place, your browser kept showing the old one for up to a day — pressing Reload could not help, because the address had not changed. Edited images now appear straight away.',
+    ],
+  },
+  {
     date: '2026-08-03',
     title: 'Status changes made by Viktor now show up on reload',
     items: [
