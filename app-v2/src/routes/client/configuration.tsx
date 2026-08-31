@@ -4,10 +4,11 @@
 // credential-facing; this one is dashboard-user-facing). Two toggles today,
 // both stored in org_configs.settings (see api-client.ts / client-data.ts).
 
-import { useMemo, useState } from 'react'
+import type { KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
 import { toast } from 'sonner'
-import { Sparkles, CalendarClock, Globe } from 'lucide-react'
+import { Sparkles, CalendarClock, Globe, Search, ChevronDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { InfoHint } from '@/components/ui/info-hint'
 import { cn } from '@/lib/utils'
@@ -189,10 +190,33 @@ function ToggleCard({
   )
 }
 
-// GF-37 residual — per-client timezone picker. Same Card shell as ToggleCard
-// (same page, same visual language), a native <select> instead of a switch:
-// with ~400 IANA zone names a native control gets type-ahead and scrolling
-// for free, and this page has no other "pick one of many" pattern to match.
+function tzLabel(tz: string): string {
+  return tz.replace(/_/g, ' ')
+}
+
+function matchesQuery(tz: string, q: string): boolean {
+  const hay = tzLabel(tz).toLowerCase()
+  return hay.includes(q) || tz.toLowerCase().includes(q)
+}
+
+// GF-37 residual, Martin design-review round 1 — a flat native <select> with
+// ~400 `Intl.supportedValuesOf('timeZone')` entries was reported unusable
+// ("too many options, difficult to find, no search"). Replaced with a
+// minimal type-to-filter combobox instead of pulling in a new dependency:
+// there is no combobox/command primitive anywhere in this repo (checked
+// package.json and components/ui/) to reuse, so this borrows the two
+// patterns the app already has for "pick one of many" —
+// assets.tsx's search-input styling (icon + input classes) and
+// calendar.tsx's channel-picker dropdown shape (button trigger,
+// role="listbox"/role="option", click-away backdrop) — rather than inventing
+// a third visual language for one field.
+//
+// With the query empty, the list shows only the curated pinned suggestions
+// (UTC + GF's actual client base regions, same FALLBACK_TIMEZONES used when
+// Intl.supportedValuesOf is unavailable) plus the client's current value if
+// it isn't one of those — never the full ~400-entry list unfiltered. Typing
+// searches the full option set by both the raw IANA id and the
+// space-separated display label (so "berlin" and "Europe/Berlin" both work).
 function TimezoneCard({
   value,
   options,
@@ -207,6 +231,64 @@ function TimezoneCard({
   onChange: (timezone: string) => void
 }) {
   const t = useT()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const pinned = useMemo(() => {
+    const seen = new Set<string>()
+    const list: string[] = []
+    for (const tz of [value, ...FALLBACK_TIMEZONES]) {
+      if (options.includes(tz) && !seen.has(tz)) {
+        seen.add(tz)
+        list.push(tz)
+      }
+    }
+    return list
+  }, [value, options])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return pinned
+    return options.filter((tz) => matchesQuery(tz, q))
+  }, [query, options, pinned])
+
+  useEffect(() => {
+    if (!open) return
+    inputRef.current?.focus()
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [open])
+
+  const select = (tz: string) => {
+    onChange(tz)
+    setOpen(false)
+    setQuery('')
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setOpen(false)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const tz = filtered[activeIndex]
+      if (tz) select(tz)
+    }
+  }
+
   return (
     <Card>
       <CardContent className="p-5 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
@@ -215,23 +297,81 @@ function TimezoneCard({
           <span className="text-sm font-medium truncate">{t('config.timezone.title')}</span>
           <InfoHint aria-label={t('config.timezone.title')}>{t('config.timezone.info')}</InfoHint>
         </div>
-        <select
-          value={value}
-          disabled={disabled || saving}
-          onChange={(e) => onChange(e.target.value)}
-          aria-label={t('config.timezone.title')}
-          className={cn(
-            'w-full sm:w-auto min-w-[220px] text-sm bg-paper border border-border-subtle rounded-md px-3 py-1.5',
-            'focus:outline-none focus:ring-2 focus:ring-brand-blue/30',
-            (disabled || saving) && 'opacity-50 cursor-not-allowed',
+        <div ref={rootRef} className="relative w-full sm:w-72">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen((o) => !o)
+              setActiveIndex(0)
+            }}
+            disabled={disabled || saving}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-label={t('config.timezone.title')}
+            className={cn(
+              'flex w-full items-center justify-between gap-2 rounded-md border border-border-subtle bg-paper px-3 py-1.5 text-sm',
+              'focus:outline-none focus:ring-2 focus:ring-brand-blue/30',
+              (disabled || saving) && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <span className="truncate">{tzLabel(value)}</span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          </button>
+
+          {open && (
+            <>
+              <div className="fixed inset-0 z-10" />
+              <div className="absolute right-0 z-20 mt-1 w-full sm:w-80 rounded-md border border-border-subtle bg-paper shadow-md">
+                <div className="relative p-2 border-b border-border-subtle">
+                  <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-muted pointer-events-none" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    role="combobox"
+                    aria-expanded={open}
+                    aria-controls="config-timezone-listbox"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value)
+                      setActiveIndex(0)
+                    }}
+                    onKeyDown={onKeyDown}
+                    placeholder={t('config.timezone.searchPlaceholder')}
+                    className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                  />
+                </div>
+                {!query.trim() && (
+                  <p className="px-3 pt-2 text-[10px] uppercase tracking-wider text-ink-muted">
+                    {t('config.timezone.suggested')}
+                  </p>
+                )}
+                <ul id="config-timezone-listbox" role="listbox" className="max-h-64 overflow-y-auto py-1">
+                  {filtered.length === 0 && (
+                    <li className="px-3 py-2 text-xs text-ink-muted">{t('config.timezone.noMatches')}</li>
+                  )}
+                  {filtered.map((tz, i) => (
+                    <li key={tz}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={tz === value}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        onClick={() => select(tz)}
+                        className={cn(
+                          'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-paper-muted',
+                          i === activeIndex && 'bg-paper-muted',
+                          tz === value && 'font-medium text-brand-blue',
+                        )}
+                      >
+                        {tzLabel(tz)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
           )}
-        >
-          {options.map((tz) => (
-            <option key={tz} value={tz}>
-              {tz.replace(/_/g, ' ')}
-            </option>
-          ))}
-        </select>
+        </div>
       </CardContent>
     </Card>
   )
