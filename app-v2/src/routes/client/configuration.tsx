@@ -255,11 +255,24 @@ function TimezoneCard({
     return options.filter((tz) => matchesQuery(tz, q))
   }, [query, options, pinned])
 
+  // Layer-5 review round 4, finding 1 — the click-away backdrop below is a
+  // DOM child of `rootRef` (rendered inside the same wrapper as the trigger
+  // button and the popup), so `rootRef.current.contains(backdropClick)` was
+  // always true and outside-click close never fired. closeMenu() is the
+  // single source of truth for "close and reset search", used by the
+  // backdrop's own onClick, Escape, and this document-level listener alike
+  // — so a stray future edit to any one of them can't silently reopen this
+  // exact bug on a different path.
+  const closeMenu = () => {
+    setOpen(false)
+    setQuery('')
+  }
+
   useEffect(() => {
     if (!open) return
     inputRef.current?.focus()
     const onPointerDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu()
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
@@ -267,13 +280,12 @@ function TimezoneCard({
 
   const select = (tz: string) => {
     onChange(tz)
-    setOpen(false)
-    setQuery('')
+    closeMenu()
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      setOpen(false)
+      closeMenu()
       return
     }
     if (e.key === 'ArrowDown') {
@@ -320,7 +332,13 @@ function TimezoneCard({
 
           {open && (
             <>
-              <div className="fixed inset-0 z-10" />
+              {/* Layer-5 review round 4, finding 1 — this MUST have its own
+                  onClick. It is a DOM child of `rootRef` (React fragments
+                  don't change DOM nesting), so the document `pointerdown`
+                  listener's `rootRef.current.contains(e.target)` check is
+                  always true for a click landing here — without this
+                  onClick, "click outside to close" silently never fires. */}
+              <div className="fixed inset-0 z-10" onClick={closeMenu} />
               <div className="absolute right-0 z-20 mt-1 w-full sm:w-80 rounded-md border border-border-subtle bg-paper shadow-md">
                 <div className="relative p-2 border-b border-border-subtle">
                   <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-muted pointer-events-none" />
@@ -330,6 +348,7 @@ function TimezoneCard({
                     role="combobox"
                     aria-expanded={open}
                     aria-controls="config-timezone-listbox"
+                    aria-activedescendant={filtered[activeIndex] ? `config-timezone-option-${activeIndex}` : undefined}
                     value={query}
                     onChange={(e) => {
                       setQuery(e.target.value)
@@ -353,6 +372,7 @@ function TimezoneCard({
                     <li key={tz}>
                       <button
                         type="button"
+                        id={`config-timezone-option-${i}`}
                         role="option"
                         aria-selected={tz === value}
                         onMouseEnter={() => setActiveIndex(i)}
