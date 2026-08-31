@@ -64,17 +64,38 @@ assetFiles.get('/clients/:slug/assets/files/:name', async (c) => {
     //
     // Revalidate instead. A validator makes the common case a cheap 304 rather
     // than a re-download, so this is close to free while staying correct.
+    //
+    // The validator is size+mtime, so it's weak by construction (RFC 9110
+    // marks it `W/`): a same-byte-count overwrite that lands within the
+    // filesystem's mtime resolution would keep the old ETag. That's a real
+    // edge case for a PIL in-place edit, just not the common one -- accepted
+    // as a documented tradeoff rather than paying for a content hash on every
+    // request.
     const info = await stat(filePath)
     const etag = `W/"${info.size.toString(16)}-${info.mtimeMs.toString(16)}"`
-    if (c.req.header('if-none-match') === etag) {
-      return c.body(null, 304, { ETag: etag, 'Cache-Control': 'no-cache' })
+    const lastModified = info.mtime.toUTCString()
+    // If-None-Match takes precedence over If-Modified-Since when both are
+    // sent (RFC 9110 13.1.1); fall back to If-Modified-Since only when the
+    // client has no ETag yet (or is an intermediary that only speaks dates).
+    // HTTP-date (and therefore If-Modified-Since) has no sub-second
+    // precision, so both sides must be compared at second granularity -- an
+    // mtime of 12:00:00.345 must still satisfy IMS: Tue, ... 12:00:00 GMT.
+    const ifNoneMatch = c.req.header('if-none-match')
+    const ifModifiedSince = c.req.header('if-modified-since')
+    const since = ifModifiedSince ? new Date(ifModifiedSince).getTime() : NaN
+    const mtimeSeconds = Math.floor(info.mtime.getTime() / 1000)
+    const notModified = ifNoneMatch
+      ? ifNoneMatch === etag
+      : !Number.isNaN(since) && mtimeSeconds <= Math.floor(since / 1000)
+    if (notModified) {
+      return c.body(null, 304, { ETag: etag, 'Cache-Control': 'no-cache', 'Last-Modified': lastModified })
     }
     const bytes = await readFile(filePath)
     return c.body(bytes, 200, {
       'Content-Type': CONTENT_TYPE[ext] ?? 'application/octet-stream',
       'Cache-Control': 'no-cache',
       ETag: etag,
-      'Last-Modified': info.mtime.toUTCString(),
+      'Last-Modified': lastModified,
     })
   } catch {
     return problem(c, { title: 'Not Found', status: 404, detail: 'No such asset file' })

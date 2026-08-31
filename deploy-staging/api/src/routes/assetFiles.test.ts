@@ -43,12 +43,36 @@ test('GF-29: overwriting an asset in place makes the new bytes visible', async (
   const first = await assetFiles.request(URL_)
   const stale = first.headers.get('etag')!
 
-  // Exactly what the agent's PIL edit path does: same filename, new content.
+  // Same byte count as the original ('AAAA' -> 'BBBB'): this isolates the
+  // mtime component of the ETag. A same-size overwrite is exactly the case
+  // where dropping mtimeMs from the validator would silently regress (the
+  // size component alone would tie), so unlike an overwrite that also
+  // changes length, this proves mtime is actually load-bearing.
   await new Promise((r) => setTimeout(r, 20))
-  await writeFile(file, 'BBBBBB')
+  await writeFile(file, 'BBBB')
 
   const after = await assetFiles.request(URL_, { headers: { 'if-none-match': stale } })
   assert.equal(after.status, 200, 'a stale validator must not win after an in-place edit')
   assert.notEqual(after.headers.get('etag'), stale)
-  assert.equal(await after.text(), 'BBBBBB')
+  assert.equal(await after.text(), 'BBBB')
+})
+
+test('GF-29: If-Modified-Since is honored when the client has no ETag yet', async () => {
+  const first = await assetFiles.request(URL_)
+  const lastModified = first.headers.get('last-modified')!
+  assert.ok(lastModified, 'Last-Modified must be set for IMS-only clients/intermediaries to revalidate against')
+
+  const notYetModified = await assetFiles.request(URL_, {
+    headers: { 'if-modified-since': lastModified },
+  })
+  assert.equal(notYetModified.status, 304)
+  assert.equal(notYetModified.headers.get('last-modified'), lastModified, '304 responses must carry Last-Modified too')
+
+  // An in-place overwrite after that Last-Modified must be visible even to a
+  // client that only sends If-Modified-Since (no ETag support).
+  await new Promise((r) => setTimeout(r, 1100)) // IMS is second-resolution (HTTP-date)
+  await writeFile(file, 'CCCC')
+  const after = await assetFiles.request(URL_, { headers: { 'if-modified-since': lastModified } })
+  assert.equal(after.status, 200, 'a stale If-Modified-Since date must not win after an in-place edit')
+  assert.equal(await after.text(), 'CCCC')
 })
