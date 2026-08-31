@@ -186,9 +186,23 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
  * 15:00) still read as 'today' here, so Programmed stayed enabled in the UI
  * while the API rejected the same post with a 422 — precisely the "client
  * says allowed, API answers 422" symptom this whole fix exists to eliminate.
- * A future instant on today's calendar day still falls through to the
- * calendar-day comparison below, so it correctly reads as 'today' for
- * styling purposes (not blocked, just highlighted).
+ * A future instant still falls through to the calendar-day comparison below
+ * for the 'today' vs 'future' distinction (styling only, never blocking).
+ *
+ * Layer-5 review round 2, finding 1 — that calendar-day comparison must use
+ * the calendar day the INSTANT falls on in `timezone`, not the Y-M-D digits
+ * literally written in the string. A full-ISO string's date portion denotes
+ * a day in whatever offset it was written with (typically UTC, via a `Z`
+ * suffix) — for a client far enough ahead of that offset, the instant can
+ * already be a different calendar day locally. Repro that was wrong before
+ * this fix: `now = 2026-08-31T23:30:00Z`, timezone Australia/Sydney (UTC+10,
+ * no DST in August), post dated `2026-08-31T23:45:00Z` (15 minutes in the
+ * future). The exact-instant check above correctly does not call it 'past';
+ * but Sydney's calendar day for that instant is already Sep 1, matching
+ * Sydney's `now`-derived "today" — so it must read 'today', not fall back
+ * one day short by reusing the string's literal "Aug 31". A date-only value
+ * has no instant to convert (the string itself IS the client's calendar
+ * day), so this only applies to full-ISO values.
  */
 export function dateTiming(
   iso: string,
@@ -197,18 +211,25 @@ export function dateTiming(
 ): 'past' | 'today' | 'future' {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
   if (!m) return 'future'
-  if (!DATE_ONLY.test(iso ?? '')) {
+  const isDateOnly = DATE_ONLY.test(iso ?? '')
+  let instant: Date | null = null
+  if (!isDateOnly) {
     const ts = new Date(iso).getTime()
-    if (!Number.isNaN(ts) && ts <= now.getTime()) return 'past'
+    if (!Number.isNaN(ts)) {
+      if (ts <= now.getTime()) return 'past'
+      instant = new Date(ts)
+    }
   }
-  const whenKey = `${m[1]}-${m[2]}-${m[3]}`
+
   if (timezone) {
     const todayKey = calendarDayKeyInTimezone(now, timezone)
+    const whenKey = instant ? calendarDayKeyInTimezone(instant, timezone) : `${m[1]}-${m[2]}-${m[3]}`
     if (whenKey < todayKey) return 'past'
     if (whenKey === todayKey) return 'today'
     return 'future'
   }
-  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime()
+  const whenDate = instant ?? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const day = new Date(whenDate.getFullYear(), whenDate.getMonth(), whenDate.getDate()).getTime()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   if (day < today) return 'past'
   if (day === today) return 'today'

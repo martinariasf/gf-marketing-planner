@@ -318,10 +318,15 @@ test('GF-37 timezone: a full-ISO date compares against the injected `now`, not t
   assert.equal(isPastDate(laterToday, new Date(laterToday).getTime(), 'UTC', now), false)
 })
 
-test('GF-37 timezone: an unset client timezone defaults to UTC end-to-end through applyStatusToSchedule', async () => {
-  // No explicit timezone configured (mirrors an existing client's org_configs
-  // row with no `settings.timezone` key — loadOrgSettings' DEFAULTS kicks in
-  // upstream of this call). Must behave exactly like the pre-timezone code.
+// Layer-5 review round 2, finding 3 — this test's name previously claimed to
+// cover "an unset client timezone", but `fakeOrgSettings` here sets
+// `timezone: 'UTC'` explicitly, which exercises the explicit-UTC path
+// through applyStatusToSchedule end-to-end, not the missing-key -> DEFAULTS
+// fallback (that fallback IS covered, correctly, by
+// orgSettings.test.ts's "no stored record at all -> DEFAULTS" case, which
+// exercises loadOrgSettings' own coerce()/DEFAULTS logic directly — this
+// test's mock bypasses that logic entirely, so it cannot cover it).
+test('GF-37 timezone: an explicit UTC client timezone rejects a yesterday post end-to-end through applyStatusToSchedule', async () => {
   fakeOrgSettings = { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' }
   const schedule = schedulingFake()
   const current = { status: 'approved', approval: { status: 'approved' }, date: utcDayOffset(-1) }

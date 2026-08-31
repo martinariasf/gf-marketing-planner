@@ -87,6 +87,26 @@ assertEqual(getDateTimingTimezone(), undefined, 'getDateTimingTimezone reflects 
   setDateTimingTimezone(undefined)
 }
 
+// ── Layer-5 review round 2 finding 1: a FUTURE full-ISO instant must resolve
+//    its "today vs future" calendar day from the INSTANT in `timezone`, not
+//    from the string's literal Y-M-D digits (which denote the day in
+//    whatever offset the string was written with — typically UTC). ─────────
+{
+  // now = 2026-08-31T23:30:00Z. Sydney (UTC+10, no DST in August) is already
+  // on 2026-09-01T09:30 local — Sydney's "today" is Sep 1. A post dated
+  // 2026-08-31T23:45:00Z is 15 minutes in the future (not past), and its
+  // Sydney-local calendar day is ALSO Sep 1 (23:45 UTC + 10h rolls to the
+  // next day) — so it must read 'today', not 'past' from naively reusing
+  // the string's "Aug 31" prefix as the day.
+  const now = new Date('2026-08-31T23:30:00Z')
+  const nearFutureIso = '2026-08-31T23:45:00Z'
+  assertEqual(
+    dateTiming(nearFutureIso, now, 'Australia/Sydney'),
+    'today',
+    'a near-future full-ISO instant resolves "today" via the CLIENT-timezone calendar day of the instant, not the literal UTC-written date in the string',
+  )
+}
+
 // ── Layer-5 review round 1 finding 6: an unresolvable timezone must not
 //    throw inside dateTiming (would crash the React tree mid-render). ──────
 {
