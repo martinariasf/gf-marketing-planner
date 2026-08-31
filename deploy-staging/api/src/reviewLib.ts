@@ -442,3 +442,38 @@ setInterval(() => {
   const now = Date.now()
   for (const [k, v] of reviewSessions) if (v.expiresAt <= now) reviewSessions.delete(k)
 }, 10 * 60_000).unref()
+
+/** Reviewer-facing brand block of the public review payload. */
+export type PublicBrand = { name: string; handle: string; logoInitials: string }
+
+/** Trimmed string, or '' for anything that is not a non-blank string. */
+function str(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * GF-108 — resolve the brand block an external reviewer sees.
+ *
+ * PocketBase is the source of truth for a client's display name, exactly as it
+ * is for the dashboard (`clientList()` in routes/clients.ts overlays PB records
+ * onto the disk index). plan.json is a fallback for what PB carries, and the
+ * only source for `handle`, which PB has no field for.
+ *
+ * `name` has NO slug fallback on purpose: an unresolvable name returns '', and
+ * the strategy header then falls back to the link's own title (GF-106,
+ * app-v2/src/routes/review/strategy-view.tsx). Printing the internal slug to an
+ * external reviewer is the bug this function exists to prevent.
+ */
+export function resolveBrand(args: {
+  slug: string
+  pbClient: Record<string, unknown> | null
+  planClient: Record<string, unknown> | null
+}): PublicBrand {
+  const { slug, pbClient, planClient } = args
+  return {
+    name: str(pbClient?.name) || str(planClient?.name),
+    handle: str(planClient?.handle) || `@${slug}`,
+    logoInitials:
+      str(pbClient?.logoInitials) || str(planClient?.logoInitials) || slug.slice(0, 2).toUpperCase(),
+  }
+}
