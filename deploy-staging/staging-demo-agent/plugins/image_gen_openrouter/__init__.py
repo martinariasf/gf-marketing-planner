@@ -277,19 +277,37 @@ class OpenRouterImageGenProvider(ImageGenProvider):
                 aspect_ratio=aspect,
             )
 
-        # When reference images are attached the model otherwise tends to draw
-        # the scene and ignore them (e.g. omit the logo). Append an explicit
-        # directive so it composites the references faithfully and unaltered.
+        # GF-134: reference images serve two different jobs and need opposite
+        # directives. The default (edit=False) is unchanged from before: the
+        # reference is a brand asset being COMPOSITED into a new scene, so we
+        # tell the model to reproduce it unaltered and place it as instructed.
+        # edit=True is for editing an existing photo (e.g. a client-sent photo
+        # of their product) — there the composite-unaltered directive fights
+        # the request, so we swap it for a preserve-subject/change-only-what's-
+        # asked directive instead of appending to the legacy one.
+        edit = bool(kwargs.get("edit"))
         text = prompt
         if ref_blocks:
-            text = (
-                prompt
-                + "\n\nIMPORTANT: "
-                + f"{len(ref_blocks)} reference image(s) are attached. Reproduce them "
-                "EXACTLY and FAITHFULLY in the output — composite the provided brand "
-                "logo / asset unaltered (do not redraw, restyle, recolor, or omit it). "
-                "Place each reference cleanly exactly where the prompt instructs."
-            )
+            if edit:
+                text = (
+                    prompt
+                    + "\n\nIMPORTANT: "
+                    + f"{len(ref_blocks)} reference image(s) are attached. This is a "
+                    "PHOTO EDIT, not a new composition: preserve the subject exactly "
+                    "as shown (identity, shape, proportions, material, colors) and "
+                    "change ONLY what the prompt explicitly asks for. Do not redraw "
+                    "or reinvent the subject, and do not alter anything the prompt "
+                    "did not mention."
+                )
+            else:
+                text = (
+                    prompt
+                    + "\n\nIMPORTANT: "
+                    + f"{len(ref_blocks)} reference image(s) are attached. Reproduce them "
+                    "EXACTLY and FAITHFULLY in the output — composite the provided brand "
+                    "logo / asset unaltered (do not redraw, restyle, recolor, or omit it). "
+                    "Place each reference cleanly exactly where the prompt instructs."
+                )
         content_blocks: List[Dict[str, Any]] = [{"type": "text", "text": text}]
         content_blocks.extend(ref_blocks)
 
@@ -1261,7 +1279,12 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
         "before generating and pass the selected fidelity explicitly. Pass "
         "`reference_images` when the result must contain "
         "the EXACT official logo or match a real product/photo — the model can't "
-        "invent the real logo from a text description, so give it the actual file."
+        "invent the real logo from a text description, so give it the actual file. "
+        "GF-134: EDITING a photo the client just sent (e.g. 'keep this bottle, "
+        "put it on a white studio backdrop') is also supported — pass that photo "
+        "in `reference_images` AND set `edit=true` so the subject is preserved "
+        "and only the requested change is applied, instead of being composited "
+        "into a new scene."
     ),
     "parameters": {
         "type": "object",
@@ -1343,6 +1366,19 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                     "the real file here (find the logo via the brief's branding.logos "
                     "or the client assets folder). OMIT for purely text-described images."
                 ),
+            },
+            "edit": {
+                "type": "boolean",
+                "description": (
+                    "GF-134. Set true when `reference_images` is a photo the client "
+                    "sent (or an existing shot) and the goal is to EDIT it — e.g. "
+                    "swap the background, keep the same product/subject. When true "
+                    "the model is told to preserve the subject and change only what "
+                    "the prompt asks for. When false (default) references are treated "
+                    "as brand assets to composite unaltered into a new scene — use "
+                    "this default for logos/product cutouts being placed into a design."
+                ),
+                "default": False,
             },
         },
         "required": ["prompt"],
@@ -1516,11 +1552,16 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,
     )
+    # GF-134: explicit edit intent, distinct from plain reference conditioning.
+    # Defaults to False so existing callers (composite-a-logo-into-a-scene) see
+    # no behavior change.
+    edit = bool(args.get("edit"))
     result = OpenRouterImageGenProvider().generate(
         prompt=prompt,
         aspect_ratio=aspect_ratio,
         model=model,
         reference_images=refs,
+        edit=edit,
     )
     media_path = ""
     if isinstance(result, dict) and result.get("image") and not result.get("error"):
