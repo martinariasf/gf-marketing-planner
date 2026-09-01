@@ -20,6 +20,7 @@ import json
 import logging
 import mimetypes
 import os
+import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -34,6 +35,21 @@ from agent.image_gen_provider import (
     save_b64_image,
     success_response,
 )
+
+# GF-134 layer 2: `compose_core` is a sibling module in this same plugin
+# directory (vendored from the `compose-image` skill, see that file's header).
+# A plain package-relative import works when Hermes loads this as a package,
+# but the unit tests load `__init__.py` standalone via
+# importlib.util.spec_from_file_location (no parent package) — same pattern
+# already used by test_story_aspect.py / test_append_manifest.py. Fall back to
+# a path-based import so both loading styles work.
+try:
+    from . import compose_core
+except ImportError:
+    import sys as _sys
+
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import compose_core
 
 logger = logging.getLogger(__name__)
 
@@ -277,19 +293,37 @@ class OpenRouterImageGenProvider(ImageGenProvider):
                 aspect_ratio=aspect,
             )
 
-        # When reference images are attached the model otherwise tends to draw
-        # the scene and ignore them (e.g. omit the logo). Append an explicit
-        # directive so it composites the references faithfully and unaltered.
+        # GF-134: reference images serve two different jobs and need opposite
+        # directives. The default (edit=False) is unchanged from before: the
+        # reference is a brand asset being COMPOSITED into a new scene, so we
+        # tell the model to reproduce it unaltered and place it as instructed.
+        # edit=True is for editing an existing photo (e.g. a client-sent photo
+        # of their product) — there the composite-unaltered directive fights
+        # the request, so we swap it for a preserve-subject/change-only-what's-
+        # asked directive instead of appending to the legacy one.
+        edit = bool(kwargs.get("edit"))
         text = prompt
         if ref_blocks:
-            text = (
-                prompt
-                + "\n\nIMPORTANT: "
-                + f"{len(ref_blocks)} reference image(s) are attached. Reproduce them "
-                "EXACTLY and FAITHFULLY in the output — composite the provided brand "
-                "logo / asset unaltered (do not redraw, restyle, recolor, or omit it). "
-                "Place each reference cleanly exactly where the prompt instructs."
-            )
+            if edit:
+                text = (
+                    prompt
+                    + "\n\nIMPORTANT: "
+                    + f"{len(ref_blocks)} reference image(s) are attached. This is a "
+                    "PHOTO EDIT, not a new composition: preserve the subject exactly "
+                    "as shown (identity, shape, proportions, material, colors) and "
+                    "change ONLY what the prompt explicitly asks for. Do not redraw "
+                    "or reinvent the subject, and do not alter anything the prompt "
+                    "did not mention."
+                )
+            else:
+                text = (
+                    prompt
+                    + "\n\nIMPORTANT: "
+                    + f"{len(ref_blocks)} reference image(s) are attached. Reproduce them "
+                    "EXACTLY and FAITHFULLY in the output — composite the provided brand "
+                    "logo / asset unaltered (do not redraw, restyle, recolor, or omit it). "
+                    "Place each reference cleanly exactly where the prompt instructs."
+                )
         content_blocks: List[Dict[str, Any]] = [{"type": "text", "text": text}]
         content_blocks.extend(ref_blocks)
 
@@ -653,6 +687,81 @@ def _branding_logo_refs() -> List[str]:
 def _append_unique_ref(refs: List[str], ref: str) -> None:
     if ref and ref not in refs:
         refs.append(ref)
+
+
+def _branding_typography() -> Dict[str, str]:
+    """Fetch {headingFont, bodyFont} from the client brief.
+
+    GF-134: `branding.typography` holds font NAMES, not files (see
+    app-v2/src/types/brief.ts) — `_resolve_font_path_from_name` below turns a
+    name into an actual .ttf/.otf in the client assets dir. No existing
+    helper covers typography (unlike logos, where `_branding_logo_refs`
+    already exists and is reused as-is), so this mirrors that function's
+    fetch pattern. Best-effort: any failure (network, missing slug/api_base,
+    malformed brief) returns {} rather than raising.
+    """
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    if not (slug and api_base):
+        return {}
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                f"{api_base}/clients/{slug}/brief",
+                headers=_api_headers(),
+            )
+            r.raise_for_status()
+            typography = (((r.json() or {}).get("data") or {}).get("branding") or {}).get(
+                "typography"
+            ) or {}
+    except Exception:
+        logger.debug("could not fetch branding typography", exc_info=True)
+        return {}
+    if not isinstance(typography, dict):
+        return {}
+    return {
+        "headingFont": str(typography.get("headingFont") or ""),
+        "bodyFont": str(typography.get("bodyFont") or ""),
+    }
+
+
+def _resolve_font_path_from_name(font_name: str) -> Optional[str]:
+    """Find a .ttf/.otf in the client assets dir whose filename stem matches
+    `font_name` (e.g. brief's "Montserrat" -> "Montserrat-Bold.ttf").
+
+    Matching is case-insensitive and ignores spaces/hyphens/underscores so
+    "Playfair Display" matches "PlayfairDisplay-Regular.ttf". Returns None
+    (never raises) when nothing matches or the assets dir is unavailable —
+    the caller falls through to compose_core's bundled default font.
+    """
+    if not font_name:
+        return None
+    assets_dir = _assets_dir()
+    if not os.path.isdir(assets_dir):
+        return None
+
+    def _norm(s: str) -> str:
+        return "".join(ch for ch in s.lower() if ch.isalnum())
+
+    target = _norm(font_name)
+    if not target:
+        return None
+    candidates: List[str] = []
+    for fname in sorted(os.listdir(assets_dir)):
+        fstem, ext = os.path.splitext(fname)
+        if ext.lower() not in (".ttf", ".otf"):
+            continue
+        stem_norm = _norm(fstem)
+        if stem_norm == target:
+            # Exact stem match wins immediately — never overridden by a
+            # looser substring match (e.g. "Arial" must not resolve to
+            # "ArialNarrow-Bold.ttf" when "Arial.ttf" also exists).
+            return os.path.join(assets_dir, fname)
+        if target in stem_norm or stem_norm in target:
+            candidates.append(fname)
+    if candidates:
+        return os.path.join(assets_dir, candidates[0])
+    return None
 
 
 def _openrouter_url(path_or_url: str) -> str:
@@ -1259,9 +1368,17 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
         "Banana 2 (a few seconds), 'high' = premium quality (~3 minutes). The "
         "default model is Nano Banana 2, but ask the user to choose fast vs high "
         "before generating and pass the selected fidelity explicitly. Pass "
-        "`reference_images` when the result must contain "
-        "the EXACT official logo or match a real product/photo — the model can't "
-        "invent the real logo from a text description, so give it the actual file."
+        "`reference_images` when the result must match a real product/photo — "
+        "the model can't invent that from a text description, so give it the "
+        "actual file. GF-134: for a LOGO, do NOT pass it here — a generative "
+        "model warps logos. Just generate the image (it leaves clean space "
+        "when the prompt mentions a logo) and then call `image_compose` to "
+        "stamp the REAL logo on afterwards. "
+        "GF-134: EDITING a photo the client just sent (e.g. 'keep this bottle, "
+        "put it on a white studio backdrop') is also supported — pass that photo "
+        "in `reference_images` AND set `edit=true` so the subject is preserved "
+        "and only the requested change is applied, instead of being composited "
+        "into a new scene."
     ),
     "parameters": {
         "type": "object",
@@ -1336,13 +1453,27 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                 "description": (
                     "Optional. Reference image(s) the model should CONDITION on "
                     "(image-to-image), instead of you describing them in words. Each "
-                    "is a public URL, an absolute path, or an asset filename (e.g. "
-                    "'logo_official.png'). USE THIS whenever the image must show the "
-                    "EXACT official logo, a specific product, or match an existing "
-                    "visual — describing a logo in text produces a WRONG logo, so pass "
-                    "the real file here (find the logo via the brief's branding.logos "
-                    "or the client assets folder). OMIT for purely text-described images."
+                    "is a public URL, an absolute path, or an asset filename. USE "
+                    "THIS whenever the image must show a specific product/photo or "
+                    "match an existing visual. GF-134: do NOT use this for a logo — "
+                    "a generative model warps logos even when given the real file; "
+                    "instead let image_generate leave clean space and stamp the "
+                    "real logo afterwards with `image_compose`. OMIT for purely "
+                    "text-described images."
                 ),
+            },
+            "edit": {
+                "type": "boolean",
+                "description": (
+                    "GF-134. Set true when `reference_images` is a photo the client "
+                    "sent (or an existing shot) and the goal is to EDIT it — e.g. "
+                    "swap the background, keep the same product/subject. When true "
+                    "the model is told to preserve the subject and change only what "
+                    "the prompt asks for. When false (default) references are treated "
+                    "as brand assets to composite unaltered into a new scene — use "
+                    "this default for logos/product cutouts being placed into a design."
+                ),
+                "default": False,
             },
         },
         "required": ["prompt"],
@@ -1423,6 +1554,402 @@ VIDEO_GENERATE_SCHEMA = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Agent-facing tool: image_compose (GF-134 layer 2).
+#
+# `image_generate` (above) is layer 1 — an AI model creates or edits pixels,
+# costs an API call, and must never be asked to draw a logo or headline text
+# (it warps logos and misspells words). `image_compose` is layer 2: it stamps
+# the REAL logo and REAL text onto an existing image with Pillow via
+# `compose_core` (vendored from the `compose-image` skill) — pixel-exact,
+# free, and fully offline. It does not touch OPENROUTER_API_KEY and works
+# with it unset.
+# ---------------------------------------------------------------------------
+
+IMAGE_COMPOSE_SCHEMA = {
+    "name": "image_compose",
+    "description": (
+        "Stamp the REAL logo and/or REAL text onto an EXISTING image with "
+        "pixel-exact Pillow compositing — no AI model, no API call, works "
+        "even without an image-generation API key. Use this instead of "
+        "asking image_generate to draw a logo or headline text: a generative "
+        "model warps logos and misspells words, this does not. `base_image` "
+        "is the existing image to stamp onto (path/URL/asset filename, e.g. "
+        "the output of a prior image_generate call). The logo defaults to "
+        "the client's official branding.logos entry; text defaults to the "
+        "client's brief typography (headingFont) for the font. Returns the "
+        "composed image's path/URL in the `image` field, same shape as "
+        "image_generate."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "base_image": {
+                "type": "string",
+                "description": (
+                    "The existing image to stamp onto: a public URL, an "
+                    "absolute path, or an asset filename in the client "
+                    "assets folder."
+                ),
+            },
+            "include_logo": {
+                "type": "boolean",
+                "description": (
+                    "Whether to stamp a logo at all. Default true. Set false "
+                    "for a text-only stamp."
+                ),
+                "default": True,
+            },
+            "logo": {
+                "type": "string",
+                "description": (
+                    "Optional explicit logo: a public URL, absolute path, or "
+                    "asset filename. Omit to use the client's official "
+                    "branding.logos entry automatically."
+                ),
+            },
+            "logo_anchor": {
+                "type": "string",
+                "enum": compose_core.ANCHORS,
+                "description": "Where to place the logo on the nine-grid.",
+                "default": "bottom-right",
+            },
+            "logo_margin": {
+                "type": "string",
+                "description": "Distance from the anchored edge(s): px (e.g. '48') or percent (e.g. '5%'). Ignored for anchor 'center'.",
+                "default": "5%",
+            },
+            "logo_scale": {
+                "type": "string",
+                "description": "Resize the logo to this width before placing it: px or percent of base image width. Omit to keep the logo's native size.",
+            },
+            "logo_opacity": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Logo opacity, 0-100.",
+                "default": 100,
+            },
+            "text": {
+                "type": "string",
+                "description": "Exact text to stamp onto the image (e.g. a headline). Omit for a logo-only stamp.",
+            },
+            "text_anchor": {
+                "type": "string",
+                "enum": compose_core.ANCHORS,
+                "description": "Where to place the text block on the nine-grid.",
+                "default": "bottom",
+            },
+            "text_margin": {
+                "type": "string",
+                "description": "Distance from the anchored edge(s): px or percent. Ignored for anchor 'center'.",
+                "default": "5%",
+            },
+            "text_size": {
+                "type": "integer",
+                "description": "Font size in px.",
+                "default": 64,
+            },
+            "text_color": {
+                "type": "string",
+                "description": "Text fill color (name or hex).",
+                "default": "white",
+            },
+            "text_max_width": {
+                "type": "string",
+                "description": "Wrap text to this width: px or percent of base image width. Omit to use the full image width.",
+            },
+            "text_font": {
+                "type": "string",
+                "description": (
+                    "Optional explicit font: a path, or a font NAME to look "
+                    "up in the client assets folder. Omit to use the "
+                    "client's brief typography (headingFont/bodyFont, see "
+                    "text_use_heading_font) with a bundled fallback."
+                ),
+            },
+            "text_use_heading_font": {
+                "type": "boolean",
+                "description": "When text_font is omitted, use the brief's headingFont (true) or bodyFont (false).",
+                "default": True,
+            },
+            "text_outline": {
+                "type": "integer",
+                "description": "Outline/stroke width in px around the text, 0 for none.",
+                "default": 0,
+            },
+            "text_outline_color": {
+                "type": "string",
+                "description": "Outline color, used only when text_outline > 0.",
+                "default": "black",
+            },
+            "text_shadow": {
+                "type": "boolean",
+                "description": "Draw a soft drop shadow behind the text for legibility.",
+                "default": False,
+            },
+            "post_id": {
+                "type": "string",
+                "description": (
+                    "If this composed image is the cover for an EXISTING "
+                    "post, pass its id — same auto-link behavior as "
+                    "image_generate's post_id. Omit for a stand-alone / "
+                    "reserve image."
+                ),
+            },
+        },
+        "required": ["base_image"],
+    },
+}
+
+
+def _compose_available(*_args: Any, **_kw: Any) -> bool:
+    """Always available — GF-134 AC4: image_compose has no API-key gate."""
+    return True
+
+
+def _compose_cache_dir() -> str:
+    root = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    path = os.path.join(root, "cache", "images")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _handle_image_compose(
+    args: Dict[str, Any], *, skip_publish: bool = False, **_kw: Any
+) -> str:
+    """Tool handler: composite a real logo and/or real text onto an existing
+    image with Pillow (compose_core), then publish it the same way
+    _handle_image_generate does (post_id link or reserve-asset publish).
+
+    Every failure path (bad base image, missing logo, missing font) returns a
+    structured {"success": False, "error": ..., "error_type": ...} dict — the
+    compositing calls never raise out of this function (GF-134 AC5).
+    """
+    base_image = str(args.get("base_image") or "").strip()
+    if not base_image:
+        return json.dumps({
+            "success": False,
+            "image": None,
+            "error": "base_image is required (path/URL/asset filename of the image to stamp onto)",
+            "error_type": "invalid_argument",
+        })
+
+    include_logo = _as_bool(args.get("include_logo"), True)
+    explicit_logo = str(args.get("logo") or "").strip()
+    text = str(args.get("text") or "").strip()
+
+    if not include_logo and not text:
+        return json.dumps({
+            "success": False,
+            "image": None,
+            "error": "nothing to compose: include_logo is false and text is empty",
+            "error_type": "invalid_argument",
+        })
+
+    logo_ref = ""
+    if include_logo:
+        if explicit_logo:
+            logo_ref = explicit_logo
+        else:
+            branding_refs = _branding_logo_refs()
+            logo_ref = branding_refs[0] if branding_refs else ""
+            if not logo_ref:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": (
+                        "include_logo is true but no logo was given and no "
+                        "official logo is available in branding.logos. Pass "
+                        "logo=<filename/URL> explicitly, or set "
+                        "include_logo=false for a text-only stamp."
+                    ),
+                    "error_type": "logo_not_found",
+                })
+
+    tmp_paths: List[str] = []
+    try:
+        try:
+            base_bytes = _resolve_image_bytes(base_image)
+        except Exception as exc:
+            return json.dumps({
+                "success": False,
+                "image": None,
+                "error": f"could not read base_image '{base_image}': {exc}",
+                "error_type": "invalid_base_image",
+            })
+        base_ext = mimetypes.guess_extension(_mime_from_bytes(base_bytes, base_image)) or ".png"
+        base_fh = tempfile.NamedTemporaryFile(suffix=base_ext, delete=False)
+        base_fh.write(base_bytes)
+        base_fh.close()
+        tmp_paths.append(base_fh.name)
+
+        img = None
+
+        if logo_ref:
+            try:
+                logo_bytes = _resolve_image_bytes(logo_ref)
+            except Exception as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"could not read logo '{logo_ref}': {exc}",
+                    "error_type": "logo_not_found",
+                })
+            logo_ext = mimetypes.guess_extension(_mime_from_bytes(logo_bytes, logo_ref)) or ".png"
+            logo_fh = tempfile.NamedTemporaryFile(suffix=logo_ext, delete=False)
+            logo_fh.write(logo_bytes)
+            logo_fh.close()
+            tmp_paths.append(logo_fh.name)
+            try:
+                img = compose_core.composite_logo(
+                    base_fh.name,
+                    logo_fh.name,
+                    anchor=str(args.get("logo_anchor") or "bottom-right"),
+                    margin=str(args.get("logo_margin") or "5%"),
+                    scale=(str(args.get("logo_scale")) if args.get("logo_scale") else None),
+                    opacity=int(args.get("logo_opacity") if args.get("logo_opacity") is not None else 100),
+                )
+            except compose_core.ComposeError as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": str(exc),
+                    "error_type": "compose_error",
+                })
+            except Exception as exc:
+                logger.debug("image_compose logo stamp failed", exc_info=True)
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"logo compositing failed: {exc}",
+                    "error_type": "compose_error",
+                })
+
+        if text:
+            font_arg = str(args.get("text_font") or "").strip()
+            font_path: Optional[str] = None
+            if font_arg:
+                font_path = font_arg if os.path.exists(font_arg) else _resolve_font_path_from_name(font_arg)
+            if not font_path:
+                typography = _branding_typography()
+                use_heading = _as_bool(args.get("text_use_heading_font"), True)
+                font_name = typography.get("headingFont" if use_heading else "bodyFont", "")
+                font_path = _resolve_font_path_from_name(font_name) if font_name else None
+
+            base_for_text = img if img is not None else base_fh.name
+            try:
+                img = compose_core.composite_text(
+                    base_for_text,
+                    text,
+                    font_path=font_path,
+                    font_dir=_assets_dir(),
+                    size=int(args.get("text_size") or 64),
+                    color=str(args.get("text_color") or "white"),
+                    anchor=str(args.get("text_anchor") or "bottom"),
+                    margin=str(args.get("text_margin") or "5%"),
+                    max_width=(str(args.get("text_max_width")) if args.get("text_max_width") else None),
+                    outline=int(args.get("text_outline") or 0),
+                    outline_color=str(args.get("text_outline_color") or "black"),
+                    shadow=_as_bool(args.get("text_shadow"), False),
+                )
+            except compose_core.ComposeError as exc:
+                # FIX 3 (GF-134 review round 2): composite_text raises
+                # ComposeError for three distinct failures (no resolvable
+                # font, unknown anchor, unreadable base image) but every one
+                # of them used to come back as "font_not_found", misdirecting
+                # the agent's recovery advice. Classify by the exception text
+                # instead of building a full exception hierarchy for it.
+                msg = str(exc)
+                if msg.startswith("Could not open base image"):
+                    err_type = "invalid_base_image"
+                elif msg.startswith("Unknown anchor"):
+                    err_type = "invalid_argument"
+                else:
+                    err_type = "font_not_found"
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": msg,
+                    "error_type": err_type,
+                })
+            except Exception as exc:
+                logger.debug("image_compose text stamp failed", exc_info=True)
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"text compositing failed: {exc}",
+                    "error_type": "compose_error",
+                })
+
+        filename = f"compose_{int(time.time() * 1000)}.png"
+        cache_path = os.path.join(_compose_cache_dir(), filename)
+        try:
+            compose_core.save(img, cache_path)
+        except Exception as exc:
+            return json.dumps({
+                "success": False,
+                "image": None,
+                "error": f"could not save composed image: {exc}",
+                "error_type": "io_error",
+            })
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "image": cache_path,
+            "path": cache_path,
+            "provider": "compose",
+            "logo": logo_ref or None,
+            "text": text or None,
+        }
+
+        # FIX 1 (GF-134 review) / FIX 4 (round 2): when this handler is
+        # invoked INTERNALLY by _handle_image_generate's auto-stamp path,
+        # the caller passes `skip_publish=True` as a real Python keyword
+        # argument, not a dict key. There is no way to reach this parameter
+        # through the tool-arg dict (`args`), so no schema laxity in Hermes'
+        # arg validation can ever let an agent's tool call set it — it is
+        # structurally unreachable from `args`, not merely absent from the
+        # public schema. The outer flow already owns manifest/post wiring
+        # for that artifact; publishing/linking here as well would write a
+        # spurious reserve-manifest entry (or double the post-link work) for
+        # an intermediate file that is not itself a reserve image. External
+        # tool calls (with or without post_id) are unaffected — this branch
+        # only triggers when the internal caller passes the kwarg.
+        if not skip_publish:
+            try:
+                post_id = str(args.get("post_id") or "").strip()
+                if post_id:
+                    link = _link_image_to_post(cache_path, post_id)
+                    result["post_link"] = link
+                    if link.get("linked") and link.get("url"):
+                        result["image"] = link["url"]
+                else:
+                    pub = _publish_reserve_image(cache_path)
+                    result["asset"] = pub
+                    if pub.get("published") and pub.get("url"):
+                        result["image"] = pub["url"]
+            except Exception as exc:
+                # FIX 3 (GF-134 review): the docstring promises every failure
+                # returns a structured dict. A publish/link failure here must
+                # not propagate out of the tool handler — degrade to the
+                # already-composed local file and surface the error instead
+                # of swallowing it.
+                logger.debug("image_compose publish/link failed", exc_info=True)
+                result["success"] = False
+                result["error"] = f"image composed but publish/link failed: {exc}"
+                result["error_type"] = "publish_error"
+
+        result["media"] = f"MEDIA:{cache_path}"
+        return json.dumps(result)
+    finally:
+        for path in tmp_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def _image_gen_available(*_args: Any, **_kw: Any) -> bool:
     return bool(os.environ.get("OPENROUTER_API_KEY"))
 
@@ -1495,10 +2022,28 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         kw in prompt_lc
         for kw in ("logo", "isotipo", "isotype", "logotipo", "brand mark", "brandmark", "wordmark")
     )
+    # GF-134: a generative model must NEVER draw the logo (it warps them and
+    # misspells wordmarks) — this is the same doctrine already applied to
+    # video in generate-media/references/polished-branded-video.md ("Never
+    # let the generative video model render text or a logo"). So the real
+    # branding logo is no longer appended into `reference_images` for the
+    # model to reproduce; instead the plate is generated with clean space
+    # reserved for it, and the REAL logo is stamped afterwards via the
+    # layer-2 `image_compose` path (compose_core), see below.
+    # GF-134: explicit edit intent, distinct from plain reference conditioning.
+    # Defaults to False so existing callers (composite-a-logo-into-a-scene) see
+    # no behavior change. Computed here (before the wants_logo block below)
+    # because FIX 4 (GF-134 review) needs it to gate the plate-space prompt
+    # injection and the auto-stamp: an explicit edit request must not get an
+    # unrequested logo stamped on it just because the edit prompt happens to
+    # mention the word "logo" (e.g. "remove the logo from this photo"). The
+    # `logo_reference_required` refusal below is intentionally left untouched
+    # — its message/condition/error_type are frozen.
+    edit = bool(args.get("edit"))
+    branding_logo_refs: List[str] = []
     if wants_logo:
-        for logo_ref in _branding_logo_refs():
-            _append_unique_ref(refs, logo_ref)
-        if not refs:
+        branding_logo_refs = _branding_logo_refs()
+        if not branding_logo_refs and not refs:
             return json.dumps({
                 "success": False,
                 "image": None,
@@ -1512,6 +2057,18 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
                 ),
                 "error_type": "logo_reference_required",
             })
+        if branding_logo_refs and not edit:
+            # Ask for clean negative space instead of a rendered logo; the
+            # real logo file is composited on after generation succeeds.
+            # Skipped for edit=true (FIX 4): an edit must change only what
+            # was explicitly asked, so we neither alter the edit prompt nor
+            # (below) auto-stamp a logo the user never requested.
+            prompt = (
+                prompt
+                + " Leave clean, uncluttered negative space where a logo can "
+                "be placed; do not draw, sketch, or invent any logo, "
+                "wordmark, or brand mark yourself."
+            )
     logger.info(
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,
@@ -1521,7 +2078,52 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         aspect_ratio=aspect_ratio,
         model=model,
         reference_images=refs,
+        edit=edit,
     )
+    if (
+        wants_logo
+        and not edit
+        and branding_logo_refs
+        and isinstance(result, dict)
+        and result.get("image")
+        and not result.get("error")
+    ):
+        # GF-134: stamp the REAL logo onto the plate the model just generated
+        # via the layer-2 compose path (compose_core), instead of the model
+        # having drawn it.
+        # FIX 4 (review): gated on `not edit` — an edit request must not get
+        # an unrequested logo stamped on it.
+        # FIX 6 (review): pass the already-resolved logo explicitly so
+        # image_compose doesn't re-fetch branding.logos over HTTP a second
+        # time for the same image.
+        # FIX 1 (review) / FIX 4 (round 2): `skip_publish=True` is passed as
+        # a real keyword argument to the handler function — this is an
+        # INTERNAL call. The outer flow below (post_id link / reserve
+        # publish) already owns manifest/post wiring for the final artifact;
+        # without this flag image_compose would ALSO publish/link the
+        # intermediate plate, producing a spurious reserve-manifest entry
+        # and a duplicate publish. `skip_publish` is not a key any tool-arg
+        # dict can carry into the handler (it is not read from `args` at
+        # all), so no agent tool call can ever set it, regardless of how
+        # strictly Hermes validates the schema.
+        compose_raw = _handle_image_compose(
+            {
+                "base_image": result["image"],
+                "logo": branding_logo_refs[0],
+            },
+            skip_publish=True,
+        )
+        try:
+            compose_result = json.loads(compose_raw)
+        except (TypeError, ValueError):
+            compose_result = None
+        if isinstance(compose_result, dict) and compose_result.get("success") and compose_result.get("image"):
+            result["image"] = compose_result["image"]
+            result["logo_composited"] = True
+        else:
+            result["logo_composite_error"] = (
+                compose_result.get("error") if isinstance(compose_result, dict) else "logo compositing failed"
+            )
     media_path = ""
     if isinstance(result, dict) and result.get("image") and not result.get("error"):
         candidate = str(result["image"])
@@ -1598,4 +2200,16 @@ def register(ctx) -> None:
         description="Generate a Seedance 2.0 MP4 via OpenRouter and publish it as a dashboard video asset.",
         emoji="video",
         override=True,
+    )
+    # GF-134 layer 2: no requires_env — image_compose is pure Pillow
+    # compositing and must work with OPENROUTER_API_KEY unset.
+    ctx.register_tool(
+        name="image_compose",
+        toolset="image_gen",
+        schema=IMAGE_COMPOSE_SCHEMA,
+        handler=_handle_image_compose,
+        check_fn=_compose_available,
+        is_async=False,
+        description="Stamp the real logo/text onto an existing image with Pillow (offline, no API call).",
+        emoji="🖼️",
     )

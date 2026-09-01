@@ -1,6 +1,6 @@
 ---
 name: image-generation
-description: Generating or changing images for posts and assets. ALWAYS read the brand identity (colors, typography, logos, tone) AND the Visual Guidelines from the brief BEFORE generating, so the image is on-brand and cohesive across posts. Covers per-channel format (Instagram vertical 4:5, LinkedIn horizontal), fidelity, post_id auto-link, never inventing logos, using the real logo as a reference image, and the visual craft bar that keeps the result from looking AI-made.
+description: Generating or changing images for posts and assets. ALWAYS read the brand identity (colors, typography, logos, tone) AND the Visual Guidelines from the brief BEFORE generating, so the image is on-brand and cohesive across posts. Covers per-channel format (Instagram vertical 4:5, LinkedIn horizontal), fidelity, post_id auto-link, generate vs. edit (image_generate edit=true for a client's own photo), never inventing logos or headline text, stamping the real logo and exact copy with image_compose, and the visual craft bar that keeps the result from looking AI-made.
 tags: [marketing, images, branding]
 ---
 
@@ -62,7 +62,38 @@ FORMAT overrides the channel default whenever the post is a story:
   the GF-33 channel rule above — this exception is story-only and leaves
   feed/LinkedIn/X/Facebook sizing untouched.
 
-## STEP 1 — Generate
+## STEP 1 — Generate or Edit
+
+Two layers do the work now. **Layer 1, `image_generate`, is AI and costs an API
+call** — use it to create pixels (a new scene, or a reinterpreted background).
+**Layer 2, `image_compose`, is local Pillow and free** — use it to stamp
+pixel-exact elements (the real logo, exact headline text) onto an image that
+already exists. See STEP 2 and the "Stamping" section below for the compose
+side; this step covers `image_generate`'s two modes.
+
+### Generate vs. edit — which mode
+
+- **Nothing exists yet** (a fresh scene, no source photo to preserve) → plain
+  generate, `edit` omitted or `false`. This is the default and covers most
+  requests.
+- **The client sent a photo and wants it changed** (e.g. a product photo from
+  Telegram, "swap the background", "make this look like golden hour") → pass
+  the photo in `reference_images` AND set `edit=true`. In edit mode the model
+  preserves the subject exactly — identity, shape, proportions, material,
+  colors — and changes only what the prompt asks, typically the background.
+
+  ```
+  image_generate(prompt="replace the background with a bright modern kitchen, keep the product untouched",
+                 reference_images=["client_photo.jpg"],
+                 edit=true,
+                 channel="instagram")
+  ```
+
+  **Without `edit=true`, references are treated as brand assets to composite
+  into a new scene** — that fights an edit request and the client's photo will
+  not be preserved. Do not omit `edit=true` when the intent is "change this
+  photo," and do not set it when the intent is "generate something new using
+  this asset as a brand reference."
 
 Default model is **Nano Banana 2** via `fidelity="fast"`. Before every image
 generation, ask one short question: whether the user wants **fast / Nano Banana
@@ -107,49 +138,119 @@ its current `image`/`url`; a partial array drops the other entries.
 For a **reserve / stand-alone** image (no target post), omit `post_id` — the
 plugin publishes it to a public URL and adds a reserve manifest entry.
 
-## STEP 2 — NEVER invent a logo / isotipo (GF-28)
+## STEP 2 — NEVER invent a logo / isotipo (GF-28) — stamp it, don't draw it
 
-This is a recurring failure: the model fabricates a fake GF logo/isotipo when it
-is only described. **Hard rule: never invent, redraw, or guess a logo.**
+This is a recurring failure: a generative model fabricates a fake logo/isotipo,
+or misspells headline text, when it is only described. **Hard rule: a
+generative model never draws a logo and never renders headline text.** Scenes
+and backgrounds may be AI-reinterpreted; brand marks and exact copy are always
+stamped afterward with `image_compose` (Layer 2, local Pillow, free — see
+"Stamping the logo and text" below). This mirrors the video doctrine already in
+this codebase: `generate-media/references/polished-branded-video.md:9` —
+"Never let the generative video model render text or a logo."
 
-- If the image must carry the real official logo (or a specific product), pass
-  the **actual file** via `reference_images` — do NOT describe the logo in
-  words, do NOT do a Pillow overlay:
+- **Never describe the logo in the prompt.** Generate a clean plate with space
+  reserved for it, then stamp the real logo on top:
 
   ```
   image_generate(prompt="<scene>, leave clean space bottom-right for the brand logo",
-                 reference_images=["logo_official.png"],   # asset filename, URL, or path
                  channel="instagram", post_id="p016")
+
+  image_compose(base_image="<the file image_generate just produced>",
+                include_logo=true,          # pulls the client's real branding.logos
+                logo_anchor="bottom-right",
+                logo_margin="5%")
   ```
 
-  Find the logo via `data.branding.logos` (`GET /brief`) or the client assets
-  folder.
+  `image_generate` no longer auto-injects the client's logo into
+  `reference_images` — that responsibility moved entirely to `image_compose`.
+  `include_logo=true` (the default) resolves the real file from
+  `data.branding.logos` itself; you do not need to look it up or pass it
+  yourself unless you want a non-default logo file (`logo=<path>`).
 
 - **If NO official logo file is available** (none in `branding.logos`, none
   given): do NOT generate a fabricated logo. Either
   1. **ask the user** for the official logo file, or
-  2. generate the image **WITHOUT the logo** (e.g. "leave clean space
-     bottom-right for the brand logo" so it can be added later).
+  2. generate the image **WITHOUT calling `image_compose`** (e.g. leave the
+     clean space so it can be stamped later once the file exists).
 
-  The `image_generate` tool enforces this: a prompt mentioning a logo/isotipo
-  with no resolvable reference returns `error_type:"logo_reference_required"`.
-  When you see it, follow option 1 or 2 above — never retry with a described
-  logo.
+- `reference_images` on `image_generate` is now for brand-asset compositing
+  into a new scene (a product shot, packaging, a physical object) — not for
+  logos, and not for edits (see STEP 1's edit mode).
 
-- Omit `reference_images` for ordinary illustrations that do not need the logo.
+## STEP 3 — Text INSIDE the image (GF-32, Instagram especially) — stamp it, don't draw it
 
-## STEP 3 — Text INSIDE the image (GF-32, Instagram especially)
+Same doctrine as the logo: **never describe exact headline copy in the
+`image_generate` prompt.** The model cannot spell reliably (see the "Garbled
+text" mechanical check in STEP 4) and it will misspell or melt the words. When
+the wording matters exactly, generate a text-free plate and stamp the copy with
+`image_compose`:
 
-When the image carries on-canvas text:
+```
+image_compose(base_image="<the plate>",
+              text="Your headline here",
+              text_anchor="bottom",
+              text_size=64,
+              text_color="white",
+              text_use_heading_font=true,   # resolves branding.typography.headingFont
+              text_outline=4)               # px stroke width, 0 = none
+```
+
+When on-canvas text IS appropriate:
 - **Instagram: keep text MINIMAL** — only the highlight / core info (a short
   hook, one stat, or the CTA). Do not paste the whole caption onto the image;
   the body copy lives in the post text, not baked into the picture.
 - **Legible minimum size:** on the 1080x1350 canvas, the smallest text must be
   at least ~**8–9 pt equivalent** (roughly **38–45 px** tall on 1080x1350).
   Nothing smaller — tiny text is unreadable on a phone. Prefer fewer, larger
-  words over many small ones.
-- State this in the prompt, e.g. "minimal on-image text: one short headline only,
-  large legible sans-serif, no small print, no paragraphs."
+  words over many small ones. `image_compose`'s default `text_size=64` clears
+  this floor; do not shrink it below ~45px on a 1080-wide canvas.
+- If the prompt still needs to describe the *scene* around where text will go
+  (e.g. "leave clean space at the bottom for a headline"), that is fine — only
+  the literal words are banned from the prompt.
+
+## When to stamp vs. when to prompt
+
+- **Logo, exact headline copy, any text that must spell correctly** →
+  `image_compose`. Never the prompt.
+- **Scene, background, subject, mood, composition, color palette** →
+  `image_generate`'s prompt. Let the model reinterpret these; do not try to
+  stamp a whole scene with Pillow.
+
+## Stamping the logo and text — `image_compose` reference
+
+`image_compose` is local (Pillow), free, and takes no API call. It stamps
+pixel-exact elements onto an image that already exists — the output of
+`image_generate`, or a photo the client sent.
+
+**Logo parameters:**
+- `include_logo` (default `true`) — pulls the client's real `branding.logos`
+- `logo` — override path/URL if you need a non-default logo file
+- `logo_anchor` (default `bottom-right`) — one of `top-left top top-right left
+  center right bottom-left bottom bottom-right`
+- `logo_margin` (default `5%`) — px (`48`) or percent (`5%`, per-axis)
+- `logo_scale` — logo size, px or percent of base width
+- `logo_opacity` (default `100`) — integer 0-100
+
+**Text parameters:**
+- `text` — the exact string to stamp
+- `text_anchor` (default `bottom`) — same anchor set as the logo
+- `text_margin`, `text_size` (default `64`), `text_color` (default `white`)
+- `text_max_width`, `text_font` — explicit font file override
+- `text_use_heading_font` (default `true`) — resolves the client's
+  `branding.typography.headingFont` automatically; leave this on unless the
+  user asks for a specific different font
+- `text_outline` (default `0`) — integer stroke width in px around the text,
+  `0` for none; `text_outline_color`, `text_shadow` — legibility aids over
+  busy backgrounds
+
+Both logo and text can be stamped in one call — pass both sets of parameters
+together. `base_image` (required) is the existing image to stamp onto — a
+path/URL/asset filename, e.g. the output of a prior `image_generate` call.
+`image_compose` DOES take `post_id`, with the same auto-link behavior as
+`image_generate`'s `post_id` (copies the composed file into the client assets
+dir, PATCHes the post, and confirms) — pass it when the composed file is the
+cover for an existing post; omit it for a stand-alone / reserve image.
 
 ## STEP 4 — The visual craft bar (don't produce AI slop)
 
@@ -200,9 +301,10 @@ Surface habits (these are the tells that got the v1 pitch slides rejected as
 Hard mechanical checks:
 - **Garbled text is the single biggest AI tell.** The generator cannot spell
   reliably. Keep on-canvas text to the minimum STEP 3 allows, and when the exact
-  wording matters, generate a **text-free** plate and composite the type
-  afterwards (see `video-generation` and the reel-overlay skill for the ffmpeg
-  route). Never ship an image with a misspelled or melted word.
+  wording matters, generate a **text-free** plate and stamp the type afterwards
+  with `image_compose` (see STEP 3; the analogous ffmpeg route for video lives in
+  `video-generation` and the reel-overlay skill). Never ship an image with a
+  misspelled or melted word.
 - **Hands.** Prefer compositions without visible hands, or crop them. If hands
   are unavoidable, inspect the finger count before delivering.
 - **Contrast.** Any text over imagery needs a real contrast floor — roughly
@@ -231,13 +333,16 @@ regeneration. Then deliver. Do not iterate open-endedly on an image that already
 clears the bar; every regeneration costs credits and drifts off the Visual
 Guidelines.
 
-## PIL-based image editing (fallback when image_generate can't transform an existing image)
+## PIL-based image editing (fallback for transforms `image_generate` and `image_compose` don't cover)
 
-The active `image_generate` backend is **text-to-image only** — it cannot edit or
-transform an existing image (no image-to-image). When the user asks to modify a
-photo they already have (change colours, make an illustration, apply a filter),
-use **PIL + numpy** directly. The venv at `/opt/hermes/.venv/bin/python3` has
-Pillow; install numpy if missing (`/opt/hermes/.venv/bin/pip install numpy -q`).
+`image_generate` with `edit=true` (STEP 1) handles AI-driven edits — background
+swaps, style changes that need the model to reinterpret the scene.
+`image_compose` (STEP 2/3) handles pixel-exact stamping — logo, headline text.
+Neither covers deterministic filter-style transforms (recolor, posterize,
+cartoon-ify) where no AI reinterpretation is wanted and no compositing is
+involved. For those, use **PIL + numpy** directly. The venv at
+`/opt/hermes/.venv/bin/python3` has Pillow; install numpy if missing
+(`/opt/hermes/.venv/bin/pip install numpy -q`).
 
 ### Common transforms
 
