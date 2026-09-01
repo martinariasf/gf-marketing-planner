@@ -14,7 +14,8 @@
      trigger the auto-stamp (and does not alter the edit prompt).
 
 Mirrors the exact stubbing pattern used by test_story_aspect.py in this same
-directory, so this file also loads on any box with a bare Python 3:
+directory. Requires Pillow (compose_core imports it); run it with the
+plugin venv's Python, not a bare interpreter:
 
     python -m unittest deploy-staging/staging-demo-agent/plugins/image_gen_openrouter/test_gf134_review_fixes.py
 
@@ -26,6 +27,8 @@ the audit). This file, like its siblings, is currently only ever run by hand.
 import importlib.util
 import json
 import os
+import shutil
+import tempfile
 import sys
 import types
 import unittest
@@ -165,21 +168,74 @@ class ComposeWorksWithoutApiKeyTests(unittest.TestCase):
     def setUp(self):
         self._had_key = "OPENROUTER_API_KEY" in os.environ
         self._old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        # Review round 2 (N5c): this test reaches the real compose cache dir
+        # ($HERMES_HOME/cache/images), so isolate it from the developer's
+        # ~/.hermes the same way the auto-stamp test does.
+        self._tmp_home = tempfile.mkdtemp(prefix="gf134-test-home-")
+        self._had_home = "HERMES_HOME" in os.environ
+        self._old_home = os.environ.get("HERMES_HOME")
+        os.environ["HERMES_HOME"] = self._tmp_home
 
     def tearDown(self):
         if self._had_key:
             os.environ["OPENROUTER_API_KEY"] = self._old_key
+        if self._had_home:
+            os.environ["HERMES_HOME"] = self._old_home
+        else:
+            os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(self._tmp_home, ignore_errors=True)
 
     def test_missing_api_key_does_not_block_compose(self):
+        """The compose path must RUN with no key, not just fail differently.
+
+        Review round 2 (N2): the earlier version of this test passed
+        include_logo=False and text="", which tripped the "nothing to compose"
+        guard and returned before touching any compositing code — it would
+        have passed even if the whole compose path crashed without a key.
+        This version drives a REAL text stamp all the way through
+        compose_core and asserts the composite actually happened.
+        """
         self.assertIsNone(os.environ.get("OPENROUTER_API_KEY"))
-        raw = _mod._handle_image_compose({
-            "base_image": "https://example.com/base.png",
-            "include_logo": False,
-            "text": "",
-        })
+
+        composited = {"called": False}
+        orig_bytes = _mod._resolve_image_bytes
+        orig_text = _mod.compose_core.composite_text
+        orig_save = _mod.compose_core.save
+        orig_publish = _mod._publish_reserve_image
+        orig_font = _mod._resolve_font_path_from_name
+
+        def fake_composite_text(*a, **k):
+            # Fails loudly if the compose path ever starts requiring a key.
+            self.assertIsNone(os.environ.get("OPENROUTER_API_KEY"))
+            composited["called"] = True
+            return object()
+
+        _mod._resolve_image_bytes = lambda ref: b"\x89PNG\r\n\x1a\nfakebytes"
+        _mod.compose_core.composite_text = fake_composite_text
+        _mod.compose_core.save = lambda img, path: open(path, "wb").close()
+        _mod._publish_reserve_image = lambda ref: {"published": True,
+                                                   "url": "https://example.com/x.png"}
+        _mod._resolve_font_path_from_name = lambda name: None
+        try:
+            raw = _mod._handle_image_compose({
+                "base_image": "https://example.com/base.png",
+                "include_logo": False,
+                "text": "hello",
+            })
+        finally:
+            _mod._resolve_image_bytes = orig_bytes
+            _mod.compose_core.composite_text = orig_text
+            _mod.compose_core.save = orig_save
+            _mod._publish_reserve_image = orig_publish
+            _mod._resolve_font_path_from_name = orig_font
+
         result = json.loads(raw)
-        # No API-key related failure — the actual failure (if any) must be
-        # about compositing inputs, never auth.
+        # The stamp path was genuinely entered — past the "nothing to
+        # compose" guard — with no API key present.
+        self.assertTrue(composited["called"],
+                        "compose_core.composite_text was never reached; the "
+                        "test did not get past the guard clause")
+        self.assertTrue(result.get("success"), result)
         self.assertNotEqual(result.get("error_type"), "auth_required")
 
 
@@ -222,10 +278,16 @@ class AutoStampDoesNotPublishReserveAssetTests(unittest.TestCase):
     def setUp(self):
         os.environ["OPENROUTER_API_KEY"] = "fake-key-for-tests"
         os.environ["CLIENT_SLUG"] = "test-client"
+        # Review round 2 (N5c): the compose cache dir is $HERMES_HOME/cache/
+        # images, so without this the test writes a real file into the
+        # developer's ~/.hermes. Point HERMES_HOME at a temp dir instead.
+        self._tmp_home = tempfile.mkdtemp(prefix="gf134-test-home-")
+        self._had_home = "HERMES_HOME" in os.environ
+        self._old_home = os.environ.get("HERMES_HOME")
+        os.environ["HERMES_HOME"] = self._tmp_home
         self._orig_branding = _mod._branding_logo_refs
         self._orig_generate = _mod.OpenRouterImageGenProvider.generate
         self._orig_compose_publish = _mod._publish_reserve_image
-        self._orig_link = _mod._link_image_to_post
 
         _mod._branding_logo_refs = lambda: ["https://example.com/logo.png"]
         self.publish_calls = []
@@ -253,6 +315,11 @@ class AutoStampDoesNotPublishReserveAssetTests(unittest.TestCase):
     def tearDown(self):
         os.environ.pop("OPENROUTER_API_KEY", None)
         os.environ.pop("CLIENT_SLUG", None)
+        if self._had_home:
+            os.environ["HERMES_HOME"] = self._old_home
+        else:
+            os.environ.pop("HERMES_HOME", None)
+        shutil.rmtree(self._tmp_home, ignore_errors=True)
         _mod._branding_logo_refs = self._orig_branding
         _mod.OpenRouterImageGenProvider.generate = self._orig_generate
         _mod._publish_reserve_image = self._orig_compose_publish

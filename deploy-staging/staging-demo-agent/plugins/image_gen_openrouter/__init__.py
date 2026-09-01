@@ -1715,7 +1715,9 @@ def _compose_cache_dir() -> str:
     return path
 
 
-def _handle_image_compose(args: Dict[str, Any], **_kw: Any) -> str:
+def _handle_image_compose(
+    args: Dict[str, Any], *, skip_publish: bool = False, **_kw: Any
+) -> str:
     """Tool handler: composite a real logo and/or real text onto an existing
     image with Pillow (compose_core), then publish it the same way
     _handle_image_generate does (post_id link or reserve-asset publish).
@@ -1852,11 +1854,24 @@ def _handle_image_compose(args: Dict[str, Any], **_kw: Any) -> str:
                     shadow=_as_bool(args.get("text_shadow"), False),
                 )
             except compose_core.ComposeError as exc:
+                # FIX 3 (GF-134 review round 2): composite_text raises
+                # ComposeError for three distinct failures (no resolvable
+                # font, unknown anchor, unreadable base image) but every one
+                # of them used to come back as "font_not_found", misdirecting
+                # the agent's recovery advice. Classify by the exception text
+                # instead of building a full exception hierarchy for it.
+                msg = str(exc)
+                if msg.startswith("Could not open base image"):
+                    err_type = "invalid_base_image"
+                elif msg.startswith("Unknown anchor"):
+                    err_type = "invalid_argument"
+                else:
+                    err_type = "font_not_found"
                 return json.dumps({
                     "success": False,
                     "image": None,
-                    "error": str(exc),
-                    "error_type": "font_not_found",
+                    "error": msg,
+                    "error_type": err_type,
                 })
             except Exception as exc:
                 logger.debug("image_compose text stamp failed", exc_info=True)
@@ -1888,16 +1903,19 @@ def _handle_image_compose(args: Dict[str, Any], **_kw: Any) -> str:
             "text": text or None,
         }
 
-        # FIX 1 (GF-134 review): when this handler is invoked INTERNALLY by
-        # _handle_image_generate's auto-stamp path, the caller sets the
-        # private `_skip_publish` flag (never part of the public tool
-        # schema — the agent can never set it). The outer flow already owns
-        # manifest/post wiring for that artifact; publishing/linking here as
-        # well would write a spurious reserve-manifest entry (or double the
-        # post-link work) for an intermediate file that is not itself a
-        # reserve image. External tool calls (with or without post_id) are
-        # unaffected — this branch only triggers on the internal flag.
-        skip_publish = bool(args.get("_skip_publish"))
+        # FIX 1 (GF-134 review) / FIX 4 (round 2): when this handler is
+        # invoked INTERNALLY by _handle_image_generate's auto-stamp path,
+        # the caller passes `skip_publish=True` as a real Python keyword
+        # argument, not a dict key. There is no way to reach this parameter
+        # through the tool-arg dict (`args`), so no schema laxity in Hermes'
+        # arg validation can ever let an agent's tool call set it — it is
+        # structurally unreachable from `args`, not merely absent from the
+        # public schema. The outer flow already owns manifest/post wiring
+        # for that artifact; publishing/linking here as well would write a
+        # spurious reserve-manifest entry (or double the post-link work) for
+        # an intermediate file that is not itself a reserve image. External
+        # tool calls (with or without post_id) are unaffected — this branch
+        # only triggers when the internal caller passes the kwarg.
         if not skip_publish:
             try:
                 post_id = str(args.get("post_id") or "").strip()
@@ -2078,18 +2096,23 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         # FIX 6 (review): pass the already-resolved logo explicitly so
         # image_compose doesn't re-fetch branding.logos over HTTP a second
         # time for the same image.
-        # FIX 1 (review): `_skip_publish=True` — this is an INTERNAL call.
-        # The outer flow below (post_id link / reserve publish) already owns
-        # manifest/post wiring for the final artifact; without this flag
-        # image_compose would ALSO publish/link the intermediate plate,
-        # producing a spurious reserve-manifest entry and a duplicate
-        # publish. `_skip_publish` is not part of IMAGE_COMPOSE_SCHEMA, so
-        # the agent can never set it on an external tool call.
-        compose_raw = _handle_image_compose({
-            "base_image": result["image"],
-            "logo": branding_logo_refs[0],
-            "_skip_publish": True,
-        })
+        # FIX 1 (review) / FIX 4 (round 2): `skip_publish=True` is passed as
+        # a real keyword argument to the handler function — this is an
+        # INTERNAL call. The outer flow below (post_id link / reserve
+        # publish) already owns manifest/post wiring for the final artifact;
+        # without this flag image_compose would ALSO publish/link the
+        # intermediate plate, producing a spurious reserve-manifest entry
+        # and a duplicate publish. `skip_publish` is not a key any tool-arg
+        # dict can carry into the handler (it is not read from `args` at
+        # all), so no agent tool call can ever set it, regardless of how
+        # strictly Hermes validates the schema.
+        compose_raw = _handle_image_compose(
+            {
+                "base_image": result["image"],
+                "logo": branding_logo_refs[0],
+            },
+            skip_publish=True,
+        )
         try:
             compose_result = json.loads(compose_raw)
         except (TypeError, ValueError):

@@ -228,23 +228,32 @@ def composite_text(
     x0, y0 = anchor_xy(base.width, base.height, block_w, block_h,
                         anchor, margin_x, margin_y)
 
+    # GF-134 (review round 2): draw every glyph onto a transparent overlay and
+    # alpha_composite it, rather than drawing straight onto the base.
+    # ImageDraw REPLACES pixel values instead of blending them, so laying down
+    # semi-transparent ink (the shadow's alpha 160) directly on an RGBA base
+    # punches translucent holes through an opaque plate and destroys the
+    # imagery underneath instead of darkening it.
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+
     y = y0
     for line, bbox, lh in zip(lines, line_bboxes, line_heights):
         lw = bbox[2] - bbox[0]
         lx = x0 + (block_w - lw) // 2
 
         if shadow:
-            draw.text((lx + 3, y + 3), line, font=font, fill=(0, 0, 0, 160))
+            odraw.text((lx + 3, y + 3), line, font=font, fill=(0, 0, 0, 160))
 
         if outline:
-            draw.text((lx, y), line, font=font, fill=color,
+            odraw.text((lx, y), line, font=font, fill=color,
                        stroke_width=outline, stroke_fill=outline_color)
         else:
-            draw.text((lx, y), line, font=font, fill=color)
+            odraw.text((lx, y), line, font=font, fill=color)
 
         y += lh + spacing
 
-    return base
+    return Image.alpha_composite(base, overlay)
 
 
 def save(img, out_path: str, base_path: Optional[str] = None) -> None:
