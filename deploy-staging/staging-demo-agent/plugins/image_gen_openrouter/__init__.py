@@ -20,6 +20,7 @@ import json
 import logging
 import mimetypes
 import os
+import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -34,6 +35,21 @@ from agent.image_gen_provider import (
     save_b64_image,
     success_response,
 )
+
+# GF-134 layer 2: `compose_core` is a sibling module in this same plugin
+# directory (vendored from the `compose-image` skill, see that file's header).
+# A plain package-relative import works when Hermes loads this as a package,
+# but the unit tests load `__init__.py` standalone via
+# importlib.util.spec_from_file_location (no parent package) — same pattern
+# already used by test_story_aspect.py / test_append_manifest.py. Fall back to
+# a path-based import so both loading styles work.
+try:
+    from . import compose_core
+except ImportError:
+    import sys as _sys
+
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import compose_core
 
 logger = logging.getLogger(__name__)
 
@@ -671,6 +687,73 @@ def _branding_logo_refs() -> List[str]:
 def _append_unique_ref(refs: List[str], ref: str) -> None:
     if ref and ref not in refs:
         refs.append(ref)
+
+
+def _branding_typography() -> Dict[str, str]:
+    """Fetch {headingFont, bodyFont} from the client brief.
+
+    GF-134: `branding.typography` holds font NAMES, not files (see
+    app-v2/src/types/brief.ts) — `_resolve_font_path_from_name` below turns a
+    name into an actual .ttf/.otf in the client assets dir. No existing
+    helper covers typography (unlike logos, where `_branding_logo_refs`
+    already exists and is reused as-is), so this mirrors that function's
+    fetch pattern. Best-effort: any failure (network, missing slug/api_base,
+    malformed brief) returns {} rather than raising.
+    """
+    slug = os.environ.get("CLIENT_SLUG", "")
+    api_base = _api_base()
+    if not (slug and api_base):
+        return {}
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(
+                f"{api_base}/clients/{slug}/brief",
+                headers=_api_headers(),
+            )
+            r.raise_for_status()
+            typography = (((r.json() or {}).get("data") or {}).get("branding") or {}).get(
+                "typography"
+            ) or {}
+    except Exception:
+        logger.debug("could not fetch branding typography", exc_info=True)
+        return {}
+    if not isinstance(typography, dict):
+        return {}
+    return {
+        "headingFont": str(typography.get("headingFont") or ""),
+        "bodyFont": str(typography.get("bodyFont") or ""),
+    }
+
+
+def _resolve_font_path_from_name(font_name: str) -> Optional[str]:
+    """Find a .ttf/.otf in the client assets dir whose filename stem matches
+    `font_name` (e.g. brief's "Montserrat" -> "Montserrat-Bold.ttf").
+
+    Matching is case-insensitive and ignores spaces/hyphens/underscores so
+    "Playfair Display" matches "PlayfairDisplay-Regular.ttf". Returns None
+    (never raises) when nothing matches or the assets dir is unavailable —
+    the caller falls through to compose_core's bundled default font.
+    """
+    if not font_name:
+        return None
+    assets_dir = _assets_dir()
+    if not os.path.isdir(assets_dir):
+        return None
+
+    def _norm(s: str) -> str:
+        return "".join(ch for ch in s.lower() if ch.isalnum())
+
+    target = _norm(font_name)
+    if not target:
+        return None
+    for fname in os.listdir(assets_dir):
+        fstem, ext = os.path.splitext(fname)
+        if ext.lower() not in (".ttf", ".otf"):
+            continue
+        stem_norm = _norm(fstem)
+        if stem_norm == target or target in stem_norm or stem_norm in target:
+            return os.path.join(assets_dir, fname)
+    return None
 
 
 def _openrouter_url(path_or_url: str) -> str:
@@ -1459,6 +1542,362 @@ VIDEO_GENERATE_SCHEMA = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Agent-facing tool: image_compose (GF-134 layer 2).
+#
+# `image_generate` (above) is layer 1 — an AI model creates or edits pixels,
+# costs an API call, and must never be asked to draw a logo or headline text
+# (it warps logos and misspells words). `image_compose` is layer 2: it stamps
+# the REAL logo and REAL text onto an existing image with Pillow via
+# `compose_core` (vendored from the `compose-image` skill) — pixel-exact,
+# free, and fully offline. It does not touch OPENROUTER_API_KEY and works
+# with it unset.
+# ---------------------------------------------------------------------------
+
+IMAGE_COMPOSE_SCHEMA = {
+    "name": "image_compose",
+    "description": (
+        "Stamp the REAL logo and/or REAL text onto an EXISTING image with "
+        "pixel-exact Pillow compositing — no AI model, no API call, works "
+        "even without an image-generation API key. Use this instead of "
+        "asking image_generate to draw a logo or headline text: a generative "
+        "model warps logos and misspells words, this does not. `base_image` "
+        "is the existing image to stamp onto (path/URL/asset filename, e.g. "
+        "the output of a prior image_generate call). The logo defaults to "
+        "the client's official branding.logos entry; text defaults to the "
+        "client's brief typography (headingFont) for the font. Returns the "
+        "composed image's path/URL in the `image` field, same shape as "
+        "image_generate."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "base_image": {
+                "type": "string",
+                "description": (
+                    "The existing image to stamp onto: a public URL, an "
+                    "absolute path, or an asset filename in the client "
+                    "assets folder."
+                ),
+            },
+            "include_logo": {
+                "type": "boolean",
+                "description": (
+                    "Whether to stamp a logo at all. Default true. Set false "
+                    "for a text-only stamp."
+                ),
+                "default": True,
+            },
+            "logo": {
+                "type": "string",
+                "description": (
+                    "Optional explicit logo: a public URL, absolute path, or "
+                    "asset filename. Omit to use the client's official "
+                    "branding.logos entry automatically."
+                ),
+            },
+            "logo_anchor": {
+                "type": "string",
+                "enum": compose_core.ANCHORS,
+                "description": "Where to place the logo on the nine-grid.",
+                "default": "bottom-right",
+            },
+            "logo_margin": {
+                "type": "string",
+                "description": "Distance from the anchored edge(s): px (e.g. '48') or percent (e.g. '5%'). Ignored for anchor 'center'.",
+                "default": "5%",
+            },
+            "logo_scale": {
+                "type": "string",
+                "description": "Resize the logo to this width before placing it: px or percent of base image width. Omit to keep the logo's native size.",
+            },
+            "logo_opacity": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Logo opacity, 0-100.",
+                "default": 100,
+            },
+            "text": {
+                "type": "string",
+                "description": "Exact text to stamp onto the image (e.g. a headline). Omit for a logo-only stamp.",
+            },
+            "text_anchor": {
+                "type": "string",
+                "enum": compose_core.ANCHORS,
+                "description": "Where to place the text block on the nine-grid.",
+                "default": "bottom",
+            },
+            "text_margin": {
+                "type": "string",
+                "description": "Distance from the anchored edge(s): px or percent. Ignored for anchor 'center'.",
+                "default": "5%",
+            },
+            "text_size": {
+                "type": "integer",
+                "description": "Font size in px.",
+                "default": 64,
+            },
+            "text_color": {
+                "type": "string",
+                "description": "Text fill color (name or hex).",
+                "default": "white",
+            },
+            "text_max_width": {
+                "type": "string",
+                "description": "Wrap text to this width: px or percent of base image width. Omit to use the full image width.",
+            },
+            "text_font": {
+                "type": "string",
+                "description": (
+                    "Optional explicit font: a path, or a font NAME to look "
+                    "up in the client assets folder. Omit to use the "
+                    "client's brief typography (headingFont/bodyFont, see "
+                    "text_use_heading_font) with a bundled fallback."
+                ),
+            },
+            "text_use_heading_font": {
+                "type": "boolean",
+                "description": "When text_font is omitted, use the brief's headingFont (true) or bodyFont (false).",
+                "default": True,
+            },
+            "text_outline": {
+                "type": "integer",
+                "description": "Outline/stroke width in px around the text, 0 for none.",
+                "default": 0,
+            },
+            "text_outline_color": {
+                "type": "string",
+                "description": "Outline color, used only when text_outline > 0.",
+                "default": "black",
+            },
+            "text_shadow": {
+                "type": "boolean",
+                "description": "Draw a soft drop shadow behind the text for legibility.",
+                "default": False,
+            },
+            "post_id": {
+                "type": "string",
+                "description": (
+                    "If this composed image is the cover for an EXISTING "
+                    "post, pass its id — same auto-link behavior as "
+                    "image_generate's post_id. Omit for a stand-alone / "
+                    "reserve image."
+                ),
+            },
+        },
+        "required": ["base_image"],
+    },
+}
+
+
+def _compose_available(*_args: Any, **_kw: Any) -> bool:
+    """Always available — GF-134 AC4: image_compose has no API-key gate."""
+    return True
+
+
+def _compose_cache_dir() -> str:
+    root = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    path = os.path.join(root, "cache", "images")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _handle_image_compose(args: Dict[str, Any], **_kw: Any) -> str:
+    """Tool handler: composite a real logo and/or real text onto an existing
+    image with Pillow (compose_core), then publish it the same way
+    _handle_image_generate does (post_id link or reserve-asset publish).
+
+    Every failure path (bad base image, missing logo, missing font) returns a
+    structured {"success": False, "error": ..., "error_type": ...} dict — the
+    compositing calls never raise out of this function (GF-134 AC5).
+    """
+    base_image = str(args.get("base_image") or "").strip()
+    if not base_image:
+        return json.dumps({
+            "success": False,
+            "image": None,
+            "error": "base_image is required (path/URL/asset filename of the image to stamp onto)",
+            "error_type": "invalid_argument",
+        })
+
+    include_logo = _as_bool(args.get("include_logo"), True)
+    explicit_logo = str(args.get("logo") or "").strip()
+    text = str(args.get("text") or "").strip()
+
+    if not include_logo and not text:
+        return json.dumps({
+            "success": False,
+            "image": None,
+            "error": "nothing to compose: include_logo is false and text is empty",
+            "error_type": "invalid_argument",
+        })
+
+    logo_ref = ""
+    if include_logo:
+        if explicit_logo:
+            logo_ref = explicit_logo
+        else:
+            branding_refs = _branding_logo_refs()
+            logo_ref = branding_refs[0] if branding_refs else ""
+            if not logo_ref:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": (
+                        "include_logo is true but no logo was given and no "
+                        "official logo is available in branding.logos. Pass "
+                        "logo=<filename/URL> explicitly, or set "
+                        "include_logo=false for a text-only stamp."
+                    ),
+                    "error_type": "logo_not_found",
+                })
+
+    tmp_paths: List[str] = []
+    try:
+        try:
+            base_bytes = _resolve_image_bytes(base_image)
+        except Exception as exc:
+            return json.dumps({
+                "success": False,
+                "image": None,
+                "error": f"could not read base_image '{base_image}': {exc}",
+                "error_type": "invalid_base_image",
+            })
+        base_ext = mimetypes.guess_extension(_mime_from_bytes(base_bytes, base_image)) or ".png"
+        base_fh = tempfile.NamedTemporaryFile(suffix=base_ext, delete=False)
+        base_fh.write(base_bytes)
+        base_fh.close()
+        tmp_paths.append(base_fh.name)
+
+        img = None
+
+        if logo_ref:
+            try:
+                logo_bytes = _resolve_image_bytes(logo_ref)
+            except Exception as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"could not read logo '{logo_ref}': {exc}",
+                    "error_type": "logo_not_found",
+                })
+            logo_ext = mimetypes.guess_extension(_mime_from_bytes(logo_bytes, logo_ref)) or ".png"
+            logo_fh = tempfile.NamedTemporaryFile(suffix=logo_ext, delete=False)
+            logo_fh.write(logo_bytes)
+            logo_fh.close()
+            tmp_paths.append(logo_fh.name)
+            try:
+                img = compose_core.composite_logo(
+                    base_fh.name,
+                    logo_fh.name,
+                    anchor=str(args.get("logo_anchor") or "bottom-right"),
+                    margin=str(args.get("logo_margin") or "5%"),
+                    scale=(str(args.get("logo_scale")) if args.get("logo_scale") else None),
+                    opacity=int(args.get("logo_opacity") if args.get("logo_opacity") is not None else 100),
+                )
+            except compose_core.ComposeError as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": str(exc),
+                    "error_type": "compose_error",
+                })
+            except Exception as exc:
+                logger.debug("image_compose logo stamp failed", exc_info=True)
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"logo compositing failed: {exc}",
+                    "error_type": "compose_error",
+                })
+
+        if text:
+            font_arg = str(args.get("text_font") or "").strip()
+            font_path: Optional[str] = None
+            if font_arg:
+                font_path = font_arg if os.path.exists(font_arg) else _resolve_font_path_from_name(font_arg)
+            if not font_path:
+                typography = _branding_typography()
+                use_heading = _as_bool(args.get("text_use_heading_font"), True)
+                font_name = typography.get("headingFont" if use_heading else "bodyFont", "")
+                font_path = _resolve_font_path_from_name(font_name) if font_name else None
+
+            base_for_text = img if img is not None else base_fh.name
+            try:
+                img = compose_core.composite_text(
+                    base_for_text,
+                    text,
+                    font_path=font_path,
+                    font_dir=_assets_dir(),
+                    size=int(args.get("text_size") or 64),
+                    color=str(args.get("text_color") or "white"),
+                    anchor=str(args.get("text_anchor") or "bottom"),
+                    margin=str(args.get("text_margin") or "5%"),
+                    max_width=(str(args.get("text_max_width")) if args.get("text_max_width") else None),
+                    outline=int(args.get("text_outline") or 0),
+                    outline_color=str(args.get("text_outline_color") or "black"),
+                    shadow=_as_bool(args.get("text_shadow"), False),
+                )
+            except compose_core.ComposeError as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": str(exc),
+                    "error_type": "font_not_found",
+                })
+            except Exception as exc:
+                logger.debug("image_compose text stamp failed", exc_info=True)
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"text compositing failed: {exc}",
+                    "error_type": "compose_error",
+                })
+
+        filename = f"compose_{int(time.time() * 1000)}.png"
+        cache_path = os.path.join(_compose_cache_dir(), filename)
+        try:
+            compose_core.save(img, cache_path)
+        except Exception as exc:
+            return json.dumps({
+                "success": False,
+                "image": None,
+                "error": f"could not save composed image: {exc}",
+                "error_type": "io_error",
+            })
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "image": cache_path,
+            "path": cache_path,
+            "provider": "compose",
+            "logo": logo_ref or None,
+            "text": text or None,
+        }
+
+        post_id = str(args.get("post_id") or "").strip()
+        if post_id:
+            link = _link_image_to_post(cache_path, post_id)
+            result["post_link"] = link
+            if link.get("linked") and link.get("url"):
+                result["image"] = link["url"]
+        else:
+            pub = _publish_reserve_image(cache_path)
+            result["asset"] = pub
+            if pub.get("published") and pub.get("url"):
+                result["image"] = pub["url"]
+
+        result["media"] = f"MEDIA:{cache_path}"
+        return json.dumps(result)
+    finally:
+        for path in tmp_paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def _image_gen_available(*_args: Any, **_kw: Any) -> bool:
     return bool(os.environ.get("OPENROUTER_API_KEY"))
 
@@ -1639,4 +2078,16 @@ def register(ctx) -> None:
         description="Generate a Seedance 2.0 MP4 via OpenRouter and publish it as a dashboard video asset.",
         emoji="video",
         override=True,
+    )
+    # GF-134 layer 2: no requires_env — image_compose is pure Pillow
+    # compositing and must work with OPENROUTER_API_KEY unset.
+    ctx.register_tool(
+        name="image_compose",
+        toolset="image_gen",
+        schema=IMAGE_COMPOSE_SCHEMA,
+        handler=_handle_image_compose,
+        check_fn=_compose_available,
+        is_async=False,
+        description="Stamp the real logo/text onto an existing image with Pillow (offline, no API call).",
+        emoji="🖼️",
     )

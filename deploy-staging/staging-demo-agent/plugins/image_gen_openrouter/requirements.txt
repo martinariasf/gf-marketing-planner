@@ -1,0 +1,6 @@
+# Runtime deps for the `image_compose` tool (GF-134 layer 2 — pure PIL
+# compositing, no AI/API call). Mirrors plugins/drive/requirements.txt: the
+# in-repo prod Dockerfile installs these; the hand-managed staging box
+# (/opt/agents/staging-demo, no in-repo Dockerfile) needs the same install:
+#   /opt/hermes/.venv/bin/pip install -r plugins/image_gen_openrouter/requirements.txt
+Pillow>=10.0.0
