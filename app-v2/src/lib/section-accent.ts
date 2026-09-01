@@ -130,3 +130,43 @@ export const SECTION_ACCENT: Record<AppSection, SectionAccent> = {
     labelCls: 'text-violet-700',
   },
 }
+
+// ─── Pillar accents (GF-105) ─────────────────────────────────────────────────
+// Inside the dashboard a pillar's colour is authored data (`plan.pillars[].color`)
+// and every page reads it from there — that stays the source of truth and is NOT
+// replaced here. The external strategy review, though, never receives the plan:
+// a shared link only carries sanitized posts, so `plan.pillars` is unavailable
+// and a colour has to be derived from the pillar name alone.
+//
+// Rather than invent a second palette, these are the same colour families the
+// section accents above already use (brand blue/green plus violet/amber/rose/
+// teal/indigo at their 600 shade), expressed as hex so they can be fed straight
+// into the existing <Pillar> chip, which takes a colour value, not a class.
+
+export const PILLAR_ACCENTS: readonly string[] = [
+  '#211D58', // brand blue
+  '#4f8c45', // brand green (dark)
+  '#7c3aed', // violet-600
+  '#b45309', // amber-700
+  '#be123c', // rose-700
+  '#0d9488', // teal-600
+  '#4f46e5', // indigo-600
+  '#5e5497', // brand blue (light)
+]
+
+/**
+ * Deterministic pillar → colour map for a set of pillar names. Names are sorted
+ * before assignment so the same set always yields the same colours regardless of
+ * the order the posts happen to arrive in. Falls back to cycling the palette when
+ * there are more pillars than colours.
+ */
+export function pillarColors(names: Iterable<string>): Record<string, string> {
+  const unique = Array.from(new Set(Array.from(names).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b),
+  )
+  const map: Record<string, string> = {}
+  unique.forEach((name, i) => {
+    map[name] = PILLAR_ACCENTS[i % PILLAR_ACCENTS.length]
+  })
+  return map
+}

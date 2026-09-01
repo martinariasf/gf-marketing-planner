@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useOutletContext, useParams, useSearchParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,8 +10,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { ChannelMockup } from '@/components/channel-mockup'
-import { ChannelIcon, CHANNEL_LABEL, CHANNEL_ORDER, effectiveChannels } from '@/components/channel-icon'
-import { Pillar } from '@/components/pillar'
+import { ChannelIcon, CHANNEL_LABEL, effectiveChannels } from '@/components/channel-icon'
+// GF-107 — the status control and the Month-view copy pane now live in their
+// own modules so the three candidate card layouts can share them.
+import { StatusSelect, StatusBadges } from '@/components/calendar/status-select'
+import { CopyPane } from '@/components/calendar/copy-pane'
 import { ReviewShareDialog } from '@/components/review-share-dialog'
 import {
   DropdownMenu,
@@ -35,9 +37,12 @@ import {
   isApiEnabled,
   type ApprovalDecision,
   type ReviewFeedback,
+  type ReviewFeedbackComment,
+  type ReviewFeedbackDecision,
+  type ReviewLinkView,
   type ReviewPostFeedback,
 } from '@/lib/api-client'
-import { WORKFLOW, isPublished, laneFor, publishedUrl, postSeqMap, scheduleConfirmationFor } from '@/lib/post-status'
+import { postSeqMap } from '@/lib/post-status'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts'
 import { exportCalendarPdf, exportCalendarWord } from '@/lib/calendar-export'
 import { toast } from 'sonner'
@@ -48,11 +53,9 @@ import {
   ChevronRight,
   ChevronDown,
   RefreshCw,
-  Tag,
   ImageIcon,
   Maximize2,
   Wand2,
-  Save,
   Loader2,
   Eye,
   Upload,
@@ -67,14 +70,12 @@ import {
   Film,
   Plus,
   PieChart as PieChartIcon,
-  Check,
   ThumbsUp,
   PenLine,
   MessageSquare,
   Send,
   Trash2,
-  ExternalLink,
-  AlertTriangle,
+  Compass,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT, useI18n } from '@/lib/i18n'
@@ -91,19 +92,72 @@ import {
   type CalendarRangeConfig,
 } from '@/lib/planning-range'
 import type { ClientBundle } from '@/lib/client-data'
-import { POST_FORMATS, POST_FORMAT_LABEL_KEY, postFormatLabelKey, isCanonicalFormat } from '@/lib/post-format'
 import type { Post, Channel } from '@/types'
 import type { Slide } from '@/types/post'
 
-const STATUS_STYLES: Record<string, string> = {
-  idea:           'bg-neutral-100 text-neutral-700',
-  drafting:       'bg-amber-50 text-amber-700',
-  in_review:      'bg-blue-50 text-blue-700',
-  needs_revision: 'bg-orange-50 text-orange-700',
-  approved:       'bg-emerald-50 text-emerald-700',
-  scheduled:      'bg-violet-50 text-violet-700',
-  published:      'bg-brand-green-100 text-brand-green-600',
-  rejected:       'bg-rose-50 text-rose-700',
+// GF-118 — Instagram's carousel ceiling, mirrored by the API's
+// `slides` schema (`.max(10)` in deploy-staging/api/src/schemas/post.ts).
+// Checked in the UI so an over-sized pick fails before any file is uploaded.
+const MAX_SLIDES = 10
+
+// GF-130 — mirror the server's video-size cap in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth) so an
+// over-sized video is rejected before any upload request goes out.
+const MAX_VIDEO_BYTES = 100_000_000
+
+// GF-130 — mirror the server's MIME-or-extension kind detection in
+// deploy-staging/api/src/routes/inspiration.ts (`resolveKind`, the source of
+// truth). A .mov picked on Windows commonly reports as
+// application/octet-stream (or nothing at all), so MIME alone would silently
+// route it into the images path and write a broken image into `slides[]`.
+// Broadened (round 2) to also catch avi/mkv/m4v/wmv/flv forced through the
+// picker with a generic MIME — those must resolve to "video" (and then get
+// refused by isUnsupportedVideoMime below) instead of falling through as an
+// image. SUPPORTED_VIDEO_EXT_RE stays narrow: it names the three extensions
+// that pair with an ALLOWED_VIDEO_MIMES entry.
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|avi|mkv|m4v|wmv|flv)$/i
+const SUPPORTED_VIDEO_EXT_RE = /\.(mp4|webm|mov)$/i
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i
+
+/**
+ * Resolve a picked file's kind. An EXPLICIT `image/*` or `video/*` MIME
+ * always wins, whatever the filename says — this is what keeps a PNG
+ * renamed to `scan.mov` (MIME `image/png`) classified as an image instead of
+ * a broken video. Only when the MIME is absent or generic (neither
+ * `image/*` nor `video/*`) does the extension decide. Neither match
+ * resolves to `null`, which callers must refuse outright.
+ */
+function resolveFileKind(f: File): 'image' | 'video' | null {
+  if (f.type.startsWith('image/')) return 'image'
+  if (f.type.startsWith('video/')) return 'video'
+  if (VIDEO_EXT_RE.test(f.name)) return 'video'
+  if (IMAGE_EXT_RE.test(f.name)) return 'image'
+  return null
+}
+// GF-130 — mirror the server's `ALLOWED_VIDEO_MIMES` in
+// deploy-staging/api/src/routes/inspiration.ts (the source of truth), so an
+// unsupported video type (e.g. an AVI) is refused before any upload request
+// goes out instead of round-tripping to the server's 415.
+const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+/** Called only on a file that `resolveFileKind` already resolved to
+ * "video". An EXPLICIT `video/*` MIME outside the allowlist is unsupported.
+ * A generic/empty MIME that resolved to video via the broadened
+ * VIDEO_EXT_RE extension fallback is unsupported unless the extension is
+ * one of the three the server actually accepts (mp4/webm/mov) — this is
+ * what still refuses an AVI/MKV/etc. forced through the picker. */
+function isUnsupportedVideoMime(f: File): boolean {
+  if (f.type.startsWith('video/')) return !ALLOWED_VIDEO_MIMES.has(f.type)
+  return !SUPPORTED_VIDEO_EXT_RE.test(f.name)
+}
+
+/**
+ * GF-118 — a post's slides as one editable list. A post that only carries a
+ * cover `image` counts as a single slide, so uploading a second file turns it
+ * into a carousel instead of discarding the picture that was already there.
+ */
+function slidesOf(post: Post): Slide[] {
+  if (Array.isArray(post.slides) && post.slides.length > 0) return post.slides
+  return post.image ? [{ image: post.image }] : []
 }
 
 /** A post is a carousel when it carries more than one slide. */
@@ -118,17 +172,6 @@ function postVideo(post: Post) {
 /** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
 function weekOfMonth(iso: string) {
   return Math.ceil(new Date(iso).getDate() / 7)
-}
-
-/**
- * GF-16 — normalize a stored post date (full ISO or plain YYYY-MM-DD) to the
- * `YYYY-MM-DD` value an `<input type="date">` expects. Empty string if unparseable.
- */
-function toDateInputValue(iso: string): string {
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso ?? '')
-  if (m) return m[1]
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -318,6 +361,9 @@ export default function CalendarView() {
   const [imageSlide, setImageSlide] = useState(0)
   // CAL2 — direct user image upload on a post.
   const [uploading, setUploading] = useState(false)
+  // GF-118 — a reorder/delete write is in flight; separate from `uploading` so
+  // the upload button's spinner never fires for a slide the user only moved.
+  const [slideBusy, setSlideBusy] = useState(false)
   // GF-35 — collapsed by default; expands the recoverable rejected list.
   const [showRejected, setShowRejected] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -353,7 +399,7 @@ export default function CalendarView() {
       setCalendarRange(next)
       setRangeOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save calendar range')
+      toast.error(err instanceof Error ? err.message : t('calendar.saveRangeFailed'))
     } finally {
       setSavingRange(false)
     }
@@ -481,29 +527,204 @@ export default function CalendarView() {
     [plan.client.name, calendarRange, posts, rangeMonths, t],
   )
 
-  // CAL2 — upload an image straight onto the active post (no Viktor needed).
-  // Reuses the inspiration upload endpoint (the API mounts clients/ read-only,
-  // so uploads are PB-backed) then PATCHes the returned URL onto post.image.
-  const onUploadImage = useCallback(
-    async (file: File | null | undefined) => {
-      if (!file || !activePost) return
+  // GF-118 — the slide list we last wrote successfully. `refetch` from the
+  // client context is fire-and-forget (`() => void`), so `activePost` can still
+  // carry the PRE-patch slides when the user clicks again; both the strip and
+  // the edit handlers read this instead, via `baseSlides`.
+  //
+  // State, not a ref, and deliberately so: the strip must RENDER from the same
+  // list the handlers edit. Rendering the stale list while the handlers act on
+  // the fresh one makes the index a user clicks refer to a different slide than
+  // the one that moves or gets deleted — and a ref cannot be read during render
+  // under this repo's react-compiler rule, which is what forced that split.
+  // One source of truth for both, or neither.
+  //
+  // ponytail: keyed by post id and never explicitly cleared, so returning to a
+  // post re-applies our last write and would mask a concurrent server-side
+  // change to that same post. Fine today — while a user sits on a post they are
+  // its only slide writer. Upgrade to comparing against the refetched list if
+  // Viktor ever edits slides underneath an open post.
+  const [pendingSlides, setPendingSlides] = useState<{ postId: string; slides: Slide[] } | null>(null)
+
+  const baseSlides = useCallback(
+    (post: Post): Slide[] =>
+      pendingSlides && pendingSlides.postId === post.id ? pendingSlides.slides : slidesOf(post),
+    [pendingSlides],
+  )
+
+  // GF-118 — every slide-list change (upload, reorder, delete) goes through one
+  // PATCH. `image` is always sent explicitly: an already-stored cover WINS over
+  // the one coalescePost() would derive from slides[0], so a reorder or delete
+  // would otherwise leave the calendar card showing the old cover forever.
+  const writeSlides = useCallback(
+    async (postId: string, format: string, next: Slide[]) => {
+      const patch: Record<string, unknown> = { slides: next, image: next[0]?.image ?? '' }
+      // 2+ slides IS a carousel, so keep `format` honest. GF-69 made `format` a
+      // user-editable field, so we only overwrite the default and never a
+      // deliberate "story" (and never flip back down on delete).
+      if (next.length >= 2 && (format || 'single image').trim().toLowerCase() === 'single image') {
+        patch.format = 'carousel'
+      }
+      await apiPatchPost(slug, postId, patch)
+      // Only once the write actually landed: a rejected PATCH must leave the
+      // base list exactly where it was.
+      setPendingSlides({ postId, slides: next })
+    },
+    [slug],
+  )
+
+  // CAL2/GF-118 — upload images straight onto the active post (no Viktor
+  // needed). Reuses the inspiration upload endpoint (the API mounts clients/
+  // read-only, so uploads are PB-backed), then appends the returned URLs to the
+  // post's slides.
+  const onUploadImages = useCallback(
+    async (files: FileList | null) => {
+      // Copy the FileList BEFORE resetting the input. `files` is the input's
+      // LIVE FileList, so clearing `value` first empties it and the handler
+      // silently uploads nothing. Reset after the copy so re-picking the same
+      // file still fires a change event.
+      const picked = files ? Array.from(files) : []
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (picked.length === 0 || !activePost) return
+
+      // GF-130 — the widened <input accept> now lets video files through, but
+      // a post can only ever carry ONE video and it lives in `media`, never in
+      // `slides`. Split the pick by mime type up front so the two paths below
+      // never see the other kind's files.
+      const videos = picked.filter((f) => resolveFileKind(f) === 'video')
+      const images = picked.filter((f) => resolveFileKind(f) === 'image')
+      const unresolved = picked.filter((f) => resolveFileKind(f) === null)
+
+      // A file that resolves to neither a recognized image nor a recognized
+      // video (e.g. a .txt, or an extension-less file with a generic MIME)
+      // must be refused outright, not silently dropped into either path.
+      if (unresolved.length > 0) {
+        toast.error(t('calendar.fileTypeNotAllowed'))
+        return
+      }
+
+      if (videos.length > 0 && images.length > 0) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+      if (videos.length > 1) {
+        toast.error(t('calendar.videoMixNotAllowed'))
+        return
+      }
+
+      if (videos.length === 1) {
+        const [video] = videos
+        // Pre-flight size check — reject BEFORE the request goes out, mirroring
+        // the server's cap (see MAX_VIDEO_BYTES above).
+        if (video.size > MAX_VIDEO_BYTES) {
+          toast.error(t('calendar.videoTooLarge', { max: Math.floor(MAX_VIDEO_BYTES / 1_000_000) }))
+          return
+        }
+        // Pre-flight type check — reject an explicitly unsupported video MIME
+        // (e.g. AVI) BEFORE the request goes out, instead of letting the
+        // server's 415 surface a raw, untranslated error string.
+        if (isUnsupportedVideoMime(video)) {
+          toast.error(t('calendar.videoTypeNotAllowed'))
+          return
+        }
+        setUploading(true)
+        try {
+          const item = await apiUploadInspiration(slug, video, `post ${activePost.id}`)
+          // A post carries one video: the new upload replaces any existing
+          // video entry, while any non-video `media` entries are preserved.
+          // `slides`/`image` are untouched on this path.
+          const keep = (activePost.media ?? []).filter((m) => m.type !== 'video')
+          await apiPatchPost(slug, activePost.id, {
+            media: [{ type: 'video', url: item.url }, ...keep],
+          })
+          toast(t('calendar.videoUploaded'), { duration: 1600 })
+          refetch()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
+        } finally {
+          setUploading(false)
+        }
+        return
+      }
+
+      // GF-118 image path — unchanged.
+      const existing = baseSlides(activePost)
+      if (existing.length + images.length > MAX_SLIDES) {
+        toast.error(t('calendar.slideLimit', { max: MAX_SLIDES, have: existing.length }))
+        return
+      }
       setUploading(true)
       try {
-        const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
-        await apiPatchPost(slug, activePost.id, { image: item.url })
-        toast(t('calendar.imageUploaded'), { duration: 1600 })
+        // Sequential, not Promise.all: the endpoint takes one file per request,
+        // and this keeps the slide order identical to the order the user picked.
+        // The PATCH only happens once every upload succeeded, so a mid-way
+        // failure leaves the post exactly as it was.
+        const added: Slide[] = []
+        for (const file of images) {
+          const item = await apiUploadInspiration(slug, file, `post ${activePost.id}`)
+          added.push({ image: item.url })
+        }
+        await writeSlides(activePost.id, activePost.format, [...existing, ...added])
+        toast(
+          images.length > 1
+            ? t('calendar.imagesUploaded', { n: images.length })
+            : t('calendar.imageUploaded'),
+          { duration: 1600 },
+        )
         refetch()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t('calendar.uploadFailed'))
       } finally {
         setUploading(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
       }
     },
-    [activePost, slug, t, refetch],
+    [activePost, slug, t, refetch, writeSlides, baseSlides],
   )
 
-  // Reset the image-slide cursor whenever the active post changes.
+  // GF-118 — move a slide one position, or drop it. Both rewrite the whole list
+  // so the cover and the carousel format stay consistent with the new order.
+  const onSlideEdit = useCallback(
+    async (next: Slide[], focus: number) => {
+      if (!activePost) return
+      setSlideBusy(true)
+      try {
+        await writeSlides(activePost.id, activePost.format, next)
+        setImageSlide(Math.max(0, Math.min(focus, next.length - 1)))
+        refetch()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('calendar.slideEditFailed'))
+      } finally {
+        setSlideBusy(false)
+      }
+    },
+    [activePost, t, refetch, writeSlides],
+  )
+
+  const onMoveSlide = useCallback(
+    (from: number, to: number) => {
+      if (!activePost) return
+      const list = baseSlides(activePost)
+      if (to < 0 || to >= list.length) return
+      const next = [...list]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      void onSlideEdit(next, to)
+    },
+    [activePost, onSlideEdit, baseSlides],
+  )
+
+  const onRemoveSlide = useCallback(
+    (index: number) => {
+      if (!activePost) return
+      const next = baseSlides(activePost).filter((_, i) => i !== index)
+      void onSlideEdit(next, index - 1)
+    },
+    [activePost, onSlideEdit, baseSlides],
+  )
+
+  // Reset the image-slide cursor whenever the active post changes. The
+  // pending-slides override is keyed by post id, so it simply stops matching
+  // and needs no explicit clear here.
   useEffect(() => {
     setImageSlide(0)
   }, [activePost?.id])
@@ -606,7 +827,7 @@ export default function CalendarView() {
           {t('calendar.eyebrow')}
         </p>
         <h1 className="text-3xl font-bold text-brand-blue tracking-tight">
-          {plan.quarter.theme || 'Content calendar'}
+          {plan.quarter.theme || t('calendar.eyebrow')}
         </h1>
       </div>
 
@@ -726,7 +947,7 @@ export default function CalendarView() {
               )}
               <span className="relative flex items-center gap-2">
                 {m.name}
-                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">Today</span>}
+                {m.isCurrent && <span className="text-[9px] uppercase opacity-80">{t('common.today')}</span>}
                 <span
                   className={cn(
                     'inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full text-[10px] font-bold',
@@ -752,7 +973,7 @@ export default function CalendarView() {
                 <div className="flex items-center justify-between border-b border-border-subtle pb-2">
                   <h3 className="text-sm font-semibold text-brand-blue">
                     {m.name}
-                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">Current month</span>}
+                    {m.isCurrent && <span className="ml-2 text-[10px] uppercase text-brand-green-600">{t('calendar.currentMonth')}</span>}
                   </h3>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-ink-muted">
@@ -967,6 +1188,7 @@ export default function CalendarView() {
                               slideIndex={imageSlide}
                               onSlideChange={setImageSlide}
                               onZoom={() => setZoomOpen(true)}
+                              showFilmstrip={!(isApiEnabled && baseSlides(activePost).length > 0)}
                             />
                           )}
                         </motion.div>
@@ -974,44 +1196,60 @@ export default function CalendarView() {
                     </div>
 
                     {rightView === 'picture' && (
-                      <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title, format: activePost.format || (isCarousel(activePost) ? 'carousel' : 'single image') }))}
-                          className="gap-1.5"
-                        >
-                          <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
-                          {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
-                        </Button>
-                        {/* CAL2 — direct upload (single-image posts only; carousels
-                            are preview-only in V3 so the cover isn't replaced here). */}
-                        {isApiEnabled && !isCarousel(activePost) && (
-                          <>
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp,image/gif"
-                              className="hidden"
-                              onChange={(e) => onUploadImage(e.target.files?.[0])}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={uploading}
-                              onClick={() => fileInputRef.current?.click()}
-                              className="gap-1.5"
-                            >
-                              {uploading ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Upload className="h-3.5 w-3.5 text-brand-blue" />
-                              )}
-                              {t('calendar.uploadImage')}
-                            </Button>
-                          </>
+                      <>
+                        <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => requestPictureChange(t('calendar.changePicturePrompt', { id: activePost.id, title: activePost.title, format: activePost.format || (isCarousel(activePost) ? 'carousel' : 'single image') }))}
+                            className="gap-1.5"
+                          >
+                            <Wand2 className="h-3.5 w-3.5 text-brand-blue" />
+                            {activePost.image ? t('calendar.changePicture') : t('calendar.generatePicture')}
+                          </Button>
+                          {/* CAL2/GF-118 — direct upload of one or many images. Available
+                              on carousels too: the files append to the existing slides. */}
+                          {isApiEnabled && (
+                            <>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                                className="hidden"
+                                onChange={(e) => onUploadImages(e.target.files)}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={uploading || slideBusy}
+                                onClick={() => fileInputRef.current?.click()}
+                                className="gap-1.5"
+                              >
+                                {uploading ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="h-3.5 w-3.5 text-brand-blue" />
+                                )}
+                                {t('calendar.uploadMedia')}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                        {/* GF-118 — editable slide strip. Kept out of PicturePane on
+                            purpose: that filmstrip is navigation (and renders in the
+                            lightbox too); this one owns order and deletion. */}
+                        {isApiEnabled && baseSlides(activePost).length > 0 && (
+                          <SlideStrip
+                            slides={baseSlides(activePost)}
+                            busy={uploading || slideBusy}
+                            activeIndex={imageSlide}
+                            onSelect={setImageSlide}
+                            onMove={onMoveSlide}
+                            onRemove={onRemoveSlide}
+                          />
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1241,13 +1479,13 @@ export default function CalendarView() {
 
       <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
         <DialogContent>
-          <DialogTitle>Calendar range</DialogTitle>
+          <DialogTitle>{t('calendar.rangeTitle')}</DialogTitle>
           <DialogDescription>
-            Select a start and end month. The planning window can span up to 6 months.
+            {t('calendar.rangeDesc')}
           </DialogDescription>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">Start month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.startMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.startMonth}
@@ -1256,7 +1494,7 @@ export default function CalendarView() {
               />
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-xs uppercase tracking-wider text-ink-muted">End month</span>
+              <span className="text-xs uppercase tracking-wider text-ink-muted">{t('calendar.endMonth')}</span>
               <input
                 type="month"
                 value={rangeDraft.endMonth}
@@ -1267,7 +1505,7 @@ export default function CalendarView() {
           </div>
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setRangeOpen(false)} disabled={savingRange}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={saveRange} disabled={savingRange}>
               {savingRange && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
@@ -1433,130 +1671,6 @@ function ContentMixChart({
 }
 
 /**
- * GF-23 — workflow status control. For a live (non-published) post it is a
- * dropdown over the full workflow (Draft/Review/Approved/Programmed/Rechecked/
- * Rejected). A published post is read-only: it shows the Published badge and a
- * link to the live Postiz post when one is known.
- */
-function StatusSelect({
-  post,
-  busy,
-  onSetStatus,
-  size = 'sm',
-}: {
-  post: Post
-  busy: boolean
-  onSetStatus: (decision: ApprovalDecision) => void
-  size?: 'sm' | 'xs'
-}) {
-  const t = useT()
-
-  if (isPublished(post)) {
-    const url = publishedUrl(post)
-    return (
-      <span className="inline-flex items-center gap-1.5 flex-wrap">
-        <Badge variant="secondary" className={cn(size === 'xs' ? 'text-[9px]' : 'text-[10px]', STATUS_STYLES.published)}>
-          <Send className={cn(size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3', 'mr-1')} />
-          {t('status.published')}
-        </Badge>
-        {url && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              'inline-flex items-center gap-1 font-medium text-brand-blue hover:underline',
-              size === 'xs' ? 'text-[10px]' : 'text-xs',
-            )}
-          >
-            <ExternalLink className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-            {t('calendar.viewPublished')}
-          </a>
-        )}
-      </span>
-    )
-  }
-
-  const current = laneFor(post) as ApprovalDecision
-  const step = WORKFLOW.find((s) => s.key === current) ?? WORKFLOW[1]
-  const StepIcon = step.Icon
-  // GF-92 — the "scheduled" label doesn't mean a provider job actually exists;
-  // surface the real confirmation (or its absence) next to the control.
-  const scheduleConfirmation = current === 'scheduled' ? scheduleConfirmationFor(post) : null
-  return (
-    <span className="inline-flex items-center gap-1.5 flex-wrap">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            className={cn('gap-1.5', size === 'xs' && 'h-6 px-2 text-[10px]')}
-          >
-            {busy ? (
-              <Loader2 className={size === 'xs' ? 'h-3 w-3 animate-spin' : 'h-3.5 w-3.5 animate-spin'} />
-            ) : (
-              <StepIcon className={size === 'xs' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-            )}
-            {t(step.labelKey)}
-            <ChevronDown className={size === 'xs' ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {WORKFLOW.map((s) => {
-            const Icon = s.Icon
-            // GF-37 — block scheduling (Programmed) a post dated in the past.
-            const pastSchedule = s.key === 'scheduled' && dateTiming(post.date) === 'past'
-            return (
-              <DropdownMenuItem
-                key={s.key}
-                disabled={s.key === current || pastSchedule}
-                onClick={() => onSetStatus(s.key)}
-                title={pastSchedule ? t('calendar.pastDateNoSchedule') : undefined}
-              >
-                <Icon className="h-3.5 w-3.5 mr-2" />
-                {t(s.labelKey)}
-                {s.key === current && <Check className="ml-auto h-3.5 w-3.5 text-brand-green-600" />}
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {scheduleConfirmation?.kind === 'confirmed' && (
-        <span className={cn('text-ink-muted', size === 'xs' ? 'text-[9px]' : 'text-[10px]')}>
-          {t('schedule.confirmedAt', {
-            date: scheduleConfirmation.scheduledFor ? fmtDate(scheduleConfirmation.scheduledFor) : '—',
-            provider: scheduleConfirmation.provider ?? '—',
-          })}
-        </span>
-      )}
-      {scheduleConfirmation?.kind === 'failed' && (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 text-rose-700',
-            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
-          )}
-        >
-          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-          {t('schedule.failed', { error: scheduleConfirmation.lastError })}
-        </span>
-      )}
-      {scheduleConfirmation?.kind === 'missingJob' && (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 text-amber-700',
-            size === 'xs' ? 'text-[9px]' : 'text-[10px]',
-          )}
-        >
-          <AlertTriangle className={size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-          {t('schedule.notConfirmed')}
-        </span>
-      )}
-    </span>
-  )
-}
-
-/**
  * CAL1 — compact post card reused by Week + Quarter overviews. Small thumbnail,
  * date Â· channel, line-clamped title, status badge. Click jumps to Month view.
  */
@@ -1700,9 +1814,97 @@ function ReviewSignals({ feedback }: { feedback?: ReviewPostFeedback }) {
 }
 
 /**
+ * GF-106 — which review link a row came from. The API stamps every decision and
+ * comment with a `view`, but an API that predates GF-106 omits the field
+ * entirely; absent MUST read as 'content' so an un-upgraded backend keeps
+ * rendering its feedback instead of blanking the panel.
+ */
+function viewOfRow(row: { view?: ReviewLinkView }): ReviewLinkView {
+  return row.view === 'strategy' ? 'strategy' : 'content'
+}
+
+/**
+ * GF-106 — one bordered, headed section of the external-feedback panel: either
+ * the feedback left on the finished posts, or the feedback left on the strategy
+ * plan. Rendered only when it has something to show, so a post that only ever
+ * got one kind of feedback never shows an empty heading.
+ *
+ * The two sections are told apart structurally — own border, own heading, own
+ * icon — not by colour, because the dashboard runs in light and dark.
+ */
+function FeedbackSection({
+  view,
+  decisions,
+  comments,
+}: {
+  view: ReviewLinkView
+  decisions: ReviewFeedbackDecision[]
+  comments: ReviewFeedbackComment[]
+}) {
+  const t = useT()
+  if (decisions.length === 0 && comments.length === 0) return null
+  const Icon = view === 'strategy' ? Compass : Images
+  return (
+    <section className="rounded-lg border border-border-subtle bg-paper-muted/30 p-3 space-y-2">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        {t(view === 'strategy' ? 'review.fb.section.strategy' : 'review.fb.section.content')}
+      </h4>
+
+      {decisions.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {decisions.map((d) => (
+            <span
+              // GF-106: the view belongs in the key. Before the split a reviewer
+              // had at most ONE decision per post, so reviewer+createdAt was
+              // unique; now they can have one per view, and createdAt falls back
+              // to '' server-side, so two entries could collide. The fold keys on
+              // (reviewer, view), so adding view makes this unique by construction.
+              key={`${d.reviewerName}-${d.view}-${d.createdAt}`}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                d.decision === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700',
+              )}
+            >
+              {d.decision === 'approved' ? <ThumbsUp className="h-3 w-3" /> : <PenLine className="h-3 w-3" />}
+              {d.reviewerName}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {comments.length > 0 && (
+        <div className="space-y-1.5">
+          {comments.map((c) => (
+            <div
+              key={c.id}
+              className={cn(
+                'text-xs rounded-md px-2.5 py-1.5',
+                c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
+              )}
+            >
+              <span className="font-medium">
+                {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
+              </span>
+              {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
+              <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/**
  * GF-4 v3 — "External feedback" under the month-view post: reviewer decision
  * chips + the comment thread, with a team reply box. Reviewer decisions are
  * signals only; internal Approve/Reject stays in CopyPane.
+ *
+ * GF-106 — the body is split into a Posts section and a Strategy section, so
+ * the team can tell whether the client was reacting to the finished creative or
+ * to the plan. The reply box stays single and shared: a reply threads onto the
+ * latest reviewer comment for this post regardless of which link it came from.
  */
 function ExternalFeedbackPanel({
   slug,
@@ -1749,48 +1951,16 @@ function ExternalFeedbackPanel({
           {t('review.fb.title')}
         </h3>
 
-        {decisions.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {decisions.map((d) => (
-              <span
-                key={`${d.reviewerName}-${d.createdAt}`}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  d.decision === 'approved'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-amber-50 text-amber-700',
-                )}
-              >
-                {d.decision === 'approved' ? (
-                  <ThumbsUp className="h-3 w-3" />
-                ) : (
-                  <PenLine className="h-3 w-3" />
-                )}
-                {d.reviewerName}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {comments.length > 0 && (
-          <div className="space-y-1.5">
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className={cn(
-                  'text-xs rounded-md px-2.5 py-1.5',
-                  c.source === 'dashboard' ? 'bg-brand-blue/5' : 'bg-paper-muted/60',
-                )}
-              >
-                <span className="font-medium">
-                  {c.source === 'dashboard' ? t('review.ext.team') : c.reviewerName || t('review.guest')}
-                </span>
-                {c.createdAt && <span className="text-ink-muted"> · {fmtDate(c.createdAt)}</span>}
-                <p className="text-ink mt-0.5 whitespace-pre-line">{c.body}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        <FeedbackSection
+          view="content"
+          decisions={decisions.filter((d) => viewOfRow(d) === 'content')}
+          comments={comments.filter((c) => viewOfRow(c) === 'content')}
+        />
+        <FeedbackSection
+          view="strategy"
+          decisions={decisions.filter((d) => viewOfRow(d) === 'strategy')}
+          comments={comments.filter((c) => viewOfRow(c) === 'strategy')}
+        />
 
         {lastReviewerComment && (
           <div className="flex items-center gap-2">
@@ -1820,393 +1990,109 @@ function ExternalFeedbackPanel({
   )
 }
 
-function StatusBadges({ post }: { post: Post }) {
-  const approval = post.approval.status || post.status
-  const isPublished = post.status === 'published' || Boolean(post.publishing.publishedAt || post.publishing.publicUrl)
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES[approval] ?? STATUS_STYLES[post.status])}>
-        {approval.replace('_', ' ')}
-      </Badge>
-      {isPublished && (
-        <Badge variant="secondary" className={cn('text-[9px]', STATUS_STYLES.published)}>
-          published
-        </Badge>
-      )}
-    </div>
-  )
-}
-/** Left pane: editable title + copy, saved into posts_patches via the API. */
-function CopyPane({
-  slug,
-  post,
-  postName,
-  pillarColor,
-  onSaved,
-  approving,
-  onSetStatus,
-  onDelete,
+
+/**
+ * GF-118 — the editable slide strip under the picture pane. One thumbnail per
+ * slide, each with move-left / move-right / remove. Ordering is explicit
+ * buttons rather than drag-and-drop so it works the same with a mouse, a
+ * finger and a keyboard.
+ */
+function SlideStrip({
+  slides,
+  busy,
+  activeIndex,
+  onSelect,
+  onMove,
+  onRemove,
 }: {
-  slug: string
-  post: Post
-  postName: string
-  pillarColor?: string
-  onSaved: () => void
-  approving: boolean
-  onSetStatus: (decision: ApprovalDecision) => void
-  onDelete: () => void
+  slides: Slide[]
+  busy: boolean
+  activeIndex: number
+  onSelect: (index: number) => void
+  onMove: (from: number, to: number) => void
+  onRemove: (index: number) => void
 }) {
   const t = useT()
-  // GF-37 — a published post is terminal: the editor is read-only / greyed out.
-  const locked = isPublished(post)
-  const initialHashtags = (post.hashtags ?? []).join(' ')
-  const initialDate = toDateInputValue(post.date)
-  const [title, setTitle] = useState(post.title ?? '')
-  const [copy, setCopy] = useState(post.copy ?? '')
-  const [hashtags, setHashtags] = useState(initialHashtags)
-  const [cta, setCta] = useState(post.cta ?? '')
-  // GF-16 — editable publication date (YYYY-MM-DD for the date input).
-  const [date, setDate] = useState(initialDate)
-  // GF-20 — editable target networks (multi-select, picked above the title).
-  const initialChannels = effectiveChannels(post)
-  const [channels, setChannels] = useState<Channel[]>(initialChannels)
-  const [channelOpen, setChannelOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  // GF-69 — editable post type (Single image / Carousel / Story). `post.format`
-  // is always a non-empty string by the time it reaches the SPA (coalescePost
-  // fills it structurally on the API side), so this just mirrors the server value.
-  const initialFormat = post.format || (isCarousel(post) ? 'carousel' : 'single image')
-  const [format, setFormat] = useState(initialFormat)
-
-  const channelsChanged = channels.join(',') !== initialChannels.join(',')
-  const formatChanged = format !== initialFormat
-  const dirty =
-    title !== (post.title ?? '') ||
-    copy !== (post.copy ?? '') ||
-    hashtags !== initialHashtags ||
-    cta !== (post.cta ?? '') ||
-    date !== initialDate ||
-    channelsChanged ||
-    formatChanged
-
-  const save = async () => {
-    if (locked) {
-      toast(t('calendar.publishedReadOnly'))
-      return
-    }
-    if (!dirty || saving) return
-    const patch: Record<string, unknown> = {}
-    if (title !== post.title) patch.title = title
-    if (copy !== post.copy) patch.copy = copy
-    if (hashtags !== initialHashtags) {
-      // Space- or newline-separated tokens → string[]; drop empties, keep as typed.
-      patch.hashtags = hashtags.split(/\s+/).map((t) => t.trim()).filter(Boolean)
-    }
-    if (cta !== (post.cta ?? '')) patch.cta = cta
-    if (channelsChanged && channels.length > 0) {
-      // Persist the multi-network list and keep the primary `channel` in sync so
-      // every single-channel reader (list icon, exports, mockups) stays coherent.
-      patch.channels = channels
-      patch.channel = channels[0]
-    }
-    // GF-69 — the picker sets metadata only; it never touches slides/media.
-    if (formatChanged) patch.format = format
-    // GF-16 — only send the date when it actually changed and is non-empty
-    // (the API rejects an empty date with a 422).
-    if (date !== initialDate) {
-      if (!date) {
-        toast.error(t('calendar.dateRequired'))
-        return
-      }
-      patch.date = date
-    }
-    setSaving(true)
-    try {
-      await apiPatchPost(slug, post.id, patch)
-      toast(t('calendar.updated', { id: postName }), { duration: 1600 })
-      onSaved()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('calendar.saveFailed'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const reset = () => {
-    setTitle(post.title ?? '')
-    setCopy(post.copy ?? '')
-    setHashtags(initialHashtags)
-    setCta(post.cta ?? '')
-    setDate(initialDate)
-    setChannels(initialChannels)
-    setChannelOpen(false)
-    setFormat(initialFormat)
-  }
-
-  // Toggle a network in/out of the selection, keeping CHANNEL_ORDER and ≥1 picked.
-  const toggleChannel = (c: Channel) => {
-    setChannels((prev) => {
-      const has = prev.includes(c)
-      if (has && prev.length === 1) return prev // never empty
-      const next = new Set(prev)
-      if (has) next.delete(c)
-      else next.add(c)
-      return CHANNEL_ORDER.filter((x) => next.has(x))
-    })
-  }
+  const controlClass =
+    'h-5 w-5 rounded flex items-center justify-center text-ink-muted transition-colors hover:bg-brand-blue hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-muted'
 
   return (
-    <div className={cn('p-6 lg:p-8 space-y-4', locked && 'opacity-70')}>
-      {locked && (
-        <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-paper-muted px-3 py-2 text-[11px] text-ink-muted">
-          <Send className="h-3.5 w-3.5 shrink-0" />
-          <span>{t('calendar.publishedReadOnly')}</span>
-        </div>
-      )}
-      {/* GF-37 — disabled fieldset makes every nested control read-only when the
-          post is published; `contents` keeps the existing layout intact. */}
-      <fieldset disabled={locked} className="contents">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="outline" className="text-[10px]">{postName}</Badge>
-        <StatusBadges post={post} />
-        <span className="text-[11px] text-ink-muted">v{post.approval.version}</span>
-
-        {/* GF-20 — target-network selector, top-right above the title. Multi-select:
-            a post can target several networks at once (each gets its own preview). */}
-        <div className="ml-auto">
-          {isApiEnabled ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setChannelOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-[11px] hover:bg-paper-muted focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                aria-haspopup="listbox"
-                aria-expanded={channelOpen}
-                aria-label={t('context.selectNetwork')}
-              >
-                {channels.map((c) => (
-                  <ChannelIcon key={c} channel={c} className="h-4 w-4" />
-                ))}
-                {channels.length === 1 && (
-                  <span className="font-medium">{CHANNEL_LABEL[channels[0]]}</span>
+    <div className="mt-3">
+      <p className="text-center text-xs text-ink-muted mb-2">
+        {t('calendar.slideCount', { n: slides.length, max: MAX_SLIDES })}
+      </p>
+      {/* `w-max mx-auto` rather than `justify-center`: a centred flex row that
+          overflows pushes its FIRST item past scrollLeft 0, where no scroll can
+          reach it — on mobile that hides the cover once there are ~6 slides.
+          Auto margins collapse to 0 on overflow, so this centres when it fits
+          and left-aligns (fully scrollable) when it does not. */}
+      <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+        <div className="flex gap-2 pb-1 w-max mx-auto">
+          {slides.map((s, i) => (
+            <div key={`${s.image}-${i}`} className="shrink-0 w-16">
+              <div
+                className={cn(
+                  'relative h-16 w-16 rounded-t-md overflow-hidden border transition-all',
+                  i === activeIndex
+                    ? 'border-brand-blue shadow-sm'
+                    : 'border-border-subtle opacity-70 hover:opacity-100',
                 )}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </button>
-              {channelOpen && (
-                <>
-                  {/* click-away backdrop */}
-                  <div className="fixed inset-0 z-10" onClick={() => setChannelOpen(false)} />
-                  <ul
-                    role="listbox"
-                    aria-multiselectable="true"
-                    className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border-subtle bg-paper py-1 shadow-md"
-                  >
-                    {CHANNEL_ORDER.map((c) => {
-                      const on = channels.includes(c)
-                      return (
-                        <li key={c}>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={on}
-                            onClick={() => toggleChannel(c)}
-                            className={cn(
-                              'flex w-full items-center gap-2 px-2.5 py-1.5 text-sm hover:bg-paper-muted',
-                              on && 'font-medium',
-                            )}
-                          >
-                            <ChannelIcon channel={c} className="h-4 w-4" />
-                            <span className="flex-1 text-left">{CHANNEL_LABEL[c]}</span>
-                            {on && <Check className="h-3.5 w-3.5 text-brand-green-600" />}
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </>
-              )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(i)}
+                  aria-label={t('calendar.goToSlide', { n: i + 1 })}
+                  className="absolute inset-0 h-full w-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue"
+                >
+                  <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                </button>
+                {i === 0 && (
+                  <span className="absolute inset-x-0 bottom-0 bg-brand-blue/90 text-white text-[9px] leading-tight text-center py-0.5">
+                    {t('calendar.cover')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onRemove(i)}
+                  aria-label={t('calendar.removeSlide', { n: i + 1 })}
+                  title={t('calendar.removeSlide', { n: i + 1 })}
+                  className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full bg-paper/90 text-ink-muted shadow flex items-center justify-center transition-colors hover:bg-red-500 hover:text-white disabled:opacity-40"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+              <div
+                className={cn(
+                  'flex items-center justify-between rounded-b-md border border-t-0 px-0.5 py-0.5',
+                  i === activeIndex ? 'border-brand-blue' : 'border-border-subtle',
+                )}
+              >
+                <button
+                  type="button"
+                  disabled={busy || i === 0}
+                  onClick={() => onMove(i, i - 1)}
+                  aria-label={t('calendar.moveSlideLeft', { n: i + 1 })}
+                  title={t('calendar.moveSlideLeft', { n: i + 1 })}
+                  className={controlClass}
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || i === slides.length - 1}
+                  onClick={() => onMove(i, i + 1)}
+                  aria-label={t('calendar.moveSlideRight', { n: i + 1 })}
+                  title={t('calendar.moveSlideRight', { n: i + 1 })}
+                  className={controlClass}
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
             </div>
-          ) : (
-            <span className="flex items-center gap-1">
-              {effectiveChannels(post).map((c) => (
-                <ChannelIcon key={c} channel={c} className="h-4 w-4" />
-              ))}
-            </span>
-          )}
+          ))}
         </div>
       </div>
-
-      <div>
-        {isApiEnabled ? (
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t('calendar.postTitle')}
-            className="w-full text-2xl font-bold text-ink leading-tight bg-transparent border-b border-transparent hover:border-border-subtle focus:border-brand-blue focus:outline-none transition-colors"
-          />
-        ) : (
-          <h2 className="text-2xl font-bold text-ink leading-tight">{post.title}</h2>
-        )}
-      </div>
-
-      {/* GF-16 — editable publication date. */}
-      {isApiEnabled && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.publishDate')}
-          </p>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          />
-        </div>
-      )}
-
-      {/* GF-69 — editable post type. Metadata only: never creates/deletes/
-          reorders slides or media, even when Carousel is picked on a post
-          with fewer than 2 slides — the preview keeps rendering whatever the
-          post actually has. `format` stays free-form on the wire (GF-69
-          TASK-001), so a legacy/non-canonical value (e.g. "reel") is shown as
-          its own extra option instead of leaving the select with nothing
-          selected — the user can still switch it to a canonical value. */}
-      {isApiEnabled ? (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.postTypeLabel')}
-          </p>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-            className="text-sm bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          >
-            {!isCanonicalFormat(format) && format && (
-              <option value={format}>{format}</option>
-            )}
-            {POST_FORMATS.map((f) => (
-              <option key={f} value={f}>
-                {t(POST_FORMAT_LABEL_KEY[f])}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">
-            {t('calendar.postTypeLabel')}
-          </p>
-          <span className="text-sm text-ink-muted">
-            {(() => {
-              const key = postFormatLabelKey(initialFormat)
-              // A legacy/non-canonical format (e.g. "reel") has no i18n key —
-              // show the raw stored value rather than mislabeling it.
-              return key ? t(key) : initialFormat
-            })()}
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <Pillar name={post.pillar} color={pillarColor} />
-        {post.campaign && (
-          <Badge variant="outline" className="font-normal">
-            <Tag className="h-3 w-3 mr-1" />
-            {post.campaign}
-          </Badge>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.copyLabel')}</p>
-        {isApiEnabled ? (
-          <textarea
-            value={copy}
-            onChange={(e) => setCopy(e.target.value)}
-            rows={10}
-            placeholder={t('calendar.writeCopy')}
-            className="w-full text-sm leading-relaxed bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        ) : (
-          <p className="text-sm whitespace-pre-line leading-relaxed text-ink-muted">{post.copy}</p>
-        )}
-      </div>
-
-      {isApiEnabled ? (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.hashtags')}</p>
-          <textarea
-            value={hashtags}
-            onChange={(e) => setHashtags(e.target.value)}
-            rows={2}
-            placeholder="#hashtag1 #hashtag2 …"
-            className="w-full text-xs text-brand-blue font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-          />
-        </div>
-      ) : (
-        post.hashtags.length > 0 && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">{t('calendar.hashtags')}</p>
-            <p className="text-xs text-brand-blue font-medium">{post.hashtags.join(' ')}</p>
-          </div>
-        )
-      )}
-
-      {isApiEnabled ? (
-        <div className="pt-2 border-t border-border-subtle">
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">{t('calendar.cta')}</p>
-          <input
-            value={cta}
-            onChange={(e) => setCta(e.target.value)}
-            placeholder="Call to action…"
-            className="w-full text-sm font-medium bg-paper border border-border-subtle rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          />
-        </div>
-      ) : (
-        post.cta && (
-          <div className="pt-2 border-t border-border-subtle">
-            <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">{t('calendar.cta')}</p>
-            <p className="text-sm font-medium">{post.cta}</p>
-          </div>
-        )
-      )}
-
-      {post.approval.blockerReason && (
-        <p className="text-xs text-rose-700 bg-rose-50 px-3 py-2 rounded-md">
-          {t('calendar.blocked', { reason: post.approval.blockerReason })}
-        </p>
-      )}
-
-      {isApiEnabled && dirty && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-            {t('common.saveChanges')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
-            {t('common.discard')}
-          </Button>
-        </div>
-      )}
-      {isApiEnabled && (
-        <div className="flex items-center gap-2 pt-2 border-t border-border-subtle flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
-            {t('calendar.statusLabel')}
-          </span>
-          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} />
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={approving}
-            onClick={onDelete}
-            className="ml-auto text-ink-muted hover:text-rose-700"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-            {t('calendar.deletePost')}
-          </Button>
-        </div>
-      )}
-      </fieldset>
     </div>
   )
 }
@@ -2222,9 +2108,13 @@ function PicturePane({
   slideIndex,
   onSlideChange,
   onZoom,
+  // GF-118 — suppressed when the editable SlideStrip is rendered underneath,
+  // so the pane doesn't show two near-identical thumbnail rows.
+  showFilmstrip = true,
 }: {
   post: Post
   slideIndex: number
+  showFilmstrip?: boolean
   onSlideChange: (i: number) => void
   onZoom: () => void
 }) {
@@ -2250,7 +2140,7 @@ function PicturePane({
           />
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 text-white text-[10px] font-medium px-2 py-0.5">
             <Film className="h-3 w-3" />
-            Video
+            {t('common.video')}
           </span>
           <span className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <Maximize2 className="h-3.5 w-3.5" />
@@ -2331,6 +2221,7 @@ function PicturePane({
         </div>
 
         {/* Thumbnail filmstrip */}
+        {showFilmstrip && (
         <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
           <div className="flex gap-2 pb-1 justify-center">
             {slides.map((s, i) => (
@@ -2350,6 +2241,7 @@ function PicturePane({
             ))}
           </div>
         </div>
+        )}
       </div>
     )
   }

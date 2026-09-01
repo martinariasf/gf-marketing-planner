@@ -29,15 +29,119 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-16',
-    title: 'Posts dated today can be scheduled again',
+    date: '2026-08-31',
+    title: 'A stale session now sends you back to login instead of a broken page',
     items: [
-      'A post dated for today was wrongly treated as being in the past, so "Programmed" was blocked with a confusing error. Today\'s posts schedule normally again.',
-      'Approving a post whose date has already passed now says so, instead of quietly moving it and doing nothing. You can change the date, or approve it for the record knowing it will not be published.',
+      'If your dashboard session was rejected by the server, you used to land on a broken red error card on the home page and had to know to reload it yourself. You now get sent straight to the login screen with a plain "your session expired, please sign in again" message, wherever in the dashboard it happened.',
+      'A brief hiccup on our end that made the server temporarily unreachable used to look identical to a bad session and could sign everyone out at once. The two are now told apart, so a passing server blip no longer logs anyone out.',
     ],
   },
   {
-    date: '2026-08-15',
+    date: '2026-08-30',
+    title: 'Upload your own video to a post',
+    items: [
+      'The Upload button on a post now takes a video as well as pictures - an MP4, WebM or MOV up to 100 MB. Until now it only accepted images, so the only way to get a video onto a post was to ask Viktor for one.',
+      'An uploaded video plays everywhere a Viktor-made video already does: in the post preview, on the calendar card and in the thumbnail strip.',
+      'A post carries one video at a time, so uploading a new one replaces it. Pictures already on the post are left exactly as they are.',
+      'If you pick something that cannot be used - a file that is too large, a format we do not support, or a video and pictures together in one go - you get told before anything is uploaded, instead of the upload failing halfway.',
+    ],
+  },
+  {
+    date: '2026-08-30',
+    title: 'Share links now show the right company name',
+    items: [
+      'A share link showed the company name stored in the workspace file on the server, which could be left over from whichever workspace it was copied from. One client could be shown another client’s name on the very page they were asked to sign off. The name on a share link now comes from the client record you see and edit in the dashboard, so the two can no longer disagree.',
+      'If a client has no proper name recorded anywhere, the strategy page falls back to the title of the link itself. It will never print the internal short name we use behind the scenes.',
+    ],
+  },
+  {
+    date: '2026-08-30',
+    title: 'Upload your own photos to a post, not just one at a time',
+    items: [
+      'The Upload button on a post now takes several pictures at once, so you can build a carousel from your own photos - an event, the team, real products - instead of only from pictures Viktor generates. Ten is the limit, the same as Instagram.',
+      'A strip of thumbnails under the picture lets you put them in the order you want and drop the ones you do not, with each move saved as you make it. The first one is always the cover, and it is the picture that shows on the calendar.',
+      'A post that already had one picture keeps it as the first image, and anything you upload lands after it.',
+      'The Upload button used to be hidden on posts that were already carousels, so there was no way to add to one by hand at all. It is available on every post now.',
+    ],
+  },
+  {
+    date: '2026-08-29',
+    title: 'Fixes: connecting your own tools, chat memory, and the Approvals tab',
+    items: [
+      'Connecting an outside tool to your account — a custom GPT, an automation like n8n, or the "Test request" button in our API docs — used to fail with "Unknown or revoked token" even though the token was correct. Those tools read the address to call out of our own API description, and that description named our test system instead of the live one, so a valid live token was being sent to the wrong place. Each system now names itself correctly.',
+      'The Approvals tab no longer fails to load for an account whose approval history is still empty.',
+      'Viktor now keeps the thread of a conversation across messages instead of starting fresh each time you write.',
+      'An image you attach in the chat is now something Viktor can use directly, and he no longer reports having saved a post when the save did not go through.',
+    ],
+  },
+  {
+    date: '2026-08-29',
+    title: 'The Performance tab now shows real numbers',
+    items: [
+      'Every number on the Performance tab used to come from a file we filled in by hand. Nothing on that page had ever touched a social network. It now reads live figures from the account that actually publishes your posts, with a visible "last updated" stamp and a Refresh button.',
+      'Published posts are listed with their real state and a link straight through to the live post on Instagram or LinkedIn.',
+      'Per-post numbers (likes, comments and so on for one specific post) are not shown, because our publishing tool does not report them. We would rather show nothing than show a zero we cannot stand behind. Getting those numbers is being handled as separate work.',
+      'If your account is not connected, or is connected but has no channels linked, the tab now tells you exactly which of the two it is instead of showing an empty page.',
+      'The Google Analytics box has been removed. It announced that web analytics was not connected and then showed two made-up numbers underneath it.',
+      'On the Goals tab, the weekly wins and losses summary has been removed, and any goal we cannot actually measure now says so rather than showing an empty progress bar.',
+      'The Integration tab now lists which social channels your publishing key can see, so a missing channel is obvious at the point where you would fix it.',
+    ],
+  },
+  {
+    date: '2026-08-29',
+    title: 'Viktor now actually reads the documents you upload',
+    items: [
+      'A document you add under Assets > Information Sources is now something Viktor reads before he writes. Until now it was stored correctly but he was never told it existed, so asked to use it he would report — honestly — that no such document was there.',
+      'He now loads your approved sources as a normal part of drafting a post or writing copy, not only when you ask him about a file by name. Where one of your documents contradicts what he assumed about your business, your document wins.',
+      'Each source now says plainly whether Viktor can see it. The badge reads "Viktor is using this" once a source is approved, and "Viktor cannot see it yet" until then, instead of only showing an approval state.',
+    ],
+  },
+  {
+    date: '2026-08-29',
+    title: 'Long documents no longer fail to save',
+    items: [
+      'Uploading a longer text file — a brand book, a brief, a transcript — in the Information Sources section of the Assets tab used to fail with "Failed to create record" once the file passed about two pages. Any length up to roughly 1 MB now saves.',
+      'The same limit was silently cutting off other things: long chat messages from Viktor, the text of documents attached in the chat, and long review comments from your clients. All of them now hold the full text.',
+      'A file you upload in the Assets tab is now available to Viktor straight away. It used to need a second "approve" click before he could use it, which was easy to miss.',
+      'When something you upload really is invalid, the message now says which field was rejected and why, instead of a generic failure.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'The plan summary now opens the Strategy link instead of closing it',
+    items: [
+      'In the card view of a Strategy link, the month-by-month plan summary — the calendar grid plus the counts by topic, network and post type — now sits at the TOP, above the first card, so your client sees how the month is laid out before judging any single post.',
+      'The same summary now also sits at the top of the end screen, above the post-by-post recap, instead of below it.',
+      'It can be collapsed with one click, and it stays collapsed while your client swipes through the cards and reaches the end screen.',
+      'The list view is unchanged: there the summary still closes the page.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'Strategy links now review like the content link, and feedback is split by kind',
+    items: [
+      'A Strategy link now says whose plan it is: the header reads "Strategy Revision — <your client\'s name>" instead of just the link title.',
+      'The Strategy link opens as a card deck by default — one post at a time, swipe right to approve and left to request changes — the same way the content review link works. The old list is still there behind the toggle in the header.',
+      'Requesting changes now asks for a reason: the send button stays disabled until your client writes one, so a change request never arrives without an explanation. Approving is still one click. This applies to content links too.',
+      'The post copy is now clearly labelled as the copy, and opening it continues the few lines already on screen instead of restarting the text from the beginning.',
+      'In the calendar, the "External feedback" box under a post now separates what the client said about the posts from what they said about the strategy, so you can tell which one they were reacting to.',
+      'Existing share links and all previous feedback are unchanged and keep working.',
+    ],
+  },
+  {
+    date: '2026-08-21',
+    title: 'New: share the plan for sign-off, without the artwork',
+    items: [
+      'When you create a share link you now choose what kind of review it is: "Content review" (the existing link, showing the finished creative) or the new "Strategy" link.',
+      'A Strategy link shows the plan as text only — for each post the topic, the post type, the networks it goes to, a description of how the visual will look, and the date. No images and no mockups, so a client can sign off the plan before anything is produced.',
+      'The post copy is still there on every row, tucked behind a "show copy" toggle.',
+      'At the bottom, a calendar grid per month shows how the posts are spread across the days, plus a count of posts by topic, network and post type.',
+      'Your client can comment, approve and request changes exactly as on a content link, and it all lands in the same Activity tab.',
+      'Existing share links are unchanged and keep working as content reviews.',
+    ],
+  },
+  {
+    date: '2026-08-21',
     title: 'New: Instagram Story as a post type',
     items: [
       'Every post now has a "Post type" control in the calendar: Single image, Carousel, or Story.',
@@ -46,7 +150,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'New: a Configuration page with two per-client dashboard switches',
     items: [
       'A new "Configuration" tab lets you turn the "AI generated" label on posts on or off, and turn on auto-programming so an approved post is sent straight to your publishing tool instead of waiting for a separate "Programmed" step.',
@@ -54,7 +158,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Fixed: approving a post to "Programmed" could leave it stuck in an earlier column',
     items: [
       'Moving a post to Programmed from the Approvals board now updates its status everywhere, so it reliably shows up in the Programmed lane instead of sometimes staying in Approved or Draft.',
@@ -62,63 +166,78 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Fixed garbled dashes and ellipses in the calendar export and placeholders',
     items: [
       'The export date-range label and the hashtag/CTA placeholder text in the calendar could show a garbled character sequence (mojibake) instead of a dash or ellipsis — those now render correctly.',
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: 'Attach images and documents in chat',
     items: [
       'You can now attach images and text documents when chatting with Viktor — drag and drop them onto the chat composer or use the new paperclip button. Attached images can be used directly as a reference for image generation; attached documents (notes, transcripts, CSV, etc.) are read and used as context for the reply.',
     ],
   },
   {
-    date: '2026-08-06',
+    date: '2026-08-21',
     title: "You'll now be told when a limit is hit, instead of silence",
     items: [
       "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-16',
+    title: 'Posts dated today can be scheduled again',
+    items: [
+      'A post dated for today was wrongly treated as being in the past, so "Programmed" was blocked with a confusing error. Today\'s posts schedule normally again.',
+      'Approving a post whose date has already passed now says so, instead of quietly moving it and doing nothing. You can change the date, or approve it for the record knowing it will not be published.',
+    ],
+  },
+  {
+    date: '2026-08-16',
+    title: 'Edited images update without a hard refresh',
+    items: [
+      'When Viktor edited an existing picture in place, your browser kept showing the old one for up to a day — pressing Reload could not help, because the address had not changed. Edited images now appear straight away.',
+    ],
+  },
+  {
+    date: '2026-08-03',
     title: 'Status changes made by Viktor now show up on reload',
     items: [
       'When Viktor moves a post to another status (for example into Review), the calendar and kanban now reflect it as soon as you press the reload button — previously his change could stay invisible on posts that had already been approved or reviewed in the dashboard.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'Post media is now labelled as AI generated',
     items: [
       'Images and videos that Viktor generated now carry a small "AI generated" label in the Instagram and LinkedIn previews, so you can tell at a glance which media is AI-made before it goes out — and stay on the right side of the platforms\' disclosure rules.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'Video posts play right in the preview',
     items: [
       'A video post used to look like a still image with no way to play it. The preview now plays the real clip in place, and Instagram shows it in a vertical reel frame while LinkedIn keeps its landscape frame without cropping your vertical clips.',
     ],
   },
   {
-    date: '2026-07-08',
+    date: '2026-08-03',
     title: 'General review comments are shown in full, next to every post',
     items: [
       'On the review link you share with clients and colleagues, a comment that applies to the whole set now appears in full underneath every post — not just once at the bottom, and no longer cut off mid-sentence. It is marked "Applies to all posts" so nobody mistakes it for feedback on a single item.',
     ],
   },
   {
-    date: '2026-07-04',
+    date: '2026-07-05',
     title: 'Every generated image and video now shows up in Assets',
     items: [
       'The Assets tab now also lists images and videos that are attached to your posts but were missing from the asset catalogue — nothing Viktor creates can silently disappear from the gallery anymore. This is what previously made some generated videos invisible.',
     ],
   },
   {
-    date: '2026-07-04',
+    date: '2026-07-05',
     title: 'Connect a Google Drive folder to Viktor',
     items: [
       'The Integration tab now shows Viktor’s own Google Drive address — the one you share your folders with so he can read your logos, briefs and reference files. Copy it with one click and share your folder with it as a Viewer in Google Drive.',

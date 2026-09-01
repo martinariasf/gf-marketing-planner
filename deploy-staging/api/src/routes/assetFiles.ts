@@ -15,7 +15,7 @@
 // client's own assets directory.
 
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { problem } from '../problem.js'
 import { withPb } from '../pb.js'
@@ -52,12 +52,50 @@ assetFiles.get('/clients/:slug/assets/files/:name', async (c) => {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
   const filePath = join(ROOT, 'clients', slug, 'assets', name)
   try {
+    // GF-29 — these files are NOT immutable. The old header said they were
+    // ("unique filenames"), but the image-generation skill tells the agent, for
+    // PIL edits of an existing picture, to "always save to the client assets
+    // path ... the file overwrites in place". So the bytes at a given URL do
+    // change, and `max-age=86400` pinned the stale ones in the browser for a
+    // day: refetching the post JSON returned the correct (unchanged) URL and
+    // the <img> re-rendered straight from cache. That is why "the agent says
+    // it's done but I have to refresh", and why the reload button looked
+    // broken for image edits -- no amount of refetching can beat a cached URL.
+    //
+    // Revalidate instead. A validator makes the common case a cheap 304 rather
+    // than a re-download, so this is close to free while staying correct.
+    //
+    // The validator is size+mtime, so it's weak by construction (RFC 9110
+    // marks it `W/`): a same-byte-count overwrite that lands within the
+    // filesystem's mtime resolution would keep the old ETag. That's a real
+    // edge case for a PIL in-place edit, just not the common one -- accepted
+    // as a documented tradeoff rather than paying for a content hash on every
+    // request.
+    const info = await stat(filePath)
+    const etag = `W/"${info.size.toString(16)}-${info.mtimeMs.toString(16)}"`
+    const lastModified = info.mtime.toUTCString()
+    // If-None-Match takes precedence over If-Modified-Since when both are
+    // sent (RFC 9110 13.1.1); fall back to If-Modified-Since only when the
+    // client has no ETag yet (or is an intermediary that only speaks dates).
+    // HTTP-date (and therefore If-Modified-Since) has no sub-second
+    // precision, so both sides must be compared at second granularity -- an
+    // mtime of 12:00:00.345 must still satisfy IMS: Tue, ... 12:00:00 GMT.
+    const ifNoneMatch = c.req.header('if-none-match')
+    const ifModifiedSince = c.req.header('if-modified-since')
+    const since = ifModifiedSince ? new Date(ifModifiedSince).getTime() : NaN
+    const mtimeSeconds = Math.floor(info.mtime.getTime() / 1000)
+    const notModified = ifNoneMatch
+      ? ifNoneMatch === etag
+      : !Number.isNaN(since) && mtimeSeconds <= Math.floor(since / 1000)
+    if (notModified) {
+      return c.body(null, 304, { ETag: etag, 'Cache-Control': 'no-cache', 'Last-Modified': lastModified })
+    }
     const bytes = await readFile(filePath)
     return c.body(bytes, 200, {
       'Content-Type': CONTENT_TYPE[ext] ?? 'application/octet-stream',
-      // Generated assets are immutable once written (unique filenames), so
-      // allow long caching. The dashboard busts via new filenames, not query.
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'no-cache',
+      ETag: etag,
+      'Last-Modified': lastModified,
     })
   } catch {
     return problem(c, { title: 'Not Found', status: 404, detail: 'No such asset file' })

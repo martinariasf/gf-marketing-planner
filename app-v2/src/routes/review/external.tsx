@@ -30,7 +30,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
-  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -48,9 +47,13 @@ import {
   type PublicReviewPayload,
   type PublicReviewPost,
   type PublicReviewBrand,
+  type PublicReviewMedia,
   type PublicPostDecision,
   type ReviewComment,
 } from '@/lib/api-client'
+import type { PostMedia } from '@/types'
+import { StrategyReviewShell } from '@/routes/review/strategy-view'
+import { RejectSheet } from '@/routes/review/reject-sheet'
 
 // Channels with a platform-accurate mockup. Anything else (or no channel)
 // falls back to the plain details card.
@@ -116,6 +119,21 @@ export default function ExternalReviewPage() {
         onName={setName}
         onCode={setCode}
         onSubmit={open}
+      />
+    )
+  }
+
+  // GF-105 — the gate, the session and the decision endpoints are shared; only
+  // what the reviewer then sees differs. An un-upgraded API response has no
+  // `view` at all, which must keep meaning 'content'.
+  if (payload.link.view === 'strategy') {
+    return (
+      <StrategyReviewShell
+        publicId={publicId}
+        token={token}
+        payload={payload}
+        reviewerName={payload.reviewerName}
+        onRefreshed={setPayload}
       />
     )
   }
@@ -213,8 +231,24 @@ interface LightboxTarget {
   slide: number
 }
 
+// GF-105 — `slides[].image` is optional on the wire now (a strategy link keeps
+// the slide entries but strips their URLs). This is the CONTENT view, which is
+// image-first: narrow to the entries that actually carry an image instead of
+// asserting, so a captions-only entry can never reach the lightbox or the mockup
+// and render a broken frame.
+function withImage(
+  slides: Array<{ image?: string; caption?: string }> | undefined,
+): Array<{ image: string; caption?: string }> {
+  return (slides ?? []).filter((s): s is { image: string; caption?: string } => !!s.image)
+}
+
+function mediaWithUrl(media: PublicReviewMedia[] | undefined): PostMedia[] {
+  return (media ?? []).filter((m): m is PostMedia => !!m.url)
+}
+
 function slidesOf(post: PublicReviewPost): Array<{ image: string; caption?: string }> {
-  if (post.slides && post.slides.length > 0) return post.slides
+  const slides = withImage(post.slides)
+  if (slides.length > 0) return slides
   if (post.image) return [{ image: post.image }]
   return []
 }
@@ -353,10 +387,10 @@ function PostContent({
             copy: post.copy ?? '',
             hashtags: post.hashtags ?? [],
             image: post.image,
-            slides: post.slides,
+            slides: withImage(post.slides),
             // GF-65 — pass media so video posts render (and carry the AI badge)
             // in the external review, not just images.
-            media: post.media,
+            media: mediaWithUrl(post.media),
             channel: post.channel ?? '',
             // GF-69 — pass format through so a story post renders its 9:16
             // frame + badge here too, not just in the internal dashboard.
@@ -881,111 +915,6 @@ function DeckCard({
   )
 }
 
-/** Bottom sheet asking what should change. Comment is optional by design. */
-function RejectSheet({
-  t,
-  open,
-  busy,
-  onCancel,
-  onSubmit,
-}: {
-  t: T
-  open: boolean
-  busy: boolean
-  onCancel: () => void
-  onSubmit: (comment?: string) => void
-}) {
-  const [text, setText] = useState('')
-  const [reasons, setReasons] = useState<string[]>([])
-
-  const reasonKeys = ['review.ext.reasonWording', 'review.ext.reasonImage', 'review.ext.reasonTiming']
-
-  useEffect(() => {
-    if (!open) {
-      setText('')
-      setReasons([])
-    }
-  }, [open])
-
-  const submit = () => {
-    const parts = [...reasons, text.trim()].filter(Boolean)
-    onSubmit(parts.length > 0 ? parts.join(' — ') : undefined)
-  }
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onCancel}
-            className="fixed inset-0 z-40 bg-black/40"
-          />
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-xl rounded-t-2xl border border-border-subtle bg-paper p-5 space-y-3 shadow-xl"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <PenLine className="h-4 w-4 text-amber-600" />
-                {t('review.ext.sheetTitle')}
-              </h3>
-              <button onClick={onCancel} aria-label={t('common.cancel')} className="text-ink-muted hover:text-ink">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="text-xs text-ink-muted">{t('review.ext.sheetHint')}</p>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {reasonKeys.map((k) => {
-                const label = t(k)
-                const active = reasons.includes(label)
-                return (
-                  <button
-                    key={k}
-                    onClick={() =>
-                      setReasons((r) => (active ? r.filter((x) => x !== label) : [...r, label]))
-                    }
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                      active
-                        ? 'border-amber-400 bg-amber-50 text-amber-700'
-                        : 'border-border-subtle text-ink-muted hover:text-ink',
-                    )}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder={t('review.ext.commentPlaceholder')}
-              className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 resize-y"
-            />
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button onClick={submit} disabled={busy} className="bg-amber-600 hover:bg-amber-700">
-                {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                {t('review.ext.sheetSend')}
-              </Button>
-              <Button variant="ghost" disabled={busy} onClick={() => onSubmit(undefined)}>
-                {t('review.ext.sheetNoComment')}
-              </Button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
-}
-
 // ── Summary screen: recap + overall verdict ──────────────────────────────────
 
 function SummaryScreen({
@@ -1319,6 +1248,8 @@ function ListPostCard({
   const [posting, setPosting] = useState(false)
   const [showBox, setShowBox] = useState(false)
   const [deciding, setDeciding] = useState(false)
+  // GF-106: a change request always goes through the sheet, so it always carries a reason.
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
   const [tab, setTab] = useState<'preview' | 'details'>(hasMockup ? 'preview' : 'details')
@@ -1338,11 +1269,12 @@ function ListPostCard({
     }
   }
 
-  const onDecide = async (d: 'approved' | 'changes_requested') => {
-    if (deciding || decision?.decision === d) return
+  const onDecide = async (d: 'approved' | 'changes_requested', comment?: string) => {
+    if (deciding || (decision?.decision === d && !comment)) return
     setDeciding(true)
     try {
-      await decide(post.id, d)
+      await decide(post.id, d, comment)
+      setSheetOpen(false)
     } catch {
       /* ignore — reviewer can retry */
     } finally {
@@ -1397,7 +1329,7 @@ function ListPostCard({
           <Button
             size="sm"
             variant={decision?.decision === 'changes_requested' ? 'default' : 'outline'}
-            onClick={() => void onDecide('changes_requested')}
+            onClick={() => setSheetOpen(true)}
             disabled={deciding}
           >
             <PenLine className="h-3.5 w-3.5 mr-1.5" />
@@ -1444,6 +1376,14 @@ function ListPostCard({
           </div>
         )}
       </div>
+
+      <RejectSheet
+        t={t}
+        open={sheetOpen}
+        busy={deciding}
+        onCancel={() => setSheetOpen(false)}
+        onSubmit={(comment) => void onDecide('changes_requested', comment)}
+      />
     </article>
   )
 }

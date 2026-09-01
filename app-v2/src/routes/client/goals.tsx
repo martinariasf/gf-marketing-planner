@@ -6,7 +6,6 @@ import {
   XAxis,
   YAxis,
   ResponsiveContainer,
-  Cell,
   Tooltip,
   ReferenceLine,
 } from 'recharts'
@@ -16,11 +15,12 @@ import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KpiCard } from '@/components/kpi-card'
 import { fmtCompact, fmtDate } from '@/lib/format'
-import { BRAND, PACE_COLORS } from '@/lib/brand'
+import { BRAND } from '@/lib/brand'
 import { Clock, Pencil, Lock } from 'lucide-react'
 import { useEdit } from '@/lib/edit-store'
 import { useT, useI18n, type Lang } from '@/lib/i18n'
 import type { ClientBundle } from '@/lib/client-data'
+import { actualForGoal, ANALYTICS_WINDOW_DAYS } from '@/lib/goal-actuals'
 
 // GV2 — period filter types + helpers (mirrors performance.tsx)
 type PeriodKey = 'all' | 'last4w' | 'thisMonth' | 'thisQuarter'
@@ -317,7 +317,7 @@ function MonthlyTooltip({ active, payload, label }: MonthlyTooltipProps) {
 export default function GoalsView() {
   const t = useT()
   const { lang } = useI18n()
-  const { goals, performance, brief } = useOutletContext<ClientBundle>()
+  const { goals, analytics, brief } = useOutletContext<ClientBundle>()
   const { slug = '' } = useParams<{ slug: string }>()
   const { editMode } = useEdit()
 
@@ -336,7 +336,11 @@ export default function GoalsView() {
 
   const allMonthlyReachData = goals.monthly.map((m) => {
     const reachGoal = m.goals.find((g) => g.ref === 'g_reach')
-    const reachActual = performance?.aggregates.monthly[m.month]?.reach ?? 0
+    // GF-113: the per-month reach breakdown came from mock aggregates. Postiz
+    // gives us a daily series for the last 30 days only, which cannot be split
+    // into historical months, so there is no honest per-month actual to plot.
+    // Charting 0 would draw a "we achieved nothing" line across the year.
+    const reachActual: number | null = null
     return {
       month: m.month,
       target: reachGoal?.target ?? 0,
@@ -410,17 +414,17 @@ export default function GoalsView() {
               ))}
             </TabsList>
           </Tabs>
-          {performance?.lastSyncedAt && (
+          {analytics.syncedAt && (
             <div className="flex items-center gap-1.5 text-xs text-ink-muted">
               <Clock className="h-3.5 w-3.5" />
-              {t('goals.lastSync')} {fmtDate(performance.lastSyncedAt)}
-              <span className="ml-1 text-ink-muted/70">({performance.source})</span>
+              {t('goals.lastSync')} {fmtDate(analytics.syncedAt)}
+              <span className="ml-1 text-ink-muted/70">({analytics.provider})</span>
             </div>
           )}
         </div>
       </div>
 
-      {!performance && (
+      {analytics.status === 'no_key' && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardContent className="p-4 text-sm text-amber-700">
             {t('goals.noPerformance')}
@@ -432,7 +436,10 @@ export default function GoalsView() {
         <h2 className="text-lg font-semibold">{t('goals.quarterlyKpis')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {goals.quarterly.map((g) => {
-            const progress = performance?.vsGoals[g.id]
+            // GF-113: explicit, reviewable mapping (see lib/goal-actuals.ts).
+            // `null` means unmeasurable, and the card says so rather than
+            // drawing an empty progress bar.
+            const actualValue = actualForGoal(g, analytics)
             const profiles = brief.channels.profiles ?? []
             const labelLower = g.label.toLowerCase()
             const matchedProfile = profiles.find((p) =>
@@ -443,11 +450,17 @@ export default function GoalsView() {
               <KpiCard
                 key={g.id}
                 label={g.label}
-                current={progress?.current ?? 0}
+                current={actualValue}
                 target={g.target}
                 unit={g.unit}
-                pace={progress?.pace}
-                deltaPct={progress?.deltaPct}
+                // Our measurements span 30 days; these targets are quarterly. Say
+                // so and drop the bar rather than implying a third of a quarter
+                // is a third of the goal.
+                windowNote={
+                  actualValue === null
+                    ? undefined
+                    : t('goals.measuredWindow', { days: String(ANALYTICS_WINDOW_DAYS) })
+                }
                 compact={g.target > 1000}
                 channel={matchedProfile?.network}
                 channelUrl={matchedProfile?.url}
@@ -495,7 +508,7 @@ export default function GoalsView() {
               </thead>
               <tbody>
                 {goals.quarterly.map((g, i) => {
-                  const actual = performance?.vsGoals[g.id]?.current
+                  const actual = actualForGoal(g, analytics) ?? undefined
                   return (
                     <tr key={g.id} className="border-b border-border-subtle/60 last:border-0">
                       <td className="px-4 py-3">
@@ -740,21 +753,15 @@ export default function GoalsView() {
                       }}
                     />
                   )}
+                  {/*
+                    GF-113: the "actual" bar is gone. It plotted mock per-month
+                    reach from performance.json. Postiz gives us a 30-day daily
+                    series that cannot be split into historical months, so there
+                    is no honest actual to draw — and a 0-height bar per month
+                    would read as "we achieved nothing all year".
+                    This chart now shows the TARGETS the team set, which is real.
+                  */}
                   <Bar dataKey="target" radius={[6, 6, 0, 0]} fill={BRAND.blue + '40'} />
-                  <Bar dataKey="actual" radius={[6, 6, 0, 0]}>
-                    {monthlyReachData.map((entry) => {
-                      const pct = entry.target === 0 ? 0 : entry.actual / entry.target
-                      const color =
-                        entry.actual === 0
-                          ? '#d4d4d8'
-                          : pct >= 1
-                            ? PACE_COLORS.ahead
-                            : pct >= 0.9
-                              ? PACE_COLORS['on-track']
-                              : PACE_COLORS.behind
-                      return <Cell key={entry.month} fill={color} />
-                    })}
-                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -763,14 +770,7 @@ export default function GoalsView() {
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: BRAND.blue + '40' }} />
                 {t('goals.legendTarget')}
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PACE_COLORS.ahead }} />
-                {t('goals.legendAhead')}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PACE_COLORS.behind }} />
-                {t('goals.legendBehind')}
-              </span>
+              <span className="text-ink-muted/80">{t('goals.actualsNotMeasured')}</span>
             </div>
           </CardContent>
         </Card>
@@ -894,50 +894,13 @@ export default function GoalsView() {
         </div>
       </section>
 
-      {performance?.weeklySummary && (
-        <>
-          <Separator />
-          <section id="weekly-summary" className="space-y-3">
-            <h2 className="text-lg font-semibold">
-              {t('goals.weekSummary', { n: performance.weeklySummary.week })}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-brand-green-200/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-green-600">{t('goals.wins')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm space-y-2">
-                    {performance.weeklySummary.wins.map((x, i) => (
-                      <li key={i}>&middot; {x}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-              <Card className="border-rose-200/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-rose-700">{t('goals.losses')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm space-y-2">
-                    {performance.weeklySummary.losses.map((x, i) => (
-                      <li key={i}>&middot; {x}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-              <Card className="border-brand-blue-200/60 bg-brand-blue-50/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-brand-blue">{t('goals.nextTest')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm">{performance.weeklySummary.nextTest}</p>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-        </>
-      )}
+      {/*
+        GF-113 / TASK-011 — the weekly wins/losses/next-test block was REMOVED here.
+        It was Viktor's prose stored in the mock performance.json, presented on a
+        measurement tab as if it were a finding. It is not a measurement, and
+        nothing produced it once the mock file was deleted.
+        Martin's decision, 2026-08-24.
+      */}
     </div>
   )
 }

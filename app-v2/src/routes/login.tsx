@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useLocation } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { GFLogo } from '@/components/gf-logo'
 import { login } from '@/lib/api-client'
+import { useT } from '@/lib/i18n'
 
 /**
  * GF-58 — dashboard login. A person signs in with email + password; the API
@@ -12,7 +13,10 @@ import { login } from '@/lib/api-client'
  * pass through here.
  */
 export default function Login() {
+  const t = useT()
   const navigate = useNavigate()
+  const location = useLocation()
+  const expired = Boolean((location.state as { expired?: boolean } | null)?.expired)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +31,7 @@ export default function Login() {
       await login(email.trim(), password)
       navigate('/', { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(err instanceof Error ? err.message : t('login.failed'))
       setBusy(false)
     }
   }
@@ -38,19 +42,25 @@ export default function Login() {
         <div className="flex flex-col items-center gap-3 text-center">
           <GFLogo variant="lockup" size="lg" />
           <div>
-            <h1 className="text-lg font-semibold text-ink">Sign in to Viktor</h1>
+            <h1 className="text-lg font-semibold text-ink">{t('login.heading')}</h1>
             <p className="text-sm text-ink-muted mt-1">
-              Use your account email and password.
+              {t('login.subheading')}
             </p>
           </div>
         </div>
+
+        {expired && (
+          <p className="text-sm text-amber-800 bg-amber-50/60 border border-amber-200 rounded-md px-3 py-2">
+            {t('login.sessionExpired')}
+          </p>
+        )}
 
         <Card>
           <CardContent className="p-6">
             <form onSubmit={onSubmit} className="space-y-4" noValidate>
               <div className="space-y-1.5">
                 <label htmlFor="email" className="text-xs font-medium text-ink">
-                  Email
+                  {t('login.email')}
                 </label>
                 <input
                   id="email"
@@ -61,13 +71,13 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-md border border-border-subtle bg-paper px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
-                  placeholder="you@agency.com"
+                  placeholder={t('login.emailPlaceholder')}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label htmlFor="password" className="text-xs font-medium text-ink">
-                  Password
+                  {t('login.password')}
                 </label>
                 <input
                   id="password"
@@ -93,14 +103,14 @@ export default function Login() {
                 className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-brand-blue px-3 py-2 text-sm font-medium text-white hover:bg-brand-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                {busy ? 'Signing in…' : 'Sign in'}
+                {busy ? t('login.signingIn') : t('login.signIn')}
               </button>
             </form>
           </CardContent>
         </Card>
 
         <p className="text-center text-xs text-ink-muted">
-          Trouble signing in? Contact your GF administrator.
+          {t('login.trouble')}
         </p>
       </div>
     </div>

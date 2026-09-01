@@ -127,10 +127,11 @@ function OpenCockpitLabel() {
 
 /** GF-58 — shows the signed-in account + a logout button (hidden if no session). */
 function SessionControl() {
+  const t = useT()
   const navigate = useNavigate()
   const session = getSession()
   if (!session) return null
-  const label = session.user.email || session.user.name || 'Account'
+  const label = session.user.email || session.user.name || t('home.account')
   async function onLogout() {
     await logout()
     navigate('/login', { replace: true })
@@ -144,10 +145,10 @@ function SessionControl() {
         type="button"
         onClick={onLogout}
         className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-brand-blue hover:border-brand-blue transition-colors"
-        title="Sign out"
+        title={t('home.signOut')}
       >
         <LogOut className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Sign out</span>
+        <span className="hidden sm:inline">{t('home.signOut')}</span>
       </button>
     </div>
   )

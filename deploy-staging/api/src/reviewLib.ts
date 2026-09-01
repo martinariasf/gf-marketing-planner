@@ -69,11 +69,130 @@ export interface ReviewLinkRecord {
    */
   months?: string[]
   codeHash: string
+  /**
+   * GF-105 — which kind of review this link is for. 'content' (the default and
+   * the only pre-GF-105 behavior) shows the finished creative; 'strategy' shows
+   * a text-only plan view with every image stripped SERVER-SIDE. Absent or
+   * unrecognized means 'content', so every existing link is unaffected.
+   */
+  view?: ReviewLinkView
   status: 'active' | 'revoked'
   expiresAt?: string
   createdBy?: string
   createdAt?: string
   revokedAt?: string
+}
+
+export type ReviewLinkView = 'content' | 'strategy'
+
+/**
+ * Normalize a stored/submitted link view into a known value. Anything that is
+ * not exactly 'strategy' collapses to 'content' — the safe default, because a
+ * link that fails to parse must never silently become a different kind of
+ * review than the sharer intended.
+ */
+export function parseLinkView(value: unknown): ReviewLinkView {
+  return value === 'strategy' ? 'strategy' : 'content'
+}
+
+/**
+ * GF-106 — build a lookup from a link id to the view that link was created for.
+ *
+ * Used by the review-feedback aggregation to stamp each decision/comment with
+ * the kind of link the reviewer was looking at when they left it. Anything the
+ * map cannot resolve — a deleted link, a row written before links carried ids,
+ * a missing linkId — collapses to 'content', which is both the pre-GF-105
+ * behavior and the safe default: the row is still returned, never dropped.
+ */
+export function linkViewResolver(
+  links: readonly { id: string; view?: ReviewLinkView }[],
+): (linkId: string | undefined | null) => ReviewLinkView {
+  const byId = new Map<string, ReviewLinkView>()
+  for (const link of links) {
+    if (link?.id) byId.set(link.id, parseLinkView(link.view))
+  }
+  return (linkId) => (linkId ? byId.get(linkId) ?? 'content' : 'content')
+}
+
+/** One reviewer decision on one post, stamped with the link view it came from. */
+export interface FeedbackDecisionEntry {
+  decision: string
+  reviewerName: string
+  createdAt: string
+  view: ReviewLinkView
+}
+
+export interface ReviewFeedbackInputEvent {
+  postId?: string
+  linkId?: string
+  kind: string
+  reviewerName?: string
+  createdAt?: string
+}
+
+/**
+ * GF-106 — the pure fold behind GET /clients/:slug/review-feedback.
+ *
+ * Extracted from the route handler so the merge semantics are unit-testable
+ * without a live PocketBase. Two rules it must keep:
+ *
+ *  1. Decisions are keyed on reviewer AND view. The same person may decide once
+ *     on the strategy link and again on the content link for the SAME post, and
+ *     the split panel has to show both. Keying on the reviewer alone would drop
+ *     one of them.
+ *  2. Within one (reviewer, view) pair, latest still wins. Callers must pass
+ *     `events` in ascending createdAt order, so a plain overwrite keeps the
+ *     newest — these PB collections have no autodate `created`, so that order
+ *     comes from the text `createdAt` the app writes itself.
+ *
+ * Nothing is ever filtered by view: a row whose linkId does not resolve is
+ * stamped 'content' by `viewOf` and still returned.
+ */
+export function buildReviewFeedback<C extends { postId?: string; linkId?: string }>(
+  events: readonly ReviewFeedbackInputEvent[],
+  comments: readonly C[],
+  viewOf: (linkId: string | undefined | null) => ReviewLinkView,
+): {
+  byPost: Record<string, { decisions: FeedbackDecisionEntry[]; comments: (C & { view: ReviewLinkView })[] }>
+  general: { comments: (C & { view: ReviewLinkView })[] }
+} {
+  const decisionsByPost = new Map<string, Map<string, FeedbackDecisionEntry>>()
+  for (const ev of events) {
+    if (!ev.postId) continue
+    const reviewer = ev.reviewerName || 'Guest'
+    const view = viewOf(ev.linkId)
+    const perReviewer = decisionsByPost.get(ev.postId) ?? new Map<string, FeedbackDecisionEntry>()
+    // Separator is U+0000 written as an ESCAPE, never a raw control byte in
+    // the source (a raw one makes git treat this file as binary). It cannot
+    // occur in a reviewer name, so a reviewer literally called "Ann content"
+    // can never collide with reviewer "Ann" on the content view.
+    perReviewer.set(`${reviewer}\u0000${view}`, {
+      decision: ev.kind,
+      reviewerName: reviewer,
+      createdAt: ev.createdAt ?? '',
+      view,
+    })
+    decisionsByPost.set(ev.postId, perReviewer)
+  }
+
+  const byPost: Record<
+    string,
+    { decisions: FeedbackDecisionEntry[]; comments: (C & { view: ReviewLinkView })[] }
+  > = {}
+  const bucket = (postId: string) => (byPost[postId] ??= { decisions: [], comments: [] })
+
+  for (const [postId, perReviewer] of decisionsByPost) {
+    bucket(postId).decisions = [...perReviewer.values()]
+  }
+
+  const general: { comments: (C & { view: ReviewLinkView })[] } = { comments: [] }
+  for (const cm of comments) {
+    const stamped = { ...cm, view: viewOf(cm.linkId) }
+    if (stamped.postId) bucket(stamped.postId).comments.push(stamped)
+    else general.comments.push(stamped)
+  }
+
+  return { byPost, general }
 }
 
 /**
@@ -130,7 +249,14 @@ const PUBLIC_MEDIA_TYPES = new Set(['image', 'video'])
 export interface PublicPost {
   id: string
   date: string
+  /** Primary channel. Always equal to `channels[0]` when `channels` is present. */
   channel?: string
+  /**
+   * GF-105 — every target platform, not just the primary one. GF-20 made posts
+   * multi-channel but the sanitizer only ever emitted the singular `channel`,
+   * so a multi-platform post was not expressible in the public payload at all.
+   */
+  channels?: string[]
   format?: string
   pillar?: string
   campaign?: string
@@ -139,8 +265,10 @@ export interface PublicPost {
   hashtags?: string[]
   cta?: string
   image?: string
-  slides?: Array<{ image: string; caption?: string }>
-  media?: Array<{ type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string }>
+  // `image` / `url` are optional because stripVisuals() removes them for a
+  // strategy link, leaving the captions (the design brief) behind.
+  slides?: Array<{ image?: string; caption?: string }>
+  media?: Array<{ type: 'image' | 'video'; url?: string; thumbnail?: string; caption?: string; assetId?: string }>
   /** Read-only label of the internal status, so reviewers see "approved" etc.
    *  without exposing who/when. */
   statusLabel?: string
@@ -152,12 +280,41 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
     date: typeof post.date === 'string' ? post.date : '',
     title: typeof post.title === 'string' ? post.title : '',
   }
-  if (typeof post.channel === 'string') out.channel = post.channel
+  // GF-105 — carry every target platform. `channels` is the multi-channel field
+  // GF-20 introduced; `channel` is the primary.
+  //
+  // The STORED primary always wins and is moved to the front, rather than simply
+  // taking channels[0]. coalescePost() already keeps the two coherent, so today
+  // they agree — but sanitizePost is a public-safe primitive that must not
+  // depend on its caller having coalesced. Deriving the primary from
+  // channels[0] would silently change `channel` for a CONTENT link too (the
+  // sanitizer runs for both views), which is a live, out-of-scope surface.
+  const channelList = Array.isArray(post.channels)
+    ? post.channels.filter((ch): ch is string => typeof ch === 'string' && ch.length > 0)
+    : []
+  const primary = typeof post.channel === 'string' && post.channel ? post.channel : undefined
+  let allChannels = channelList.length > 0 ? [...new Set(channelList)] : primary ? [primary] : []
+  if (primary && allChannels[0] !== primary) {
+    allChannels = [primary, ...allChannels.filter((ch) => ch !== primary)]
+  }
+  if (allChannels.length > 0) {
+    out.channels = allChannels
+    out.channel = allChannels[0]
+  } else if (primary) {
+    out.channel = primary
+  }
   if (typeof post.format === 'string') out.format = post.format
   if (typeof post.pillar === 'string') out.pillar = post.pillar
   if (typeof post.campaign === 'string') out.campaign = post.campaign
   if (typeof post.copy === 'string') out.copy = post.copy
   if (typeof post.cta === 'string') out.cta = post.cta
+  // ⚠ IMAGE-BEARING FIELD. sanitizePost is an allowlist, so nothing reaches the
+  // public payload unless it is named here — but that also means stripVisuals()
+  // below cannot know about a field you add here. If you add ANY new
+  // image/url/thumbnail-bearing field to this function, you MUST also strip it
+  // in stripVisuals(), or it will leak on a strategy link. The two move in
+  // lockstep; the serialize-the-payload test in reviewLib.strategy.test.ts is
+  // the backstop, not the contract.
   if (typeof post.image === 'string') out.image = post.image
   if (Array.isArray(post.hashtags)) {
     out.hashtags = post.hashtags.filter((h): h is string => typeof h === 'string')
@@ -167,7 +324,7 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
       .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
       .filter((s) => typeof s.image === 'string')
       .map((s) => {
-        const slide: { image: string; caption?: string } = { image: s.image as string }
+        const slide: { image?: string; caption?: string } = { image: s.image as string }
         if (typeof s.caption === 'string') slide.caption = s.caption
         return slide
       })
@@ -182,7 +339,7 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
           typeof m.url === 'string',
       )
       .map((m) => {
-        const media: { type: 'image' | 'video'; url: string; thumbnail?: string; caption?: string; assetId?: string } = {
+        const media: { type: 'image' | 'video'; url?: string; thumbnail?: string; caption?: string; assetId?: string } = {
           type: m.type as 'image' | 'video',
           url: m.url as string,
         }
@@ -198,6 +355,34 @@ export function sanitizePost(post: Record<string, unknown>): PublicPost {
     if (typeof status === 'string') out.statusLabel = status
   } else if (typeof post.status === 'string') {
     out.statusLabel = post.status
+  }
+  return out
+}
+
+/**
+ * GF-105 — remove every image-bearing field from an already-sanitized post,
+ * leaving only the plan: pillar, format, platforms, date, copy and the captions
+ * that describe what the visual will show.
+ *
+ * This is the enforcement point for a strategy link's "no pictures" rule, and
+ * it is deliberately server-side: hiding images in CSS would still ship the
+ * URLs to an unauthenticated party, which is exactly what a pre-production
+ * strategy review is meant to avoid.
+ *
+ * Fields removed: `image`, `slides[].image`, `media[].url`, `media[].thumbnail`,
+ * `media[].assetId`. Kept: `slides[].caption`, `media[].caption`, `media[].type`.
+ *
+ * Slides and media entries are kept (not dropped) even when they carry no
+ * caption, so the strategy view can still say how many slides a carousel has.
+ */
+export function stripVisuals(post: PublicPost): PublicPost {
+  const { image: _image, slides, media, ...rest } = post
+  const out: PublicPost = { ...rest }
+  if (slides) {
+    out.slides = slides.map((s) => (s.caption ? { caption: s.caption } : {}))
+  }
+  if (media) {
+    out.media = media.map((m) => (m.caption ? { type: m.type, caption: m.caption } : { type: m.type }))
   }
   return out
 }
@@ -257,3 +442,38 @@ setInterval(() => {
   const now = Date.now()
   for (const [k, v] of reviewSessions) if (v.expiresAt <= now) reviewSessions.delete(k)
 }, 10 * 60_000).unref()
+
+/** Reviewer-facing brand block of the public review payload. */
+export type PublicBrand = { name: string; handle: string; logoInitials: string }
+
+/** Trimmed string, or '' for anything that is not a non-blank string. */
+function str(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * GF-108 — resolve the brand block an external reviewer sees.
+ *
+ * PocketBase is the source of truth for a client's display name, exactly as it
+ * is for the dashboard (`clientList()` in routes/clients.ts overlays PB records
+ * onto the disk index). plan.json is a fallback for what PB carries, and the
+ * only source for `handle`, which PB has no field for.
+ *
+ * `name` has NO slug fallback on purpose: an unresolvable name returns '', and
+ * the strategy header then falls back to the link's own title (GF-106,
+ * app-v2/src/routes/review/strategy-view.tsx). Printing the internal slug to an
+ * external reviewer is the bug this function exists to prevent.
+ */
+export function resolveBrand(args: {
+  slug: string
+  pbClient: Record<string, unknown> | null
+  planClient: Record<string, unknown> | null
+}): PublicBrand {
+  const { slug, pbClient, planClient } = args
+  return {
+    name: str(pbClient?.name) || str(planClient?.name),
+    handle: str(planClient?.handle) || `@${slug}`,
+    logoInitials:
+      str(pbClient?.logoInitials) || str(planClient?.logoInitials) || slug.slice(0, 2).toUpperCase(),
+  }
+}

@@ -40,12 +40,24 @@ export interface VerifiedUser {
   isPlatformAdmin: boolean
 }
 
+// GF-126 — thrown by verifyUserToken when PocketBase itself couldn't be
+// reached (network failure, timeout, or a 5xx from PB), as opposed to PB
+// being reached and genuinely rejecting the token (a real 4xx). Callers must
+// not treat this the same as an invalid token — see auth.ts's requireAuth.
+export class PbUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super('PocketBase is unavailable')
+    this.name = 'PbUnavailableError'
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause
+  }
+}
+
 export async function verifyUserToken(token: string): Promise<VerifiedUser | null> {
+  const c = new PocketBase(env.pbUrl)
+  c.autoCancellation(false)
+  c.authStore.save(token, null)
+  if (!c.authStore.isValid) return null // locally-checked exp/format
   try {
-    const c = new PocketBase(env.pbUrl)
-    c.autoCancellation(false)
-    c.authStore.save(token, null)
-    if (!c.authStore.isValid) return null // locally-checked exp/format
     const res = await c.collection('users').authRefresh()
     const rec = res.record as unknown as Record<string, unknown>
     return {
@@ -54,8 +66,15 @@ export async function verifyUserToken(token: string): Promise<VerifiedUser | nul
       name: typeof rec.name === 'string' ? rec.name : '',
       isPlatformAdmin: rec.is_platform_admin === true,
     }
-  } catch {
-    return null
+  } catch (err: unknown) {
+    // A real HTTP status in [400, 500) means PB was reached and said "no" —
+    // genuinely invalid/expired token. Anything else (no status, status 0,
+    // or a 5xx) means PB itself is the problem, not the token.
+    if (err && typeof err === 'object' && 'status' in err) {
+      const status = (err as { status: unknown }).status
+      if (typeof status === 'number' && status >= 400 && status < 500) return null
+    }
+    throw new PbUnavailableError(err)
   }
 }
 

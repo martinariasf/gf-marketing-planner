@@ -1,5 +1,5 @@
-import { lazy, Suspense, Component, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router'
+import { lazy, Suspense, Component, useEffect, type ReactNode } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { EditProvider } from '@/lib/edit-store'
 import { LanguageProvider, tStatic } from '@/lib/i18n'
@@ -41,6 +41,24 @@ function RouteFallback() {
 function RequireAuth() {
   if (needsLogin()) return <Navigate to="/login" replace />
   return <Outlet />
+}
+
+/**
+ * GF-126 — listens for the `mp:session-expired` window event dispatched by
+ * api-client's `handle401` on any 401 (authedFetch and apiChatStream alike)
+ * and redirects to /login with `state.expired` so the login screen can show
+ * a "your session expired" notice. Mounted as a direct child of
+ * <BrowserRouter> so it has router context without needing the other
+ * providers.
+ */
+function SessionExpiryRedirect() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const handler = () => navigate('/login', { replace: true, state: { expired: true } })
+    window.addEventListener('mp:session-expired', handler)
+    return () => window.removeEventListener('mp:session-expired', handler)
+  }, [navigate])
+  return null
 }
 
 /**
@@ -114,6 +132,7 @@ class AppErrorBoundary extends Component<
 export default function App() {
   return (
     <BrowserRouter>
+      <SessionExpiryRedirect />
       <LanguageProvider>
       <EditProvider>
       <AppErrorBoundary>
