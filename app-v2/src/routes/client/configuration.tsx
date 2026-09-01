@@ -325,7 +325,25 @@ function TimezoneCard({
   }
 
   return (
-    <Card>
+    // Layer-5 review round 6 (Martin's live screenshot) — components/ui/card.tsx's
+    // `Card` bakes in `overflow-hidden` (it clips a first/last <img> child to the
+    // rounded corners; see that file's `*:[img:first-child]:rounded-t-xl`). This
+    // dropdown panel is `position: absolute` *inside* that same Card, so its
+    // painted content was clipped at the Card's own box edge — independent of
+    // z-index, which only controls stacking order, not an ancestor's overflow
+    // clip region. The trigger and the search-input row are short enough to sit
+    // inside the Card's existing box height (so they were visible); the listbox
+    // below them needs far more vertical room (`max-h-64` = up to 256px) and
+    // fell entirely outside the clipped box. `InfoHint`'s tooltip has this same
+    // absolute-inside-Card shape but has never hit this in practice — its
+    // content is short enough to usually fit within the Card's remaining
+    // padding. `className="overflow-visible"` here overrides the base class via
+    // `cn()`'s tailwind-merge (last conflicting utility wins) for THIS Card
+    // instance only — every other `<Card>` in the app (including the two
+    // ToggleCards on this same page) keeps clipping, unaffected. Nothing inside
+    // this specific card relies on the rounded-corner image clip, so dropping it
+    // here is visually safe.
+    <Card className="overflow-visible">
       <CardContent className="p-5 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
         <div className="flex items-center gap-2 min-w-0">
           <Globe className="h-4 w-4 text-brand-blue shrink-0" />
