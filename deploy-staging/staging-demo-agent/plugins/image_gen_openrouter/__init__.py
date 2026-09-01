@@ -1360,9 +1360,12 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
         "Banana 2 (a few seconds), 'high' = premium quality (~3 minutes). The "
         "default model is Nano Banana 2, but ask the user to choose fast vs high "
         "before generating and pass the selected fidelity explicitly. Pass "
-        "`reference_images` when the result must contain "
-        "the EXACT official logo or match a real product/photo — the model can't "
-        "invent the real logo from a text description, so give it the actual file. "
+        "`reference_images` when the result must match a real product/photo — "
+        "the model can't invent that from a text description, so give it the "
+        "actual file. GF-134: for a LOGO, do NOT pass it here — a generative "
+        "model warps logos. Just generate the image (it leaves clean space "
+        "when the prompt mentions a logo) and then call `image_compose` to "
+        "stamp the REAL logo on afterwards. "
         "GF-134: EDITING a photo the client just sent (e.g. 'keep this bottle, "
         "put it on a white studio backdrop') is also supported — pass that photo "
         "in `reference_images` AND set `edit=true` so the subject is preserved "
@@ -1442,12 +1445,13 @@ IMAGE_GENERATE_FIDELITY_SCHEMA = {
                 "description": (
                     "Optional. Reference image(s) the model should CONDITION on "
                     "(image-to-image), instead of you describing them in words. Each "
-                    "is a public URL, an absolute path, or an asset filename (e.g. "
-                    "'logo_official.png'). USE THIS whenever the image must show the "
-                    "EXACT official logo, a specific product, or match an existing "
-                    "visual — describing a logo in text produces a WRONG logo, so pass "
-                    "the real file here (find the logo via the brief's branding.logos "
-                    "or the client assets folder). OMIT for purely text-described images."
+                    "is a public URL, an absolute path, or an asset filename. USE "
+                    "THIS whenever the image must show a specific product/photo or "
+                    "match an existing visual. GF-134: do NOT use this for a logo — "
+                    "a generative model warps logos even when given the real file; "
+                    "instead let image_generate leave clean space and stamp the "
+                    "real logo afterwards with `image_compose`. OMIT for purely "
+                    "text-described images."
                 ),
             },
             "edit": {
@@ -1970,10 +1974,18 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         kw in prompt_lc
         for kw in ("logo", "isotipo", "isotype", "logotipo", "brand mark", "brandmark", "wordmark")
     )
+    # GF-134: a generative model must NEVER draw the logo (it warps them and
+    # misspells wordmarks) — this is the same doctrine already applied to
+    # video in generate-media/references/polished-branded-video.md ("Never
+    # let the generative video model render text or a logo"). So the real
+    # branding logo is no longer appended into `reference_images` for the
+    # model to reproduce; instead the plate is generated with clean space
+    # reserved for it, and the REAL logo is stamped afterwards via the
+    # layer-2 `image_compose` path (compose_core), see below.
+    branding_logo_refs: List[str] = []
     if wants_logo:
-        for logo_ref in _branding_logo_refs():
-            _append_unique_ref(refs, logo_ref)
-        if not refs:
+        branding_logo_refs = _branding_logo_refs()
+        if not branding_logo_refs and not refs:
             return json.dumps({
                 "success": False,
                 "image": None,
@@ -1987,6 +1999,15 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
                 ),
                 "error_type": "logo_reference_required",
             })
+        if branding_logo_refs:
+            # Ask for clean negative space instead of a rendered logo; the
+            # real logo file is composited on after generation succeeds.
+            prompt = (
+                prompt
+                + " Leave clean, uncluttered negative space where a logo can "
+                "be placed; do not draw, sketch, or invent any logo, "
+                "wordmark, or brand mark yourself."
+            )
     logger.info(
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,
@@ -2002,6 +2023,29 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         reference_images=refs,
         edit=edit,
     )
+    if (
+        wants_logo
+        and branding_logo_refs
+        and isinstance(result, dict)
+        and result.get("image")
+        and not result.get("error")
+    ):
+        # GF-134: stamp the REAL logo onto the plate the model just generated
+        # via the layer-2 compose path (compose_core), instead of the model
+        # having drawn it. Reuses image_compose's own default-logo lookup
+        # (branding.logos) rather than duplicating compose_core here.
+        compose_raw = _handle_image_compose({"base_image": result["image"]})
+        try:
+            compose_result = json.loads(compose_raw)
+        except (TypeError, ValueError):
+            compose_result = None
+        if isinstance(compose_result, dict) and compose_result.get("success") and compose_result.get("image"):
+            result["image"] = compose_result["image"]
+            result["logo_composited"] = True
+        else:
+            result["logo_composite_error"] = (
+                compose_result.get("error") if isinstance(compose_result, dict) else "logo compositing failed"
+            )
     media_path = ""
     if isinstance(result, dict) and result.get("image") and not result.get("error"):
         candidate = str(result["image"])
