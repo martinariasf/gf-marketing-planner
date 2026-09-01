@@ -51,6 +51,20 @@ mock.module('../pb.js', {
       }),
     verifyUserToken: async () => null,
     pb: {},
+    // GF-126 (merged into experimental after this file was first written) —
+    // mirror the real pb.js module shape so this mock doesn't diverge:
+    // requireAuth (imported by planningConfig.js via ../auth.js) imports
+    // PbUnavailableError from '../pb.js' directly, so a mock missing this
+    // named export breaks the whole module graph at import time, not just
+    // at runtime — matches the same fix already present in
+    // planningConfig.orgSettings.test.ts.
+    PbUnavailableError: class PbUnavailableError extends Error {
+      constructor(cause?: unknown) {
+        super('PocketBase is unavailable')
+        this.name = 'PbUnavailableError'
+        if (cause !== undefined) (this as { cause?: unknown }).cause = cause
+      }
+    },
   },
 })
 
