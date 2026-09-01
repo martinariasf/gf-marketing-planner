@@ -156,7 +156,7 @@ this codebase: `generate-media/references/polished-branded-video.md:9` —
   image_generate(prompt="<scene>, leave clean space bottom-right for the brand logo",
                  channel="instagram", post_id="p016")
 
-  image_compose(image="<the file image_generate just produced>",
+  image_compose(base_image="<the file image_generate just produced>",
                 include_logo=true,          # pulls the client's real branding.logos
                 logo_anchor="bottom-right",
                 logo_margin="5%")
@@ -187,13 +187,13 @@ the wording matters exactly, generate a text-free plate and stamp the copy with
 `image_compose`:
 
 ```
-image_compose(image="<the plate>",
+image_compose(base_image="<the plate>",
               text="Your headline here",
               text_anchor="bottom",
               text_size=64,
               text_color="white",
               text_use_heading_font=true,   # resolves branding.typography.headingFont
-              text_outline=true)
+              text_outline=4)               # px stroke width, 0 = none
 ```
 
 When on-canvas text IS appropriate:
@@ -230,7 +230,7 @@ pixel-exact elements onto an image that already exists — the output of
   center right bottom-left bottom bottom-right`
 - `logo_margin` (default `5%`) — px (`48`) or percent (`5%`, per-axis)
 - `logo_scale` — logo size, px or percent of base width
-- `logo_opacity` — 0-1
+- `logo_opacity` (default `100`) — integer 0-100
 
 **Text parameters:**
 - `text` — the exact string to stamp
@@ -240,14 +240,17 @@ pixel-exact elements onto an image that already exists — the output of
 - `text_use_heading_font` (default `true`) — resolves the client's
   `branding.typography.headingFont` automatically; leave this on unless the
   user asks for a specific different font
-- `text_outline`, `text_outline_color`, `text_shadow` — legibility aids over
+- `text_outline` (default `0`) — integer stroke width in px around the text,
+  `0` for none; `text_outline_color`, `text_shadow` — legibility aids over
   busy backgrounds
 
 Both logo and text can be stamped in one call — pass both sets of parameters
-together. `image_compose` does not take `post_id` and does not touch the
-manifest or post wiring by itself; if the composed file needs to become the
-post's cover, PATCH the post's `image` (or `slides[].image`/`media[].url`)
-to the composed file's path/URL afterward.
+together. `base_image` (required) is the existing image to stamp onto — a
+path/URL/asset filename, e.g. the output of a prior `image_generate` call.
+`image_compose` DOES take `post_id`, with the same auto-link behavior as
+`image_generate`'s `post_id` (copies the composed file into the client assets
+dir, PATCHes the post, and confirms) — pass it when the composed file is the
+cover for an existing post; omit it for a stand-alone / reserve image.
 
 ## STEP 4 — The visual craft bar (don't produce AI slop)
 

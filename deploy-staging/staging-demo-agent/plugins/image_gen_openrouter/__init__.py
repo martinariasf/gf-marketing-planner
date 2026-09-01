@@ -746,13 +746,21 @@ def _resolve_font_path_from_name(font_name: str) -> Optional[str]:
     target = _norm(font_name)
     if not target:
         return None
-    for fname in os.listdir(assets_dir):
+    candidates: List[str] = []
+    for fname in sorted(os.listdir(assets_dir)):
         fstem, ext = os.path.splitext(fname)
         if ext.lower() not in (".ttf", ".otf"):
             continue
         stem_norm = _norm(fstem)
-        if stem_norm == target or target in stem_norm or stem_norm in target:
+        if stem_norm == target:
+            # Exact stem match wins immediately — never overridden by a
+            # looser substring match (e.g. "Arial" must not resolve to
+            # "ArialNarrow-Bold.ttf" when "Arial.ttf" also exists).
             return os.path.join(assets_dir, fname)
+        if target in stem_norm or stem_norm in target:
+            candidates.append(fname)
+    if candidates:
+        return os.path.join(assets_dir, candidates[0])
     return None
 
 
@@ -1880,17 +1888,39 @@ def _handle_image_compose(args: Dict[str, Any], **_kw: Any) -> str:
             "text": text or None,
         }
 
-        post_id = str(args.get("post_id") or "").strip()
-        if post_id:
-            link = _link_image_to_post(cache_path, post_id)
-            result["post_link"] = link
-            if link.get("linked") and link.get("url"):
-                result["image"] = link["url"]
-        else:
-            pub = _publish_reserve_image(cache_path)
-            result["asset"] = pub
-            if pub.get("published") and pub.get("url"):
-                result["image"] = pub["url"]
+        # FIX 1 (GF-134 review): when this handler is invoked INTERNALLY by
+        # _handle_image_generate's auto-stamp path, the caller sets the
+        # private `_skip_publish` flag (never part of the public tool
+        # schema — the agent can never set it). The outer flow already owns
+        # manifest/post wiring for that artifact; publishing/linking here as
+        # well would write a spurious reserve-manifest entry (or double the
+        # post-link work) for an intermediate file that is not itself a
+        # reserve image. External tool calls (with or without post_id) are
+        # unaffected — this branch only triggers on the internal flag.
+        skip_publish = bool(args.get("_skip_publish"))
+        if not skip_publish:
+            try:
+                post_id = str(args.get("post_id") or "").strip()
+                if post_id:
+                    link = _link_image_to_post(cache_path, post_id)
+                    result["post_link"] = link
+                    if link.get("linked") and link.get("url"):
+                        result["image"] = link["url"]
+                else:
+                    pub = _publish_reserve_image(cache_path)
+                    result["asset"] = pub
+                    if pub.get("published") and pub.get("url"):
+                        result["image"] = pub["url"]
+            except Exception as exc:
+                # FIX 3 (GF-134 review): the docstring promises every failure
+                # returns a structured dict. A publish/link failure here must
+                # not propagate out of the tool handler — degrade to the
+                # already-composed local file and surface the error instead
+                # of swallowing it.
+                logger.debug("image_compose publish/link failed", exc_info=True)
+                result["success"] = False
+                result["error"] = f"image composed but publish/link failed: {exc}"
+                result["error_type"] = "publish_error"
 
         result["media"] = f"MEDIA:{cache_path}"
         return json.dumps(result)
@@ -1982,6 +2012,16 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     # model to reproduce; instead the plate is generated with clean space
     # reserved for it, and the REAL logo is stamped afterwards via the
     # layer-2 `image_compose` path (compose_core), see below.
+    # GF-134: explicit edit intent, distinct from plain reference conditioning.
+    # Defaults to False so existing callers (composite-a-logo-into-a-scene) see
+    # no behavior change. Computed here (before the wants_logo block below)
+    # because FIX 4 (GF-134 review) needs it to gate the plate-space prompt
+    # injection and the auto-stamp: an explicit edit request must not get an
+    # unrequested logo stamped on it just because the edit prompt happens to
+    # mention the word "logo" (e.g. "remove the logo from this photo"). The
+    # `logo_reference_required` refusal below is intentionally left untouched
+    # — its message/condition/error_type are frozen.
+    edit = bool(args.get("edit"))
     branding_logo_refs: List[str] = []
     if wants_logo:
         branding_logo_refs = _branding_logo_refs()
@@ -1999,9 +2039,12 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
                 ),
                 "error_type": "logo_reference_required",
             })
-        if branding_logo_refs:
+        if branding_logo_refs and not edit:
             # Ask for clean negative space instead of a rendered logo; the
             # real logo file is composited on after generation succeeds.
+            # Skipped for edit=true (FIX 4): an edit must change only what
+            # was explicitly asked, so we neither alter the edit prompt nor
+            # (below) auto-stamp a logo the user never requested.
             prompt = (
                 prompt
                 + " Leave clean, uncluttered negative space where a logo can "
@@ -2012,10 +2055,6 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
         "image_generate: post_id=%r fidelity=%r reference_images=%r",
         post_id, args.get("fidelity"), refs,
     )
-    # GF-134: explicit edit intent, distinct from plain reference conditioning.
-    # Defaults to False so existing callers (composite-a-logo-into-a-scene) see
-    # no behavior change.
-    edit = bool(args.get("edit"))
     result = OpenRouterImageGenProvider().generate(
         prompt=prompt,
         aspect_ratio=aspect_ratio,
@@ -2025,6 +2064,7 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     )
     if (
         wants_logo
+        and not edit
         and branding_logo_refs
         and isinstance(result, dict)
         and result.get("image")
@@ -2032,9 +2072,24 @@ def _handle_image_generate(args: Dict[str, Any], **_kw: Any) -> str:
     ):
         # GF-134: stamp the REAL logo onto the plate the model just generated
         # via the layer-2 compose path (compose_core), instead of the model
-        # having drawn it. Reuses image_compose's own default-logo lookup
-        # (branding.logos) rather than duplicating compose_core here.
-        compose_raw = _handle_image_compose({"base_image": result["image"]})
+        # having drawn it.
+        # FIX 4 (review): gated on `not edit` — an edit request must not get
+        # an unrequested logo stamped on it.
+        # FIX 6 (review): pass the already-resolved logo explicitly so
+        # image_compose doesn't re-fetch branding.logos over HTTP a second
+        # time for the same image.
+        # FIX 1 (review): `_skip_publish=True` — this is an INTERNAL call.
+        # The outer flow below (post_id link / reserve publish) already owns
+        # manifest/post wiring for the final artifact; without this flag
+        # image_compose would ALSO publish/link the intermediate plate,
+        # producing a spurious reserve-manifest entry and a duplicate
+        # publish. `_skip_publish` is not part of IMAGE_COMPOSE_SCHEMA, so
+        # the agent can never set it on an external tool call.
+        compose_raw = _handle_image_compose({
+            "base_image": result["image"],
+            "logo": branding_logo_refs[0],
+            "_skip_publish": True,
+        })
         try:
             compose_result = json.loads(compose_raw)
         except (TypeError, ValueError):
