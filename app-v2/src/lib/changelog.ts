@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-08-31',
+    title: 'New: a per-client time zone, so "today" means the client\'s today',
+    items: [
+      'The Configuration page has a new Time zone setting. It controls what "today" means for this client when approving or programming a post — for example, a post dated today for a client in Montevideo is no longer refused just because it is already tomorrow in UTC.',
+      'The server-side rule is unchanged for anyone who has not set this: it already used UTC. The dashboard itself now matches that same UTC default too, instead of quietly following whatever time zone your own browser happens to be in — so the calendar and the approve/program checks agree with each other near a day boundary. Set the time zone once and both stay in sync with the client\'s actual day from then on.',
+    ],
+  },
+  {
+    date: '2026-08-31',
     title: 'A stale session now sends you back to login instead of a broken page',
     items: [
       'If your dashboard session was rejected by the server, you used to land on a broken red error card on the home page and had to know to reload it yourself. You now get sent straight to the login screen with a plain "your session expired, please sign in again" message, wherever in the dashboard it happened.',
@@ -176,6 +184,14 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "You'll now be told when a limit is hit, instead of silence",
     items: [
       "If the AI hits today's usage limit, a rate limit, a provider auth problem, or its response gets cut off, you now get a clear message explaining what happened — in the dashboard chat and on Telegram — instead of the assistant just going quiet or replying with nothing.",
+    ],
+  },
+  {
+    date: '2026-08-16',
+    title: 'Posts dated today can be scheduled again',
+    items: [
+      'A post dated for today was wrongly treated as being in the past, so "Programmed" was blocked with a confusing error. Today\'s posts schedule normally again.',
+      'Approving a post whose date has already passed now says so, instead of quietly moving it and doing nothing. You can change the date, or approve it for the record knowing it will not be published.',
     ],
   },
   {

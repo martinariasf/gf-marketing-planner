@@ -15,6 +15,7 @@ import {
   SchedulingError,
   type SchedulablePost,
 } from './index.js'
+import { loadOrgSettings } from '../orgSettings.js'
 
 const SCHEDULED = 'scheduled'
 const PUBLISHED = 'published'
@@ -98,6 +99,65 @@ export function laneOf(post: Record<string, unknown>): string {
  * @throws ScheduleRejected on a business rule (past date, no provider)
  * @throws SchedulingError  on a backend failure (Postiz unreachable / rejected)
  */
+/** A stored date carrying no time component, e.g. `2026-06-15` (GF-16). */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Format a Date as the `YYYY-MM-DD` calendar day it falls on within `timezone`.
+ * `en-CA` is the standard trick for getting `Intl.DateTimeFormat` to emit an
+ * ISO-shaped (and therefore lexicographically sortable) date string. Falls
+ * back to UTC if `timezone` is somehow not resolvable at this point — it
+ * should already have been validated by orgSettings.isValidIanaTimezone
+ * before it gets here, but a request path must never throw on this.
+ */
+function calendarDayKeyInTimezone(date: Date, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
+  }
+}
+
+/**
+ * GF-37 — is this post date in the past?
+ *
+ * A date-only value has no time-of-day commitment, so it must be compared by
+ * CALENDAR DAY, not as an instant. `new Date('2026-06-15')` is UTC midnight,
+ * so the old `ts <= Date.now()` rejected a post dated *today* from ~00:00 UTC
+ * onward — the client said "today, allowed", the API answered 422. Values that
+ * do carry a time (`...T09:00:00Z`) keep the exact-instant comparison.
+ *
+ * GF-37 residual, closed: "today" is now computed in the CLIENT's configured
+ * timezone (org_configs.settings.timezone, default "UTC"), not the server's
+ * UTC day. A client that has never set a timezone gets `timezone: 'UTC'` from
+ * loadOrgSettings' DEFAULTS, so this is byte-for-byte the old UTC comparison
+ * for anyone who hasn't opted in — see orgSettings.ts DEFAULTS.
+ *
+ * `now` defaults to the real current time; the parameter exists so tests can
+ * pin an exact instant instead of racing the wall clock at a day boundary.
+ */
+export function isPastDate(when: string, ts: number, timezone: string, now: Date = new Date()): boolean {
+  // GF-37 follow-up, Layer-5 review round 1 finding 3 — this branch must use
+  // the SAME instant as the caller's `now`, not the real wall clock. It used
+  // to read `Date.now()` directly, silently ignoring the `now` parameter this
+  // function accepts precisely so tests (and any future caller) can pin an
+  // exact instant instead of racing the clock at a day boundary.
+  if (!DATE_ONLY.test(when)) return ts <= now.getTime()
+  const todayKey = calendarDayKeyInTimezone(now, timezone)
+  const whenKey = when.slice(0, 10)
+  return whenKey < todayKey
+}
+
 export async function applyStatusToSchedule(
   slug: string,
   current: Record<string, unknown>,
@@ -125,7 +185,8 @@ export async function applyStatusToSchedule(
         'Cannot schedule a post without a valid `date`. Set an ISO date in the future, then try again.',
       )
     }
-    if (ts <= Date.now()) {
+    const { timezone } = await loadOrgSettings(slug)
+    if (isPastDate(when, ts, timezone)) {
       throw new ScheduleRejected(
         `Cannot schedule a post dated in the past (${when}). Reschedule it to a future date, then move it to Programmed.`,
       )

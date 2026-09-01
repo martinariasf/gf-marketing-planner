@@ -106,6 +106,11 @@ export function ApprovalKanban({
       }
       if (result.scheduleWarning) {
         toast.warning(result.scheduleWarning, { duration: 4000 })
+      } else if (finalDecision === 'approved' && dateTiming(post.date) === 'past') {
+        // GF-37 — the board is drag-driven, so a modal mid-drag would be worse
+        // than the bug. Let the move land, then say why it stops here: a
+        // past-dated post can never reach Programmed.
+        toast.warning(t('calendar.pastApproveWarn', { id: nameOf(post) }), { duration: 5000 })
       } else {
         toast(`${nameOf(post)} → ${t(`status.${finalDecision}`)}`, { duration: 1800 })
       }
