@@ -1577,9 +1577,13 @@ IMAGE_COMPOSE_SCHEMA = {
         "is the existing image to stamp onto (path/URL/asset filename, e.g. "
         "the output of a prior image_generate call). The logo defaults to "
         "the client's official branding.logos entry; text defaults to the "
-        "client's brief typography (headingFont) for the font. Returns the "
-        "composed image's path/URL in the `image` field, same shape as "
-        "image_generate."
+        "client's brief typography (headingFont) for the font. To target a "
+        "specific social channel size, pass `canvas` (e.g. ig_square, "
+        "ig_feed, ig_story, fb_feed, fb_story) instead of hand-computing "
+        "pixel dimensions — it reframes the base image to that exact size "
+        "before the logo/text are stamped, so anchors and margins are "
+        "measured against the final canvas. Returns the composed image's "
+        "path/URL in the `image` field, same shape as image_generate."
     ),
     "parameters": {
         "type": "object",
@@ -1697,6 +1701,45 @@ IMAGE_COMPOSE_SCHEMA = {
                     "reserve image."
                 ),
             },
+            "canvas": {
+                "type": "string",
+                "enum": list(compose_core.PRESETS),
+                "description": (
+                    "Named channel canvas to reframe the base image to "
+                    "BEFORE stamping the logo/text, instead of computing "
+                    "pixel dimensions yourself: ig_square (1080x1080), "
+                    "ig_feed (1080x1350), ig_story (1080x1920), fb_feed "
+                    "(1200x630), fb_story (1080x1920). Omit to leave the "
+                    "base image's own size untouched."
+                ),
+            },
+            "canvas_mode": {
+                "type": "string",
+                "enum": ["pad", "crop"],
+                "description": (
+                    "How to fit the base image into `canvas`: 'crop' scales "
+                    "to cover and center-crops (no borders, may trim edges); "
+                    "'pad' letterboxes the whole image onto a `canvas_fill` "
+                    "background (nothing trimmed, may add borders). Ignored "
+                    "when `canvas` is omitted."
+                ),
+                "default": "crop",
+            },
+            "canvas_fill": {
+                "type": "string",
+                "description": "Background fill color used only when canvas_mode is 'pad'.",
+                "default": "white",
+            },
+            "safe_zone": {
+                "type": "boolean",
+                "description": (
+                    "Story canvases (ig_story/fb_story) keep the logo and "
+                    "text clear of the platform's UI bands by default. Pass "
+                    "false only for a deliberate full-bleed design that "
+                    "accepts the overlap."
+                ),
+                "default": True,
+            },
         },
         "required": ["base_image"],
     },
@@ -1738,8 +1781,13 @@ def _handle_image_compose(
     include_logo = _as_bool(args.get("include_logo"), True)
     explicit_logo = str(args.get("logo") or "").strip()
     text = str(args.get("text") or "").strip()
+    canvas = str(args.get("canvas") or "").strip()
 
-    if not include_logo and not text:
+    # GF-143 (review finding 5): a `canvas` reframe is a real thing to
+    # compose even with no logo and no text — reframing to a channel size is
+    # itself the requested transform, so it must not trip the "nothing to
+    # compose" guard.
+    if not include_logo and not text and not canvas:
         return json.dumps({
             "success": False,
             "image": None,
@@ -1786,6 +1834,56 @@ def _handle_image_compose(
 
         img = None
 
+        safe_zone_enabled = _as_bool(args.get("safe_zone"), True)
+        safe_zone = (
+            canvas
+            if safe_zone_enabled and canvas in compose_core.SAFE_ZONES and compose_core.SAFE_ZONES[canvas] != (0, 0)
+            else None
+        )
+        if canvas:
+            try:
+                with compose_core.Image.open(base_fh.name) as _base_for_frame:
+                    img = compose_core.frame_to_preset(
+                        _base_for_frame,
+                        canvas,
+                        mode=str(args.get("canvas_mode") or "crop"),
+                        fill=str(args.get("canvas_fill") or "white"),
+                    )
+            except compose_core.ComposeError as exc:
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": str(exc),
+                    "error_type": "invalid_argument",
+                })
+            except Exception as exc:
+                logger.debug("image_compose canvas framing failed", exc_info=True)
+                return json.dumps({
+                    "success": False,
+                    "image": None,
+                    "error": f"canvas framing failed: {exc}",
+                    "error_type": "compose_error",
+                })
+            # composite_logo takes a base PATH (it does its own Image.open),
+            # so the framed canvas has to hit disk before it can be used as
+            # the logo stamp's base. composite_text, in contrast, accepts an
+            # already-open Image directly (base_for_text below uses `img`
+            # in-memory), so this temp file is only ever read on the
+            # logo-stamping branch — skip writing it when no logo will be
+            # stamped (canvas-only or canvas+text-only calls) to avoid a
+            # wasted disk round-trip for a file nothing reads (review
+            # finding 8).
+            if logo_ref:
+                framed_fh = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                framed_fh.close()
+                compose_core.save(img, framed_fh.name)
+                tmp_paths.append(framed_fh.name)
+                base_for_logo = framed_fh.name
+            else:
+                base_for_logo = None
+        else:
+            base_for_logo = base_fh.name
+
         if logo_ref:
             try:
                 logo_bytes = _resolve_image_bytes(logo_ref)
@@ -1803,12 +1901,13 @@ def _handle_image_compose(
             tmp_paths.append(logo_fh.name)
             try:
                 img = compose_core.composite_logo(
-                    base_fh.name,
+                    base_for_logo,
                     logo_fh.name,
                     anchor=str(args.get("logo_anchor") or "bottom-right"),
                     margin=str(args.get("logo_margin") or "5%"),
                     scale=(str(args.get("logo_scale")) if args.get("logo_scale") else None),
                     opacity=int(args.get("logo_opacity") if args.get("logo_opacity") is not None else 100),
+                    safe_zone=safe_zone,
                 )
             except compose_core.ComposeError as exc:
                 return json.dumps({
@@ -1837,7 +1936,7 @@ def _handle_image_compose(
                 font_name = typography.get("headingFont" if use_heading else "bodyFont", "")
                 font_path = _resolve_font_path_from_name(font_name) if font_name else None
 
-            base_for_text = img if img is not None else base_fh.name
+            base_for_text = img if img is not None else base_for_logo
             try:
                 img = compose_core.composite_text(
                     base_for_text,
@@ -1852,6 +1951,7 @@ def _handle_image_compose(
                     outline=int(args.get("text_outline") or 0),
                     outline_color=str(args.get("text_outline_color") or "black"),
                     shadow=_as_bool(args.get("text_shadow"), False),
+                    safe_zone=safe_zone,
                 )
             except compose_core.ComposeError as exc:
                 # FIX 3 (GF-134 review round 2): composite_text raises

@@ -51,6 +51,13 @@ The **target channel decides the format**, never a global default:
 Always pass `channel` (or a `post_id` whose channel is known — the tool reads it
 and sizes automatically). Do NOT hard-code one shape for everything.
 
+**This is still how you pick the generation size.** `image_compose`'s `canvas`
+parameter (GF-143, see the reference below) is a separate thing — it reshapes
+an image that already exists (a client photo, or an image generated at a
+different shape). It is not a second way to choose the shape here; do not pass
+`canvas` on a compose call just because you already picked a channel in this
+step.
+
 **Exception — an Instagram STORY is a different shape (GF-69).** A Story is
 **full-screen 9:16, 1080x1920** — NOT the 4:5 1080x1350 feed image. The POST
 FORMAT overrides the channel default whenever the post is a story:
@@ -243,6 +250,72 @@ pixel-exact elements onto an image that already exists — the output of
 - `text_outline` (default `0`) — integer stroke width in px around the text,
   `0` for none; `text_outline_color`, `text_shadow` — legibility aids over
   busy backgrounds
+
+**Canvas parameters (GF-143):**
+- `canvas` — reshape `base_image` onto a named channel canvas BEFORE the logo
+  and text are stamped, so anchors/margins measure against the final size:
+  `instagram` 1080x1350, `story` 1080x1920, `landscape` 1536x1024, `square`
+  1024x1024, `portrait` 1024x1536, `ig_square` 1080x1080, `ig_feed` 1080x1350,
+  `ig_story` 1080x1920, `fb_feed` 1200x630, `fb_story` 1080x1920
+- `canvas_mode` (default `crop`) — `crop` scales to cover and center-crops;
+  `pad` letterboxes onto `canvas_fill` with nothing cropped
+- `canvas_fill` (default `white`) — pad-mode fill color
+- Omitting `canvas` leaves behavior exactly as before. On `story`/`ig_story`/
+  `fb_story`, the logo and text are auto-kept out of Instagram's UI bands (top
+  250px, bottom 340px) WHEN THE ELEMENT FITS in that 1330px gap — do not
+  adjust anchors or margins yourself for this. A logo or text block taller
+  than the gap is top-aligned at the 250px line instead, and its bottom edge
+  still overlaps the bottom band; there is no shrinking or rejecting it, so
+  keep stamped elements smaller than the gap on story canvases.
+  These 250/340 numbers are Instagram's own story chrome; `fb_story` reuses
+  them as a conservative approximation (Facebook's actual story UI differs
+  slightly), which is close enough to be safe. For text, the clamp is a
+  font-metric approximation — actual ink can sit a small font-dependent
+  amount below the nominal boundary, and `text_outline`/`text_shadow` extend
+  ink beyond the clamped block by their own width, unclamped.
+- `safe_zone` (default `true`) — set `false` only for a deliberate full-bleed
+  story design that accepts overlap with the platform's UI bands; leave it on
+  otherwise.
+
+### Fitting an existing image to a channel (GF-143)
+
+If the base image is not already the right shape for its channel — a client's
+own photo, or an image generated at a different aspect ratio — pass `canvas`
+by name rather than assuming the shape is already correct or hand-computing
+pixels:
+
+| `canvas` value | pixels |
+|---|---|
+| `instagram` | 1080x1350 |
+| `story` | 1080x1920 |
+| `landscape` | 1536x1024 |
+| `square` | 1024x1024 |
+| `portrait` | 1024x1536 |
+| `ig_square` | 1080x1080 |
+| `ig_feed` | 1080x1350 |
+| `ig_story` | 1080x1920 |
+| `fb_feed` | 1200x630 |
+| `fb_story` | 1080x1920 |
+
+**Which channel/format maps to which `canvas` name** — use this instead of
+inferring it:
+
+| Channel + format | `canvas` value |
+|---|---|
+| Instagram feed post / grid square | `ig_square` |
+| Instagram feed (portrait 4:5) | `ig_feed` |
+| Instagram Story | `ig_story` |
+| Facebook feed post | `fb_feed` |
+| Facebook Story | `fb_story` |
+
+**Prefer the `ig_*`/`fb_*` names for new calls.** `instagram`, `story`,
+`landscape`, `square`, and `portrait` are the original generic sizes from
+before GF-143 and are kept only so existing callers stay byte-identical —
+`instagram` == `ig_feed` (1080x1350) and `story` == `ig_story` == `fb_story`
+(1080x1920) are the same pixels under different names. The trap is `square`
+(1024x1024, the old generic AI-generation size) vs `ig_square` (1080x1080,
+Instagram's actual grid-post size) — they are NOT interchangeable. For an
+Instagram grid post, pick `ig_square`, not `square`.
 
 Both logo and text can be stamped in one call — pass both sets of parameters
 together. `base_image` (required) is the existing image to stamp onto — a
