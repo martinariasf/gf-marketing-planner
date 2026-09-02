@@ -155,6 +155,21 @@ test('GF-144: the mirrored mount list matches server.ts', async () => {
     `the server.ts mount regex matched ${mountedInServer.size} subapps — it has almost ` +
       'certainly stopped matching after a reformat. Fix the pattern; do not delete this test.',
   )
+  // Layer-5 round 2 (N1): the mirror above only tracks app.route() subapp
+  // mounts. A route registered DIRECTLY on `app` in server.ts — e.g.
+  // app.post('/api/v1/webhook', h) — would belong to no subapp, appear in no
+  // mirror, and escape both this sweep and (if written without requireAuth)
+  // the guard itself. Direct GETs are fine: they are not mutating, and the
+  // guard is method-based. Direct MUTATING registrations are not.
+  const directMutations = [...src.matchAll(/^app\.(post|put|patch|delete)\(/gm)].map((m) => m[0])
+  assert.deepEqual(
+    directMutations,
+    [],
+    'server.ts registers a mutating route directly on `app` instead of inside a ' +
+      'subapp. It is invisible to this sweep — move it into a router mounted with ' +
+      'app.route(), or it bypasses the GF-144 viewer write guard.',
+  )
+
   const mirrored = new Set([
     'health', 'assetFiles', 'reviewPublic', 'authExchange', 'authLogin', 'clients',
     'reviewLinks', 'userOwned', 'viktorOwned', 'inspiration', 'chatAttachments',
@@ -237,6 +252,12 @@ test('GF-144: a refused viewer write is recorded in the audit log', async () => 
   // criterion 3: "with their own label"
   assert.equal(calls[0]!.principal.role, 'viewer')
   assert.ok(calls[0]!.principal.label, 'the audit row must carry the token label')
+
+  // Layer-5 round 2 (N2): restore, so a test appended after this one that
+  // performs a write hits the real audit() rather than silently hitting this
+  // spy. Harmless today (the sweep below writes nothing), order-dependent
+  // tomorrow.
+  mock.restoreAll()
 })
 
 // GF-144 criterion 1 — a viewer must be able to GET every read endpoint a
