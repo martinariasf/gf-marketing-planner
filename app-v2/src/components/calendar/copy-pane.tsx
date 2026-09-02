@@ -386,7 +386,6 @@ function ChannelPicker({ s, post }: { s: PaneState; post: Post }) {
   )
 }
 
-/** Save / discard / delete, identical across the layouts. */
 /**
  * GF-138 — Delete shares the bottom bar's first line with the status control
  * and nothing else, so no other button can ever displace it.
