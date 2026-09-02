@@ -22,9 +22,11 @@ Facebook sizes by name (IG square, IG feed, IG story, FB feed, FB story) and
 teaches Viktor to use them, so nobody has to type pixel numbers and nothing gets
 badly cropped by Instagram.
 
-It also stops the logo landing behind Instagram's own buttons on a story: an
-opt-in "story safe zone" keeps the logo and text out of the top and bottom bands
-where Instagram draws its interface.
+It also stops the logo landing behind Instagram's own buttons on a story: a
+"story safe zone" keeps the logo and text out of the top and bottom bands
+where Instagram draws its interface, automatically, whenever the canvas is a
+story preset — with an explicit `safe_zone: false` opt-out for a deliberate
+full-bleed design that accepts the overlap.
 
 Not included: any new preset for LinkedIn, X, TikTok or YouTube; automatic
 choice of a canvas from the post's channel; and changing the pixel numbers of
@@ -67,15 +69,16 @@ estimate: S
 depends_on: [TASK-001]
 tags: [gf-143, compose, viktor]
 acceptance:
-- The `image_compose` schema in `deploy-staging/staging-demo-agent/plugins/image_gen_openrouter/__init__.py` gains a `canvas` string param (enum = `compose_core.PRESETS` keys), a `canvas_mode` param (`pad`|`crop`, default `crop`) and a `canvas_fill` param (default `white`).
+- The `image_compose` schema in `deploy-staging/staging-demo-agent/plugins/image_gen_openrouter/__init__.py` gains a `canvas` string param (enum = `compose_core.PRESETS` keys), a `canvas_mode` param (`pad`|`crop`, default `crop`), a `canvas_fill` param (default `white`), and a `safe_zone` boolean param (default `true`).
 - `_handle_image_compose` applies `frame_to_preset` to the base image BEFORE the logo and text stamps, so anchors and percent margins are measured against the final canvas.
-- When `canvas` names a story preset, the logo and text stamps automatically pass that preset as `safe_zone`.
+- When `canvas` names a story preset AND `safe_zone` is true (the default), the logo and text stamps automatically pass that preset as `safe_zone`. When `safe_zone` is false, no clamping happens even on a story canvas.
 - Omitting `canvas` leaves the handler's behavior byte-identical to today; the existing plugin tests still pass unchanged.
 - The tool description tells the agent to pass `canvas` rather than hand-computing pixels, and names the five channel presets.
 notes:
 - Code evidence: `image_compose` schema at `__init__.py:1570-1705`; handler `_handle_image_compose` at `__init__.py:1718`; logo stamp at `:1805`, text stamp at `:1842`, save at `:1888`.
 - Order matters: framing after stamping would rescale a pixel-exact logo. Frame first.
 - `_handle_image_compose` is also called internally from the `image_generate` compose path (`__init__.py:2109`) - that call must keep passing no `canvas`.
+- SHIPPED CONTRACT (settled by Martin 2026-09-02, after the Layer-5 round-2 review flagged that the shipped unconditional behavior contradicted the Simple Words section calling the safe zone "opt-in"): the automatic clamp on story canvases is kept as the default — it is what makes the agent get placement right without having to remember a flag — and an explicit `safe_zone: false` is the opt-out for a deliberate full-bleed design. The Simple Words section above has been corrected to match; "opt-in" was wrong.
 
 ## Skill Sync
 

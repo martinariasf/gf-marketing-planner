@@ -280,6 +280,64 @@ class StoryCanvasPassesSafeZoneTests(_BaseCanvasTest):
         self.assertEqual(self.text_calls[0].get("safe_zone"), "fb_story")
 
 
+class SafeZoneOptOutTests(StoryCanvasPassesSafeZoneTests):
+    """Round-2 review finding 1: safe_zone is unconditional on story canvases
+    with no opt-out. Martin's call (2026-09-02): keep the automatic
+    behavior, add an explicit `safe_zone: false` opt-out for a deliberate
+    full-bleed design."""
+
+    def test_safe_zone_false_disables_clamp_on_story_canvas(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "ig_story",
+            "safe_zone": False,
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertIsNone(self.logo_calls[0].get("safe_zone"))
+        self.assertIsNone(self.text_calls[0].get("safe_zone"))
+
+    def test_safe_zone_omitted_still_clamps_story_canvas(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "ig_story",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(self.logo_calls[0].get("safe_zone"), "ig_story")
+        self.assertEqual(self.text_calls[0].get("safe_zone"), "ig_story")
+
+    def test_safe_zone_true_explicit_still_clamps_story_canvas(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "ig_story",
+            "safe_zone": True,
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(self.logo_calls[0].get("safe_zone"), "ig_story")
+        self.assertEqual(self.text_calls[0].get("safe_zone"), "ig_story")
+
+    def test_safe_zone_false_on_non_story_canvas_changes_nothing(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "fb_feed",
+            "safe_zone": False,
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertIsNone(self.logo_calls[0].get("safe_zone"))
+        self.assertIsNone(self.text_calls[0].get("safe_zone"))
+
+
 class CanvasModePadTests(_BaseCanvasTest):
     """Review finding 5: canvas_mode="pad" at the handler level was untested
     — only the default "crop" mode was exercised via canvas-size tests."""

@@ -1730,6 +1730,16 @@ IMAGE_COMPOSE_SCHEMA = {
                 "description": "Background fill color used only when canvas_mode is 'pad'.",
                 "default": "white",
             },
+            "safe_zone": {
+                "type": "boolean",
+                "description": (
+                    "Story canvases (ig_story/fb_story) keep the logo and "
+                    "text clear of the platform's UI bands by default. Pass "
+                    "false only for a deliberate full-bleed design that "
+                    "accepts the overlap."
+                ),
+                "default": True,
+            },
         },
         "required": ["base_image"],
     },
@@ -1824,7 +1834,12 @@ def _handle_image_compose(
 
         img = None
 
-        safe_zone = canvas if canvas in compose_core.SAFE_ZONES and compose_core.SAFE_ZONES[canvas] != (0, 0) else None
+        safe_zone_enabled = _as_bool(args.get("safe_zone"), True)
+        safe_zone = (
+            canvas
+            if safe_zone_enabled and canvas in compose_core.SAFE_ZONES and compose_core.SAFE_ZONES[canvas] != (0, 0)
+            else None
+        )
         if canvas:
             try:
                 with compose_core.Image.open(base_fh.name) as _base_for_frame:

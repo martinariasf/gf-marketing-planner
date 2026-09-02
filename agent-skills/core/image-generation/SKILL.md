@@ -269,7 +269,13 @@ pixel-exact elements onto an image that already exists — the output of
   keep stamped elements smaller than the gap on story canvases.
   These 250/340 numbers are Instagram's own story chrome; `fb_story` reuses
   them as a conservative approximation (Facebook's actual story UI differs
-  slightly), which is close enough to be safe.
+  slightly), which is close enough to be safe. For text, the clamp is a
+  font-metric approximation — actual ink can sit a small font-dependent
+  amount below the nominal boundary, and `text_outline`/`text_shadow` extend
+  ink beyond the clamped block by their own width, unclamped.
+- `safe_zone` (default `true`) — set `false` only for a deliberate full-bleed
+  story design that accepts overlap with the platform's UI bands; leave it on
+  otherwise.
 
 ### Fitting an existing image to a channel (GF-143)
 
