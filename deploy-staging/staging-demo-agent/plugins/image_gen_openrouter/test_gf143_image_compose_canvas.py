@@ -133,7 +133,10 @@ class CanvasFramesOutputSizeTests(_BaseCanvasTest):
             self.assertEqual(img.size, (1080, 1920))
 
 
-class CanvasOmittedIsByteIdenticalTests(_BaseCanvasTest):
+class CanvasOmittedIsPixelIdenticalTests(_BaseCanvasTest):
+    """Named for pixel-identical output (asserted via decoded getdata()),
+    not a byte/file hash comparison (review finding 9)."""
+
     def test_no_canvas_key_matches_explicit_canvas_none(self):
         args_common = {
             "base_image": "https://example.com/base.png",
@@ -246,6 +249,132 @@ class StoryCanvasPassesSafeZoneTests(_BaseCanvasTest):
         self.assertTrue(result.get("success"), result)
         self.assertIsNone(self.logo_calls[0].get("safe_zone"))
         self.assertIsNone(self.text_calls[0].get("safe_zone"))
+
+    def test_story_canvas_passes_safe_zone_to_logo_and_text(self):
+        # Review finding 5: only "ig_story" was covered before; "story" (the
+        # legacy generic name) is a distinct SAFE_ZONES key that must also
+        # auto-pass safe_zone.
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "story",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(self.logo_calls[0].get("safe_zone"), "story")
+        self.assertEqual(self.text_calls[0].get("safe_zone"), "story")
+
+    def test_fb_story_canvas_passes_safe_zone_to_logo_and_text(self):
+        # Review finding 5: "fb_story" is a distinct SAFE_ZONES key from
+        # "ig_story" (same numbers, different name) and was untested.
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": True,
+            "text": "hello",
+            "canvas": "fb_story",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(self.logo_calls[0].get("safe_zone"), "fb_story")
+        self.assertEqual(self.text_calls[0].get("safe_zone"), "fb_story")
+
+
+class CanvasModePadTests(_BaseCanvasTest):
+    """Review finding 5: canvas_mode="pad" at the handler level was untested
+    — only the default "crop" mode was exercised via canvas-size tests."""
+
+    def test_pad_mode_produces_correctly_sized_letterboxed_image(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": False,
+            "text": "hello",
+            "canvas": "fb_feed",
+            "canvas_mode": "pad",
+            "canvas_fill": "white",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        with Image.open(result["path"]) as img:
+            self.assertEqual(img.size, (1200, 630))
+            # base fixture is a 500x500 square; padding it into 1200x630
+            # letterboxes with visible fill margins left/right, so a top-left
+            # corner pixel must be the fill color, not the base color.
+            self.assertEqual(img.convert("RGB").getpixel((0, 0)), (255, 255, 255))
+
+
+class CanvasOnlyNoLogoNoTextTests(_BaseCanvasTest):
+    """Review finding 5: a canvas-only call (include_logo=False, no text)
+    must still reframe and return a correctly-sized image without raising —
+    requesting a reframe is itself something to compose, even with no
+    logo/text stamp on top."""
+
+    def test_canvas_only_call_returns_correctly_sized_image(self):
+        raw = _mod._handle_image_compose({
+            "base_image": "https://example.com/base.png",
+            "include_logo": False,
+            "canvas": "ig_square",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("success"), result)
+        with Image.open(result["path"]) as img:
+            self.assertEqual(img.size, (1080, 1080))
+
+
+class InternalImageGenerateComposeCallPassesNoCanvasTests(unittest.TestCase):
+    """Review finding 4: image_generate's internal auto-stamp call to
+    _handle_image_compose (__init__.py, the skip_publish=True path around
+    line 2109/2181) must keep passing no `canvas` — that call stamps the
+    logo onto the plate the model just generated, which is already the
+    right shape; GF-143 only added `canvas` to the PUBLIC image_compose
+    tool schema, not to this internal call. Mirrors the stubbing/capture
+    pattern of test_gf134_review_fixes.py's
+    EditModeDoesNotAutoStampLogoTests."""
+
+    def setUp(self):
+        os.environ["OPENROUTER_API_KEY"] = "fake-key-for-tests"
+        self._orig_branding = _mod._branding_logo_refs
+        self._orig_generate = _mod.OpenRouterImageGenProvider.generate
+        self._orig_compose = _mod._handle_image_compose
+
+        _mod._branding_logo_refs = lambda: ["https://example.com/logo.png"]
+        self.compose_calls = []
+
+        def fake_generate(_self, prompt, aspect_ratio=None, model=None, **kwargs):
+            return {"success": True, "image": "/tmp/fake_plate.png"}
+
+        def fake_compose(args, **kw):
+            self.compose_calls.append((dict(args), dict(kw)))
+            return json.dumps({
+                "success": True,
+                "image": "/tmp/fake_composited.png",
+            })
+
+        _mod.OpenRouterImageGenProvider.generate = fake_generate
+        _mod._handle_image_compose = fake_compose
+
+    def tearDown(self):
+        os.environ.pop("OPENROUTER_API_KEY", None)
+        _mod._branding_logo_refs = self._orig_branding
+        _mod.OpenRouterImageGenProvider.generate = self._orig_generate
+        _mod._handle_image_compose = self._orig_compose
+
+    def test_internal_compose_call_has_no_canvas_key_and_uses_skip_publish(self):
+        raw = _mod._handle_image_generate({
+            "prompt": "a poster with our logo on it",
+        })
+        result = json.loads(raw)
+        self.assertTrue(result.get("logo_composited"), result)
+        self.assertEqual(len(self.compose_calls), 1)
+        call_args, call_kwargs = self.compose_calls[0]
+        # Pre-GF-143 behavior pinned: no "canvas" key at all (not even
+        # canvas=None) reaches the internal call, and skip_publish=True is
+        # still passed as a real keyword, not through the args dict.
+        self.assertNotIn("canvas", call_args)
+        self.assertNotIn("canvas_mode", call_args)
+        self.assertNotIn("canvas_fill", call_args)
+        self.assertEqual(set(call_args.keys()), {"base_image", "logo"})
+        self.assertEqual(call_kwargs.get("skip_publish"), True)
 
 
 if __name__ == "__main__":

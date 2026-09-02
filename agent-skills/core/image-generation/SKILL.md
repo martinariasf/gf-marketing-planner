@@ -262,7 +262,14 @@ pixel-exact elements onto an image that already exists — the output of
 - `canvas_fill` (default `white`) — pad-mode fill color
 - Omitting `canvas` leaves behavior exactly as before. On `story`/`ig_story`/
   `fb_story`, the logo and text are auto-kept out of Instagram's UI bands (top
-  250px, bottom 340px) — do not adjust anchors or margins yourself for this.
+  250px, bottom 340px) WHEN THE ELEMENT FITS in that 1330px gap — do not
+  adjust anchors or margins yourself for this. A logo or text block taller
+  than the gap is top-aligned at the 250px line instead, and its bottom edge
+  still overlaps the bottom band; there is no shrinking or rejecting it, so
+  keep stamped elements smaller than the gap on story canvases.
+  These 250/340 numbers are Instagram's own story chrome; `fb_story` reuses
+  them as a conservative approximation (Facebook's actual story UI differs
+  slightly), which is close enough to be safe.
 
 ### Fitting an existing image to a channel (GF-143)
 
@@ -283,6 +290,26 @@ pixels:
 | `ig_story` | 1080x1920 |
 | `fb_feed` | 1200x630 |
 | `fb_story` | 1080x1920 |
+
+**Which channel/format maps to which `canvas` name** — use this instead of
+inferring it:
+
+| Channel + format | `canvas` value |
+|---|---|
+| Instagram feed post / grid square | `ig_square` |
+| Instagram feed (portrait 4:5) | `ig_feed` |
+| Instagram Story | `ig_story` |
+| Facebook feed post | `fb_feed` |
+| Facebook Story | `fb_story` |
+
+**Prefer the `ig_*`/`fb_*` names for new calls.** `instagram`, `story`,
+`landscape`, `square`, and `portrait` are the original generic sizes from
+before GF-143 and are kept only so existing callers stay byte-identical —
+`instagram` == `ig_feed` (1080x1350) and `story` == `ig_story` == `fb_story`
+(1080x1920) are the same pixels under different names. The trap is `square`
+(1024x1024, the old generic AI-generation size) vs `ig_square` (1080x1080,
+Instagram's actual grid-post size) — they are NOT interchangeable. For an
+Instagram grid post, pick `ig_square`, not `square`.
 
 Both logo and text can be stamped in one call — pass both sets of parameters
 together. `base_image` (required) is the existing image to stamp onto — a

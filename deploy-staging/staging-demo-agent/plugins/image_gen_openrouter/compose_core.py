@@ -143,7 +143,18 @@ def frame_to_preset(img: Image.Image, preset: str, mode: str = "crop", fill="whi
 def _clamp_into_safe_zone(y: int, el_h: int, base_h: int, safe_zone: Optional[str]) -> int:
     """Clamp a computed y into [top_px, base_h - el_h - bottom_px] for the
     given safe_zone preset name. safe_zone=None returns y unchanged (today's
-    behavior, byte-identical). Raises ComposeError for an unknown name.
+    behavior, pixel-identical). Raises ComposeError for an unknown name.
+
+    Oversized-element behavior: if the element is TALLER than the safe gap
+    (high < low — e.g. a huge caption block on a 1080x1920 story canvas,
+    where the gap between the 250px top band and 340px bottom band is only
+    1330px), this does not raise and does not shrink the element. It
+    top-aligns the element at `top_px` and returns that, which means the
+    element's bottom edge still overlaps the bottom band. This is a
+    deliberate, deterministic choice — the alternative (raising, or silently
+    shrinking the caller's element) is worse — but it means the safe zone
+    only actually keeps an element OUT of both bands when the element fits
+    in the gap; an oversized element is top-aligned, not protected.
     """
     if safe_zone is None:
         return y
@@ -155,6 +166,9 @@ def _clamp_into_safe_zone(y: int, el_h: int, base_h: int, safe_zone: Optional[st
     low = top_px
     high = base_h - el_h - bottom_px
     if high < low:
+        # Element taller than the safe gap: top-align rather than raise or
+        # shrink. See the oversized-element note in this function's
+        # docstring above.
         return low
     return min(max(y, low), high)
 

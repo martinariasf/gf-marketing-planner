@@ -1771,8 +1771,13 @@ def _handle_image_compose(
     include_logo = _as_bool(args.get("include_logo"), True)
     explicit_logo = str(args.get("logo") or "").strip()
     text = str(args.get("text") or "").strip()
+    canvas = str(args.get("canvas") or "").strip()
 
-    if not include_logo and not text:
+    # GF-143 (review finding 5): a `canvas` reframe is a real thing to
+    # compose even with no logo and no text — reframing to a channel size is
+    # itself the requested transform, so it must not trip the "nothing to
+    # compose" guard.
+    if not include_logo and not text and not canvas:
         return json.dumps({
             "success": False,
             "image": None,
@@ -1819,7 +1824,6 @@ def _handle_image_compose(
 
         img = None
 
-        canvas = str(args.get("canvas") or "").strip()
         safe_zone = canvas if canvas in compose_core.SAFE_ZONES and compose_core.SAFE_ZONES[canvas] != (0, 0) else None
         if canvas:
             try:
@@ -1847,12 +1851,21 @@ def _handle_image_compose(
                 })
             # composite_logo takes a base PATH (it does its own Image.open),
             # so the framed canvas has to hit disk before it can be used as
-            # the logo stamp's base — write it alongside the other temp files.
-            framed_fh = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            framed_fh.close()
-            compose_core.save(img, framed_fh.name)
-            tmp_paths.append(framed_fh.name)
-            base_for_logo = framed_fh.name
+            # the logo stamp's base. composite_text, in contrast, accepts an
+            # already-open Image directly (base_for_text below uses `img`
+            # in-memory), so this temp file is only ever read on the
+            # logo-stamping branch — skip writing it when no logo will be
+            # stamped (canvas-only or canvas+text-only calls) to avoid a
+            # wasted disk round-trip for a file nothing reads (review
+            # finding 8).
+            if logo_ref:
+                framed_fh = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                framed_fh.close()
+                compose_core.save(img, framed_fh.name)
+                tmp_paths.append(framed_fh.name)
+                base_for_logo = framed_fh.name
+            else:
+                base_for_logo = None
         else:
             base_for_logo = base_fh.name
 
