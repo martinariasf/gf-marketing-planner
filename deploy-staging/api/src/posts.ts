@@ -119,9 +119,13 @@ export async function listPosts(slug: string, opts: ListPostsOptions = {}): Prom
 // this agrees exactly with the dashboard's monthKeyFromIso. For a full ISO
 // timestamp the two can differ near midnight: this buckets by the written
 // (UTC) date, while the dashboard resolves the instant in the client's
-// configured timezone, which the API does not have in scope here. Accepted
-// knowingly because no stored post date carries a time component; revisit if
-// that changes.
+// configured timezone, which the API does not have in scope here.
+// Verified against live staging data 2026-09-02: timestamped post dates DO
+// exist (e.g. staging-demo "2026-08-01T09:00:00Z"), so this path is reachable
+// — but no client has a `timezone` configured, so the dashboard falls back to
+// UTC and the two agree. The divergence only appears once a client is given a
+// non-UTC timezone whose offset moves a timestamp across a month boundary.
+// Revisit when the first such client is configured.
 export function monthKeyOf(iso: unknown): string {
   if (typeof iso !== 'string' || !iso) return ''
   const match = /^(\d{4})-(\d{2})-\d{2}/.exec(iso)

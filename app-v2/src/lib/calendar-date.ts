@@ -12,8 +12,10 @@
  * this codebase actually stores that is exactly right. For a full-ISO value they
  * differ from `monthKeyFromIso`, which resolves the instant's calendar day in
  * the client's configured timezone — so a timestamped post could in principle
- * bucket into month M while displaying a day in M+1. No stored data hits this
- * today; if timestamped post dates are ever introduced, reconcile the two.
+ * bucket into month M while displaying a day in M+1. Verified against live
+ * staging data 2026-09-02: timestamped post dates DO exist, but no client has
+ * a `timezone` configured, so both paths resolve in UTC and agree. Reconcile
+ * these two before giving any client a non-UTC timezone.
  *
  * These helpers parse the ISO string's Y/M/D fields directly instead of
  * routing through `new Date(iso)`, so they are immune to that failure
