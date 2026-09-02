@@ -34,7 +34,7 @@ silently change output for existing callers).
 ## Decisions and API Contracts
 
 ### TASK-001: Extend the preset table and add a story safe zone to compose_core
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: kimi-k3
@@ -57,7 +57,7 @@ notes:
 - TDD: `test_gf134_review_fixes.py` and `test_story_aspect.py` establish a pytest harness in this directory - write the failing tests first.
 
 ### TASK-002: Expose canvas + safe zone on the image_compose agent tool
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: kimi-k3
@@ -80,7 +80,7 @@ notes:
 ## Skill Sync
 
 ### TASK-003: Mirror the change into the local compose-image skill
-status: todo
+status: done
 owner: martin
 agent: claude
 reviewer: kimi-k3
@@ -97,6 +97,7 @@ acceptance:
 notes:
 - The two files are a vendored pair - `compose_core.py:2-10` says so explicitly. Divergence is the failure mode this task exists to prevent.
 - The skill script is a CLI (argparse, `sys.exit`); the plugin core raises `ComposeError`. Keep that difference; mirror only the vocabulary and the math.
+- NOTE FOR REVIEWERS: the skill script lives OUTSIDE this repo (under the user's Claude skills directory), so this task's changes never appear in a `git diff`. Round 1 of the Layer-5 review raised the twin as a HIGH finding for exactly that reason. Verify it by reading the file, not the diff.
 
 ## Verification
 
