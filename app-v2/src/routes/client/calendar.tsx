@@ -22,7 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, fmtCalendarDay } from '@/lib/format'
+import { dayOfIsoDay } from '@/lib/calendar-date'
 import {
   apiCreatePost,
   apiDeletePost,
@@ -169,9 +170,18 @@ function postVideo(post: Post) {
   return post.media?.find((item) => item.type === 'video' && item.url)
 }
 
-/** Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)). */
+/**
+ * Week bucket within a month: 1-based, by day-of-month (Math.ceil(day / 7)).
+ * GF-137 — read the day off the ISO string directly (`dayOfIsoDay`) rather
+ * than via `new Date(iso).getDate()`, which parses a date-only string as UTC
+ * midnight and rolls it back a day for clients west of Greenwich. Falls back
+ * to week 1 for unparseable input, same as `new Date('bad').getDate()` would
+ * previously have produced NaN -> Math.ceil(NaN/7) = NaN, so this is a strictly
+ * safer fallback than before.
+ */
 function weekOfMonth(iso: string) {
-  return Math.ceil(new Date(iso).getDate() / 7)
+  const day = dayOfIsoDay(iso)
+  return day === null ? 1 : Math.ceil(day / 7)
 }
 
 /** Open the right-side chat pre-filled with a "change this post's image" prompt. */
@@ -1353,7 +1363,7 @@ export default function CalendarView() {
                       <div className="p-2 space-y-0.5">
                         <p className="text-[10px] text-ink-muted flex items-center gap-1">
                           <ChannelIcon channel={p.channel} className="h-3 w-3" />
-                          <span className="truncate">{fmtDate(p.date)}</span>
+                          <span className="truncate">{fmtCalendarDay(p.date)}</span>
                           <ReviewSignals feedback={reviewFeedback.byPost[p.id]} />
                         </p>
                         <p className="text-xs font-medium leading-tight line-clamp-2">
@@ -1546,7 +1556,7 @@ export default function CalendarView() {
           <DialogDescription>
             {t('calendar.pastApproveBody', {
               id: pastApproveTarget ? nameOf(pastApproveTarget) : '',
-              date: pastApproveTarget ? fmtDate(pastApproveTarget.date) : '',
+              date: pastApproveTarget ? fmtCalendarDay(pastApproveTarget.date) : '',
             })}
           </DialogDescription>
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -1735,7 +1745,7 @@ function CompactPostCard({
           <p className="text-[10px] text-ink-muted truncate flex items-center gap-1">
             <ChannelIcon channel={post.channel} className="h-3 w-3" />
             <span>{CHANNEL_LABEL[post.channel] ?? post.channel}</span>
-            <span>· {fmtDate(post.date)}</span>
+            <span>· {fmtCalendarDay(post.date)}</span>
             {timing === 'past' && <span>· Past</span>}
             {timing === 'today' && <span>· Today</span>}
           </p>

@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2, ExternalLink, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { fmtDateShort } from '@/lib/format'
+import { fmtDateShort, fmtCalendarDayShort } from '@/lib/format'
 import { dateTiming } from '@/lib/planning-range'
 import { apiSetApproval, type ApprovalDecision } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
@@ -222,7 +222,7 @@ export function ApprovalKanban({
                           {nameOf(post)}
                         </Badge>
                         <span className="text-[10px] text-ink-muted">
-                          {fmtDateShort(post.date)} · {post.channel}
+                          {fmtCalendarDayShort(post.date)} · {post.channel}
                         </span>
                         {pending.has(post.id) && (
                           <Loader2 className="h-3 w-3 animate-spin text-ink-muted" />

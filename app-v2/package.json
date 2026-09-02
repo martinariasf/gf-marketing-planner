@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check:date-timing": "node --experimental-strip-types scripts/check-date-timing.ts"
+    "check:date-timing": "node --experimental-strip-types scripts/check-date-timing.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -43,6 +44,7 @@
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^4.0.7"
   }
 }

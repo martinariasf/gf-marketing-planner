@@ -110,11 +110,16 @@ export async function listPosts(slug: string, opts: ListPostsOptions = {}): Prom
 }
 
 /** YYYY-MM month key for a post's date, or '' if unparseable. */
+// GF-137 timezone rollback: post dates are stored date-only ("2026-09-01").
+// `new Date(iso)` parses a bare YYYY-MM-DD as UTC midnight, but reading it back
+// with LOCAL getters (getFullYear/getMonth) rolls it into the previous month on
+// any server west of Greenwich. Derive the key from the string prefix instead —
+// do NOT "simplify" this back to `new Date(...).getFullYear()/.getMonth()`.
 export function monthKeyOf(iso: unknown): string {
   if (typeof iso !== 'string' || !iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const match = /^(\d{4})-(\d{2})-\d{2}/.exec(iso)
+  if (!match) return ''
+  return `${match[1]}-${match[2]}`
 }
 
 /** Posts whose date falls within [rangeStart, rangeEnd] inclusive (month keys). */
