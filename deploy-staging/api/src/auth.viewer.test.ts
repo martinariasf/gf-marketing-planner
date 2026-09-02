@@ -65,6 +65,12 @@ const SLUG = 'staging-demo'
 // Routes mounted BEFORE the bearer-gated subapps (see src/server.ts's mount
 // comments) — no requireAuth guards these, so the viewer write-deny guard
 // (which lives inside requireAuth) never runs for them. Excluded per spec.
+// WARNING to a future author: if the sweep below fails on a route that is NOT
+// in this list, the correct fix is almost never to add it here. These entries
+// are excluded because they are mounted BEFORE requireAuth and are public to
+// everyone (not just viewers), so the guard cannot fire for them by design. A
+// newly-failing route means a genuinely unguarded mutating endpoint — fix the
+// route, not this list.
 const EXCLUDED_PATHS = new Set<string>([
   // server.ts:118 — unauth health probe.
   'GET /api/v1/health',
@@ -105,7 +111,18 @@ function substitute(path: string): string {
 const seen = new Set<string>()
 const routeEntries: { method: string; path: string }[] = []
 for (const r of app.routes) {
-  if (r.method === 'ALL') continue // middleware wildcards, not real endpoints
+  // 'ALL' entries are middleware wildcards (use('*', ...)), not endpoints. A
+  // real endpoint registered with .all() would otherwise be invisibly exempt
+  // from the sweep — the guard below fails loudly if one ever appears.
+  if (r.method === 'ALL') {
+    assert.equal(
+      r.path.includes('*'),
+      true,
+      `route table has a non-wildcard ALL entry (${r.path}). If that is a real ` +
+        'endpoint registered with .all(), it is escaping the viewer write sweep.',
+    )
+    continue
+  }
   const key = `${r.method} ${r.path}`
   if (seen.has(key)) continue
   seen.add(key)
@@ -127,8 +144,16 @@ const readable = routeEntries.filter(
 test('GF-144: the mirrored mount list matches server.ts', async () => {
   const { readFile } = await import('node:fs/promises')
   const src = await readFile(new URL('./server.ts', import.meta.url), 'utf8')
+  // Tolerant of reformatting: any quote style, any indentation, any whitespace.
+  // A brittle pattern here would find nothing, report no drift, and silently
+  // reintroduce the exact hole this test exists to close.
   const mountedInServer = new Set(
-    [...src.matchAll(/^app\.route\('\/api\/v1',\s*(\w+)\)/gm)].map((m) => m[1]!),
+    [...src.matchAll(/app\.route\(\s*['"`]\/api\/v1['"`]\s*,\s*(\w+)\s*\)/g)].map((m) => m[1]!),
+  )
+  assert.ok(
+    mountedInServer.size > 5,
+    `the server.ts mount regex matched ${mountedInServer.size} subapps — it has almost ` +
+      'certainly stopped matching after a reformat. Fix the pattern; do not delete this test.',
   )
   const mirrored = new Set([
     'health', 'assetFiles', 'reviewPublic', 'authExchange', 'authLogin', 'clients',
@@ -176,34 +201,72 @@ test('GF-144: viewer role gets 403 with the write-deny detail on every non-GET r
   assert.deepEqual(failures, [], `unguarded (or wrongly-guarded) mutating routes:\n${failures.join('\n')}`)
 })
 
-// GF-144 criterion 4 — the token must be visible in the audit trail. A viewer
+// GF-144 criterion 3 — the token must be visible in the audit trail. A viewer
 // never mutates, so the only thing there is to log is the refusal.
+//
+// This asserts BEHAVIOR, not the presence of a call site: an earlier version
+// regex-matched auth.ts's source, which would have passed just as happily if
+// audit() were a no-op or wrote to the wrong collection.
 test('GF-144: a refused viewer write is recorded in the audit log', async () => {
-  const { audit } = await import('./audit.js')
-  assert.equal(typeof audit, 'function', 'audit() must exist for requireAuth to call')
-  const src = await (await import('node:fs/promises')).readFile(
-    new URL('./auth.ts', import.meta.url),
-    'utf8',
-  )
-  // Structural assertion: the denial branch calls audit with the agreed action.
-  assert.match(
-    src,
-    /principal\.role === 'viewer'[\s\S]{0,600}?action: 'viewer\.denied'/,
-    "requireAuth's viewer-deny branch must call audit({ action: 'viewer.denied' })",
-  )
-  assert.match(
-    src,
-    /action: 'viewer\.denied'[\s\S]{0,300}?note: `\$\{c\.req\.method\}/,
-    'the audit row must record the attempted method and path in `note`',
-  )
-})
+  const calls: { principal: { role: string; label?: string }; entry: Record<string, unknown> }[] = []
+  const { mock } = await import('node:test')
+  const { Hono } = await import('hono')
+  mock.module('./audit.js', {
+    namedExports: {
+      audit: async (principal: { role: string; label?: string }, entry: Record<string, unknown>) => {
+        calls.push({ principal, entry })
+      },
+    },
+  })
+  // Re-import auth.ts so it binds the mocked audit module.
+  const { requireAuth: guarded } = await import(`./auth.js?audit-spy=${Date.now()}`)
+  const app2 = new Hono()
+  app2.use('*', guarded)
+  app2.post('/clients/:slug/thing', (c) => c.json({ ok: true }))
 
-test('GF-144: viewer role is NOT blocked on GET routes (positive case)', async () => {
-  const sample = readable.find((r) => r.path === '/api/v1/clients/:slug/posts') ?? readable[0]!
-  const path = `/api/v1${substitute(sample.path.replace(/^\/api\/v1/, ''))}`
-  const res = await app.request(path, {
-    method: sample.method,
+  const res = await app2.request('/clients/staging-demo/thing', {
+    method: 'POST',
     headers: { Authorization: 'Bearer viewer_test' },
   })
-  assert.notEqual(res.status, 403, `GET ${sample.path} was blocked for a viewer token`)
+
+  assert.equal(res.status, 403)
+  assert.equal(calls.length, 1, 'exactly one audit row per refused viewer write')
+  assert.equal(calls[0]!.entry.action, 'viewer.denied')
+  assert.equal(calls[0]!.entry.slug, 'staging-demo')
+  assert.match(String(calls[0]!.entry.note), /^POST \/clients\/staging-demo\/thing$/)
+  // criterion 3: "with their own label"
+  assert.equal(calls[0]!.principal.role, 'viewer')
+  assert.ok(calls[0]!.principal.label, 'the audit row must carry the token label')
+})
+
+// GF-144 criterion 1 — a viewer must be able to GET every read endpoint a
+// `dash` token can reach. Sweeping EVERY readable route, not sampling one:
+// sampling a single route passed while 8 of 26 GET routes were in fact 403ing,
+// because `viewer` was in no requireRole allow-list.
+//
+// The comparison is against `dash`, not against 200. Many of these routes need
+// a live PocketBase and legitimately fail with 5xx in unit tests; what matters
+// is that a viewer is not turned away where a dash token is let through.
+test('GF-144: a viewer can reach every GET route a dash token can reach', async () => {
+  const regressions: string[] = []
+  for (const r of readable) {
+    const path = `/api/v1${substitute(r.path.replace(/^\/api\/v1/, ''))}`
+    const headers = (t: string) => ({ Authorization: `Bearer ${t}` })
+    const asViewer = await app.request(path, { method: r.method, headers: headers('viewer_test') })
+    const asDash = await app.request(path, { method: r.method, headers: headers('dash_test') })
+    if (asViewer.status === 403 && asDash.status !== 403) {
+      let detail = ''
+      try {
+        detail = (await asViewer.json()).detail
+      } catch {
+        /* no JSON body */
+      }
+      regressions.push(`${r.method} ${r.path} -> viewer 403 (${detail}) but dash ${asDash.status}`)
+    }
+  }
+  assert.deepEqual(
+    regressions,
+    [],
+    `read endpoints a dash token can reach but a viewer cannot:\n${regressions.join('\n')}`,
+  )
 })

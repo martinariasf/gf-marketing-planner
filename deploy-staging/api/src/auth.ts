@@ -186,16 +186,22 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   // viktorOwned.ts) have no requireRole call at all and rely on requireAuth +
   // requireScope alone, so an allowlist-based approach would miss them.
   if (principal.role === 'viewer' && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-    // GF-144 criterion 4 — a viewer never mutates, so without logging the
+    // GF-144 criterion 3 — a viewer never mutates, so without logging the
     // REFUSALS the token would never appear in the audit trail at all. Reads
     // are deliberately not audited: that would be a PB write on every GET.
-    // audit() swallows its own failures (see audit.ts), so this cannot turn a
-    // clean 403 into a 500.
+    //
+    // audit() already swallows its own failures, but the .catch() here is not
+    // redundant: this call sits on a response path, and a future change inside
+    // audit.ts must never be able to turn a clean 403 into a 500.
+    const path = new URL(c.req.url).pathname
     await audit(principal, {
       action: 'viewer.denied',
-      slug: c.req.param('slug') ?? (principal.slug || '-'),
-      note: `${c.req.method} ${new URL(c.req.url).pathname}`,
-    })
+      // c.req.param() is not reliably populated for wildcard middleware across
+      // Hono versions, so fall back to parsing the path before the token's own
+      // scope. Worst case this is cosmetic — it only labels the audit row.
+      slug: c.req.param('slug') ?? path.match(/\/clients\/([^/]+)/)?.[1] ?? principal.slug ?? '-',
+      note: `${c.req.method} ${path}`,
+    }).catch(() => {})
     return c.json(
       {
         type: 'about:blank',
@@ -260,6 +266,20 @@ export const requireScope = (paramName = 'slug'): MiddlewareHandler<AppEnv> => {
 export const requireRole = (...allowed: Role[]): MiddlewareHandler<AppEnv> => {
   return async (c, next) => {
     const principal = c.get('principal')
+    // GF-144 — a viewer reads exactly what a `dash` token reads, so anywhere
+    // `dash` is allowed, `viewer` is too. Without this, the 20+ read routes
+    // guarded by requireRole('dash', ...) would 403 a viewer and the role
+    // would be useless for its one purpose.
+    //
+    // This cannot leak a write: requireAuth has already rejected every method
+    // other than GET/HEAD/OPTIONS for a viewer before this middleware runs, so
+    // reaching here as a viewer implies a safe method. Routes that exclude
+    // `dash` (e.g. the agent/admin-only plaintext Postiz key at
+    // routes/integration.ts:261) stay closed to viewers by construction.
+    if (principal.role === 'viewer' && allowed.includes('dash')) {
+      await next()
+      return
+    }
     if (!allowed.includes(principal.role)) {
       return c.json(
         {
