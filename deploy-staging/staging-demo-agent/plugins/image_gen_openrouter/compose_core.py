@@ -41,7 +41,23 @@ PRESETS = {
     "landscape": (1536, 1024),
     "square": (1024, 1024),
     "portrait": (1024, 1536),
+    # GF-143: named channel canvas sizes so callers don't hand-compute pixels.
+    "ig_square": (1080, 1080),
+    "ig_feed": (1080, 1350),
+    "ig_story": (1080, 1920),
+    "fb_feed": (1200, 630),
+    "fb_story": (1080, 1920),
 }
+
+# GF-143: (top_px, bottom_px) insets, in pixels, that composite_logo/
+# composite_text will clamp element placement out of when a caller passes
+# safe_zone=<preset name>. On a 1080x1920 story canvas Instagram draws its
+# own profile-header chrome in the top band and a reply/CTA row in the
+# bottom band; 250/340 keeps a stamped logo or caption out of both.
+SAFE_ZONES = {name: (0, 0) for name in PRESETS}
+SAFE_ZONES["story"] = (250, 340)
+SAFE_ZONES["ig_story"] = (250, 340)
+SAFE_ZONES["fb_story"] = (250, 340)
 
 # GF-134: the skill's Windows-only candidates plus common Linux container
 # paths, so a fallback font resolves whether this runs on a dev box or in
@@ -88,6 +104,61 @@ def anchor_xy(base_w, base_h, el_w, el_h, anchor, margin_x, margin_y) -> Tuple[i
     return x, y
 
 
+def frame_to_preset(img: Image.Image, preset: str, mode: str = "crop", fill="white") -> Image.Image:
+    """Reshape `img` to a named PRESETS size, returning a NEW Image.
+
+    `mode="pad"` letterboxes the whole image onto a `fill`-colored canvas;
+    `mode="crop"` scales to cover the target size and center-crops. Matches
+    the exact scale/crop arithmetic of `cmd_frame` in the vendored skill
+    script (compose_image.py) so the two stay behaviourally identical.
+    """
+    if preset not in PRESETS:
+        raise ComposeError(f"Unknown preset '{preset}'. Must be one of: {', '.join(PRESETS)}")
+    target_w, target_h = PRESETS[preset]
+
+    base = img.convert("RGBA")
+
+    if mode == "pad":
+        scale = min(target_w / base.width, target_h / base.height)
+        new_w = max(1, int(round(base.width * scale)))
+        new_h = max(1, int(round(base.height * scale)))
+        resized = base.resize((new_w, new_h), Image.LANCZOS)
+        canvas = Image.new("RGBA", (target_w, target_h), fill)
+        x = (target_w - new_w) // 2
+        y = (target_h - new_h) // 2
+        canvas.alpha_composite(resized, (x, y))
+        return canvas
+    elif mode == "crop":
+        scale = max(target_w / base.width, target_h / base.height)
+        new_w = max(1, int(round(base.width * scale)))
+        new_h = max(1, int(round(base.height * scale)))
+        resized = base.resize((new_w, new_h), Image.LANCZOS)
+        x = (new_w - target_w) // 2
+        y = (new_h - target_h) // 2
+        return resized.crop((x, y, x + target_w, y + target_h))
+    else:
+        raise ComposeError(f"Unknown mode '{mode}'. Must be 'pad' or 'crop'")
+
+
+def _clamp_into_safe_zone(y: int, el_h: int, base_h: int, safe_zone: Optional[str]) -> int:
+    """Clamp a computed y into [top_px, base_h - el_h - bottom_px] for the
+    given safe_zone preset name. safe_zone=None returns y unchanged (today's
+    behavior, byte-identical). Raises ComposeError for an unknown name.
+    """
+    if safe_zone is None:
+        return y
+    if safe_zone not in SAFE_ZONES:
+        raise ComposeError(
+            f"Unknown safe_zone '{safe_zone}'. Must be one of: {', '.join(SAFE_ZONES)}"
+        )
+    top_px, bottom_px = SAFE_ZONES[safe_zone]
+    low = top_px
+    high = base_h - el_h - bottom_px
+    if high < low:
+        return low
+    return min(max(y, low), high)
+
+
 def resolve_font(font_path, font_dir, size, text_for_fallback_name=None):
     """Resolution order: font_path -> stem match in font_dir -> bundled default.
 
@@ -128,6 +199,7 @@ def composite_logo(
     margin="0",
     scale: Optional[str] = None,
     opacity: int = 100,
+    safe_zone: Optional[str] = None,
 ):
     """Stamp `logo_path` onto `base_path`, returning an RGBA PIL Image.
 
@@ -157,6 +229,7 @@ def composite_logo(
     margin_y = parse_measure(margin, base.height) if anchor != "center" else 0
     x, y = anchor_xy(base.width, base.height, logo.width, logo.height,
                       anchor, margin_x, margin_y)
+    y = _clamp_into_safe_zone(y, logo.height, base.height, safe_zone)
 
     out = base.copy()
     out.alpha_composite(logo, (x, y))
@@ -195,6 +268,7 @@ def composite_text(
     outline: int = 0,
     outline_color="black",
     shadow: bool = False,
+    safe_zone: Optional[str] = None,
 ):
     """Draw `text` onto a base image, returning an RGBA PIL Image.
 
@@ -227,6 +301,7 @@ def composite_text(
     margin_y = parse_measure(margin, base.height) if anchor != "center" else 0
     x0, y0 = anchor_xy(base.width, base.height, block_w, block_h,
                         anchor, margin_x, margin_y)
+    y0 = _clamp_into_safe_zone(y0, block_h, base.height, safe_zone)
 
     # GF-134 (review round 2): draw every glyph onto a transparent overlay and
     # alpha_composite it, rather than drawing straight onto the base.
