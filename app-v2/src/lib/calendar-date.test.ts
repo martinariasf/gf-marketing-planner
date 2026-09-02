@@ -63,3 +63,22 @@ describe('parseIsoDay', () => {
     expect(parseIsoDay('not-a-date')).toBeNull()
   })
 })
+
+// GF-137 Layer-5 round 2, note 1 — an out-of-range month must not roll over.
+// The pre-GF-137 monthKeyFromIso returned '' here, so rolling "2026-13-01"
+// into Jan 2027 would be a behavior change introduced by the de-duplication.
+describe('out-of-range month', () => {
+  it('monthKeyOfIsoDay returns empty for month 13', () => {
+    expect(monthKeyOfIsoDay('2026-13-01')).toBe('')
+  })
+  it('monthKeyOfIsoDay returns empty for month 00', () => {
+    expect(monthKeyOfIsoDay('2026-00-10')).toBe('')
+  })
+  it('parseIsoDay returns null for month 13 instead of rolling to Jan 2027', () => {
+    expect(parseIsoDay('2026-13-01')).toBeNull()
+  })
+  it('still accepts a valid December date', () => {
+    expect(monthKeyOfIsoDay('2026-12-31')).toBe('2026-12')
+    expect(parseIsoDay('2026-12-31')?.getMonth()).toBe(11)
+  })
+})

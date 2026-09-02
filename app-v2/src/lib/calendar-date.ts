@@ -28,14 +28,23 @@
 export function parseIsoDay(iso: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
   if (!m) return null
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const month = Number(m[2])
+  // Reject an out-of-range month rather than letting Date roll it over:
+  // "2026-13-01" would otherwise silently become Jan 2027 (GF-137 Layer-5
+  // round 2, note 1). The pre-GF-137 monthKeyFromIso returned '' for this,
+  // so rolling over would be a behavior change, not a fix.
+  if (month < 1 || month > 12) return null
+  const d = new Date(Number(m[1]), month - 1, Number(m[3]))
   return Number.isNaN(d.getTime()) ? null : d
 }
 
 /** "YYYY-MM" straight off the ISO string prefix, never via `new Date(iso)`. */
 export function monthKeyOfIsoDay(iso: string): string {
   const m = /^(\d{4})-(\d{2})-\d{2}/.exec(iso)
-  return m ? `${m[1]}-${m[2]}` : ''
+  if (!m) return ''
+  const month = Number(m[2])
+  if (month < 1 || month > 12) return ''
+  return `${m[1]}-${m[2]}`
 }
 
 /**
