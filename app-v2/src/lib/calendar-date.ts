@@ -7,6 +7,14 @@
  * month boundary, so a post on the 1st silently drops into the previous
  * month's bucket and vanishes from the calendar.
  *
+ * SCOPE (GF-137 Layer-5 finding 2): these helpers read the LITERAL Y/M/D digits
+ * and deliberately ignore any time/offset component. For the date-only values
+ * this codebase actually stores that is exactly right. For a full-ISO value they
+ * differ from `monthKeyFromIso`, which resolves the instant's calendar day in
+ * the client's configured timezone — so a timestamped post could in principle
+ * bucket into month M while displaying a day in M+1. No stored data hits this
+ * today; if timestamped post dates are ever introduced, reconcile the two.
+ *
  * These helpers parse the ISO string's Y/M/D fields directly instead of
  * routing through `new Date(iso)`, so they are immune to that failure
  * regardless of host timezone.

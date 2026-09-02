@@ -115,6 +115,13 @@ export async function listPosts(slug: string, opts: ListPostsOptions = {}): Prom
 // with LOCAL getters (getFullYear/getMonth) rolls it into the previous month on
 // any server west of Greenwich. Derive the key from the string prefix instead —
 // do NOT "simplify" this back to `new Date(...).getFullYear()/.getMonth()`.
+// GF-137 Layer-5 finding 1 — for a DATE-ONLY value (what is actually stored)
+// this agrees exactly with the dashboard's monthKeyFromIso. For a full ISO
+// timestamp the two can differ near midnight: this buckets by the written
+// (UTC) date, while the dashboard resolves the instant in the client's
+// configured timezone, which the API does not have in scope here. Accepted
+// knowingly because no stored post date carries a time component; revisit if
+// that changes.
 export function monthKeyOf(iso: unknown): string {
   if (typeof iso !== 'string' || !iso) return ''
   const match = /^(\d{4})-(\d{2})-\d{2}/.exec(iso)

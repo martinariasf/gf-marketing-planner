@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check:date-timing": "node --experimental-strip-types scripts/check-date-timing.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:tz": "TZ=America/Montevideo vitest run && TZ=Asia/Tokyo vitest run"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
