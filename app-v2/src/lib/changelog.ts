@@ -21,6 +21,15 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-09-03',
+    title: 'Viktor explains less and says it in plainer words',
+    items: [
+      'Viktor now leads with the thing you asked for. It no longer walks you through which brand brief it read, why it picked a format or a colour, or what it plans to do next, so a request for a picture comes back as a picture rather than as a report about making one. If you do want the reasoning, ask and you get it in full.',
+      'It also drops our internal vocabulary. Tool and system names never appear in the chat, and marketing jargon like pillar, cadence, funnel or engagement rate only comes up if you use those words first. Strategy answers give the reason a business owner cares about instead of the metric behind it, in whichever of English, German or Spanish you are writing in.',
+      'Nothing it actually does has changed: it still reads the brief, still follows your brand rules, and still shows you the post and its settings for approval before anything is scheduled or published.',
+    ],
+  },
+  {
     date: '2026-08-31',
     title: 'New: a per-client time zone, so "today" means the client\'s today',
     items: [
