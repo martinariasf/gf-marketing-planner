@@ -24,10 +24,18 @@ class FakePbUnavailableError extends Error {
 
 let verifyUserTokenImpl: (token: string) => Promise<unknown> = async () => null
 
+// GF-144 — the api_tokens row lookupToken's PB branch should find, or null to
+// simulate "no such token". Default throws, preserving the original GF-126
+// tests' assertion that their paths never reach PB.
+let apiTokenRowImpl: () => Promise<unknown> = async () => {
+  throw new Error('withPb should not be called by these requireAuth tests')
+}
+
 mock.module('./pb.js', {
   namedExports: {
-    withPb: async () => {
-      throw new Error('withPb should not be called by these requireAuth tests')
+    withPb: async (fn: (pb: unknown) => unknown) => {
+      void fn
+      return apiTokenRowImpl()
     },
     verifyUserToken: (token: string) => verifyUserTokenImpl(token),
     pb: {},
@@ -88,4 +96,70 @@ test('requireAuth propagates an error that is not PbUnavailableError rather than
   assert.equal(res.status, 500)
   const body = (await res.json()) as { caught: string }
   assert.equal(body.caught, 'some other unexpected failure')
+})
+
+// ── GF-144: the viewer role, as it will actually exist in staging ────────────
+//
+// Every other viewer test uses a BOOTSTRAP_TOKENS token. Real viewer tokens are
+// rows in the `api_tokens` PB collection, and that is a different branch of
+// lookupToken — one that no test exercised. Criteria 1 and 3 are about those
+// tokens, so they are tested here against the PB branch specifically.
+
+function appWithGuardedRoutes() {
+  const app = new Hono()
+  app.use('*', requireAuth)
+  app.get('/ping', (c) => c.json({ ok: true }))
+  app.post('/write', (c) => c.json({ ok: true }))
+  return app
+}
+
+// A PB-shaped token (no dots) so lookupToken skips the JWT branch and, finding
+// no bootstrap match, falls through to the api_tokens query.
+const PB_TOKEN = 'viewer_pb_abc123'
+
+test('GF-144: a viewer token stored in api_tokens is accepted and can read', async () => {
+  apiTokenRowImpl = async () => ({
+    token: PB_TOKEN,
+    role: 'viewer',
+    slug: 'acme',
+    label: 'ci-verifier',
+    revoked: false,
+  })
+  const res = await appWithGuardedRoutes().request('/ping', {
+    headers: { Authorization: `Bearer ${PB_TOKEN}` },
+  })
+  assert.equal(res.status, 200, 'a PB-issued viewer token must be able to read')
+})
+
+test('GF-144: a viewer token stored in api_tokens is still refused on writes', async () => {
+  apiTokenRowImpl = async () => ({
+    token: PB_TOKEN,
+    role: 'viewer',
+    slug: 'acme',
+    label: 'ci-verifier',
+    revoked: false,
+  })
+  const res = await appWithGuardedRoutes().request('/write', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${PB_TOKEN}` },
+  })
+  assert.equal(res.status, 403)
+  const body = (await res.json()) as { detail: string }
+  assert.equal(body.detail, 'Viewer tokens are read-only')
+})
+
+test('GF-144: revoking a viewer token in api_tokens stops it working (criterion 3)', async () => {
+  apiTokenRowImpl = async () => ({
+    token: PB_TOKEN,
+    role: 'viewer',
+    slug: 'acme',
+    label: 'ci-verifier',
+    revoked: true,
+  })
+  const res = await appWithGuardedRoutes().request('/ping', {
+    headers: { Authorization: `Bearer ${PB_TOKEN}` },
+  })
+  assert.equal(res.status, 401, 'a revoked viewer token must not authenticate')
+  const body = (await res.json()) as { detail: string }
+  assert.equal(body.detail, 'Unknown or revoked token')
 })
