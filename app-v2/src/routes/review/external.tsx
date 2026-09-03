@@ -54,6 +54,7 @@ import {
 import type { PostMedia } from '@/types'
 import { StrategyReviewShell } from '@/routes/review/strategy-view'
 import { RejectSheet } from '@/routes/review/reject-sheet'
+import { parseIsoDay } from '@/lib/calendar-date'
 
 // Channels with a platform-accurate mockup. Anything else (or no channel)
 // falls back to the plain details card.
@@ -70,9 +71,21 @@ const HINT_RANGE = 110
 
 type T = (k: string, vars?: Record<string, string | number>) => string
 
+// fmtDate is for genuine instants (e.g. a comment's createdAt) — a real
+// timestamp that legitimately carries a timezone.
 function fmtDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// fmtCalendarDay is for a post's plain calendar day (`date`, e.g.
+// "2026-09-01"), which has no time component. It parses the ISO string's
+// Y/M/D fields via parseIsoDay instead of routing through `new Date(iso)`,
+// so it renders the same day regardless of the viewer's timezone.
+function fmtCalendarDay(iso: string): string {
+  const d = parseIsoDay(iso)
+  if (!d) return iso
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -876,7 +889,7 @@ function DeckCard({
 
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
-          <span className="font-medium text-ink">{fmtDate(post.date)}</span>
+          <span className="font-medium text-ink">{fmtCalendarDay(post.date)}</span>
           {post.channel && <span>· {post.channel}</span>}
           {post.format && <span>· {post.format}</span>}
           {post.pillar && <Badge variant="outline" className="text-[10px]">{post.pillar}</Badge>}
@@ -1016,7 +1029,7 @@ function SummaryScreen({
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-medium truncate">{p.title}</span>
                 <span className="block text-[10px] text-ink-muted">
-                  {fmtDate(p.date)}
+                  {fmtCalendarDay(p.date)}
                   {p.channel ? ` · ${p.channel}` : ''}
                 </span>
               </span>
@@ -1286,7 +1299,7 @@ function ListPostCard({
     <article className="rounded-xl border border-border-subtle bg-paper overflow-hidden">
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
-          <span className="font-medium text-ink">{fmtDate(post.date)}</span>
+          <span className="font-medium text-ink">{fmtCalendarDay(post.date)}</span>
           {post.channel && <span>· {post.channel}</span>}
           {post.format && <span>· {post.format}</span>}
           {post.pillar && <Badge variant="outline" className="text-[10px]">{post.pillar}</Badge>}

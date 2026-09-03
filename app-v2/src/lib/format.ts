@@ -1,4 +1,5 @@
 import type { Lang } from './i18n'
+import { parseIsoDay } from './calendar-date.ts'
 
 // Maps the app language to a BCP-47 locale used by Intl formatters.
 const LOCALES: Record<Lang, string> = {
@@ -96,4 +97,26 @@ export function fmtDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(d)
+}
+
+// fmtDate / fmtDateShort / fmtDateTime above are for genuine instants
+// (createdAt, lastSyncedAt, lastActivity, scheduledFor, etc.) — real
+// timestamps that legitimately carry a timezone.
+//
+// fmtCalendarDay / fmtCalendarDayShort below are for plain calendar days
+// (a post's `date`, e.g. "2026-09-01") which have no time component. They
+// parse the ISO string's Y/M/D fields via parseIsoDay instead of routing
+// through `new Date(iso)`, so they render the same day regardless of the
+// viewer's timezone. See calendar-date.ts for why this matters.
+
+export function fmtCalendarDay(iso: string): string {
+  const d = parseIsoDay(iso)
+  if (!d) return iso
+  return df('long', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
+}
+
+export function fmtCalendarDayShort(iso: string): string {
+  const d = parseIsoDay(iso)
+  if (!d) return iso
+  return df('short', { month: 'short', day: 'numeric' }).format(d)
 }

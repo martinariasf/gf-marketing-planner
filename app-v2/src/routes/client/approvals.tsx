@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Pillar } from '@/components/pillar'
 import { MessageSquare, Copy, Check, Send, Ban, ShieldCheck, Clock, Calendar, Circle, CalendarSearch } from 'lucide-react'
-import { fmtDateTime, fmtDateShort } from '@/lib/format'
+import { fmtDateTime, fmtCalendarDayShort } from '@/lib/format'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ClientBundle } from '@/lib/client-data'
@@ -259,7 +259,7 @@ function WaitingRow({
                 {postName}
               </Badge>
               <span className="text-[11px] text-ink-muted">
-                {fmtDateShort(post.date)} · {post.channel} · {post.format}
+                {fmtCalendarDayShort(post.date)} · {post.channel} · {post.format}
               </span>
               <Badge variant="secondary" className={cn(
                 'capitalize',
