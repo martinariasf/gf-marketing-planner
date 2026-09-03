@@ -110,11 +110,27 @@ export async function listPosts(slug: string, opts: ListPostsOptions = {}): Prom
 }
 
 /** YYYY-MM month key for a post's date, or '' if unparseable. */
+// GF-137 timezone rollback: post dates are stored date-only ("2026-09-01").
+// `new Date(iso)` parses a bare YYYY-MM-DD as UTC midnight, but reading it back
+// with LOCAL getters (getFullYear/getMonth) rolls it into the previous month on
+// any server west of Greenwich. Derive the key from the string prefix instead —
+// do NOT "simplify" this back to `new Date(...).getFullYear()/.getMonth()`.
+// GF-137 Layer-5 finding 1 — for a DATE-ONLY value (what is actually stored)
+// this agrees exactly with the dashboard's monthKeyFromIso. For a full ISO
+// timestamp the two can differ near midnight: this buckets by the written
+// (UTC) date, while the dashboard resolves the instant in the client's
+// configured timezone, which the API does not have in scope here.
+// Verified against live staging data 2026-09-02: timestamped post dates DO
+// exist (e.g. staging-demo "2026-08-01T09:00:00Z"), so this path is reachable
+// — but no client has a `timezone` configured, so the dashboard falls back to
+// UTC and the two agree. The divergence only appears once a client is given a
+// non-UTC timezone whose offset moves a timestamp across a month boundary.
+// Revisit when the first such client is configured.
 export function monthKeyOf(iso: unknown): string {
   if (typeof iso !== 'string' || !iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const match = /^(\d{4})-(\d{2})-\d{2}/.exec(iso)
+  if (!match) return ''
+  return `${match[1]}-${match[2]}`
 }
 
 /** Posts whose date falls within [rangeStart, rangeEnd] inclusive (month keys). */

@@ -15,7 +15,7 @@ import {
   Monitor,
   MapPin,
 } from 'lucide-react'
-import { fmtDateShort } from '@/lib/format'
+import { fmtDateShort, fmtCalendarDayShort } from '@/lib/format'
 import { Pillar } from '@/components/pillar'
 import { useT, useI18n } from '@/lib/i18n'
 import { useEdit } from '@/lib/edit-store'
@@ -765,7 +765,7 @@ export default function StrategyView() {
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div>
                     <p className="text-[10px] uppercase tracking-wider text-ink-muted">
-                      {fmtDateShort(d.date)}
+                      {fmtCalendarDayShort(d.date)}
                     </p>
                     <h3 className="font-semibold text-sm mt-0.5">{d.title}</h3>
                   </div>

@@ -48,6 +48,7 @@ import { getFormatLocale } from '@/lib/format'
 import { postFormatLabelKey } from '@/lib/post-format'
 import { pillarColors } from '@/lib/section-accent'
 import { cn } from '@/lib/utils'
+import { parseIsoDay, monthKeyOfIsoDay } from '@/lib/calendar-date'
 import {
   reviewComment,
   reviewDecision,
@@ -66,25 +67,6 @@ const SWIPE_OFFSET_RATIO = 0.25
 const SWIPE_OFFSET_MIN = 72
 const SWIPE_VELOCITY = 500
 const HINT_RANGE = 110
-
-/**
- * A post date is a plain calendar day, so it is parsed field-by-field and
- * rebuilt in LOCAL time. `new Date('2026-09-01')` would parse as UTC midnight
- * and read back as Aug 31 for any client west of Greenwich (Parque Biomas is
- * UTC-3) — wrong weekday, wrong day, wrong month bucket.
- */
-function parseIsoDay(iso: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
-  if (!m) return null
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-/** YYYY-MM bucket for a post, taken straight off the string. */
-function monthKeyOfIsoDay(iso: string): string {
-  const m = /^(\d{4})-(\d{2})/.exec(iso)
-  return m ? `${m[1]}-${m[2]}` : ''
-}
 
 /**
  * Formats a post's calendar day. Only for date-only strings — a real timestamp

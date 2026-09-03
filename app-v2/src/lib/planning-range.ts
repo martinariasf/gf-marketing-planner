@@ -1,4 +1,5 @@
 import { getFormatLocale } from './format.ts'
+import { monthKeyOfIsoDay } from './calendar-date.ts'
 
 export interface CalendarRangeConfig {
   startMonth: string
@@ -19,9 +20,35 @@ export function monthKeyFromDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+/**
+ * GF-137 — "YYYY-MM" bucket for a post date, following the same DATE_ONLY vs
+ * exact-instant split GF-37 established for `dateTiming` below (read that
+ * function's comment block first).
+ *
+ * A DATE_ONLY value (`2026-09-01`) is a calendar day, not an instant — its
+ * month is the `YYYY-MM` written in the string, taken via `monthKeyOfIsoDay`.
+ * Routing it through `new Date(iso)` + local getters would parse it as UTC
+ * midnight and roll it back a day (and sometimes a month) for any client west
+ * of Greenwich, silently dropping a 1st-of-month post into the previous
+ * month's bucket.
+ *
+ * A value carrying a real time component denotes an instant, so its month is
+ * whichever calendar day that instant falls on in the active timezone —
+ * resolved with the same `calendarDayKeyInTimezone(date, timezone)` helper
+ * `dateTiming` uses (UTC fallback when no timezone is configured), not the
+ * Y/M/D digits literally written in the string.
+ *
+ * Unparseable input still returns '' — callers rely on that.
+ */
 export function monthKeyFromIso(iso: string): string {
+  if (DATE_ONLY.test(iso ?? '')) {
+    return monthKeyOfIsoDay(iso)
+  }
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '' : monthKeyFromDate(date)
+  if (Number.isNaN(date.getTime())) return ''
+  const key = calendarDayKeyInTimezone(date, activeTimezone ?? 'UTC')
+  const m = /^(\d{4})-(\d{2})/.exec(key)
+  return m ? `${m[1]}-${m[2]}` : ''
 }
 
 export function defaultCalendarRange(now = new Date()): CalendarRangeConfig {

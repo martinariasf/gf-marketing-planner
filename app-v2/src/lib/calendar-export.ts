@@ -16,6 +16,7 @@
 
 import type { Post } from '@/types'
 import { monthsInRange, monthKeyFromIso, type CalendarRangeConfig } from '@/lib/planning-range'
+import { parseIsoDay } from '@/lib/calendar-date'
 
 export interface CalendarExportInput {
   clientName: string
@@ -56,9 +57,21 @@ function groupByMonth(input: CalendarExportInput) {
   }))
 }
 
+// Genuine instant (e.g. the export-generated-on footer timestamp) — a real
+// timestamp that legitimately carries a timezone.
 function fmtDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// A post's plain calendar day (`date`, e.g. "2026-09-01"), which has no time
+// component. Parses the ISO string's Y/M/D fields via parseIsoDay instead of
+// routing through `new Date(iso)`, so it renders the same day regardless of
+// the viewer's timezone.
+function fmtCalendarDay(iso: string): string {
+  const d = parseIsoDay(iso)
+  if (!d) return iso
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -170,7 +183,7 @@ function buildBody(
           (p) => `
           <tr>
             <td class="meta">
-              <div class="d">${esc(fmtDate(p.date))}</div>
+              <div class="d">${esc(fmtCalendarDay(p.date))}</div>
               <div class="t">${esc(p.channel)} · ${esc(p.format)}</div>
               ${p.pillar ? `<div class="p">${esc(p.pillar)}</div>` : ''}
             </td>
