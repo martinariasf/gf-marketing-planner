@@ -1,0 +1,62 @@
+{
+  "quarterly": [
+    { "id": "g_reach",       "label": "Impressionen gesamt",            "target": 240000, "unit": "Impressionen" },
+    { "id": "g_li_reach",    "label": "LinkedIn Impressionen",          "target": 180000, "unit": "Impressionen" },
+    { "id": "g_followers",   "label": "Follower-Wachstum LinkedIn",     "target": 12,     "unit": "%" },
+    { "id": "g_leads",       "label": "Qualifizierte Anfragen",         "target": 12,     "unit": "Anfragen" },
+    { "id": "g_energiecheck","label": "Energiecheck-Termine",           "target": 8,      "unit": "Termine" },
+    { "id": "g_applications","label": "Bewerbungen ueber Social Media", "target": 18,     "unit": "Bewerbungen" },
+    { "id": "g_save_rate",   "label": "Speicherrate Fachbeitraege",     "target": 3.5,    "unit": "%" }
+  ],
+  "monthly": [
+    {
+      "month": "Oktober",
+      "goals": [
+        { "ref": "g_reach",        "target": 70000 },
+        { "ref": "g_li_reach",     "target": 55000 },
+        { "ref": "g_followers",    "target": 4 },
+        { "ref": "g_leads",        "target": 3 },
+        { "ref": "g_applications", "target": 5 },
+        { "ref": "g_save_rate",    "target": 3.0 }
+      ]
+    },
+    {
+      "month": "November",
+      "goals": [
+        { "ref": "g_reach",         "target": 95000 },
+        { "ref": "g_li_reach",      "target": 75000 },
+        { "ref": "g_followers",     "target": 5 },
+        { "ref": "g_leads",         "target": 6 },
+        { "ref": "g_energiecheck",  "target": 5 },
+        { "ref": "g_applications",  "target": 6 },
+        { "ref": "g_save_rate",     "target": 3.5 }
+      ]
+    },
+    {
+      "month": "Dezember",
+      "goals": [
+        { "ref": "g_reach",         "target": 75000 },
+        { "ref": "g_li_reach",      "target": 50000 },
+        { "ref": "g_followers",     "target": 3 },
+        { "ref": "g_leads",         "target": 3 },
+        { "ref": "g_energiecheck",  "target": 3 },
+        { "ref": "g_applications",  "target": 7 },
+        { "ref": "g_save_rate",     "target": 4.0 }
+      ]
+    }
+  ],
+  "weekly": [
+    { "week": 1,  "focus": "Basiswert setzen: erster Waermeverlust-Erklaerpost auf LinkedIn",        "kpi": "Speicherungen pro Beitrag" },
+    { "week": 2,  "focus": "Blechwerkstatt-Serie auf Instagram starten",                             "kpi": "Reichweite in Hessen" },
+    { "week": 3,  "focus": "Rechenbeispiel ungedaemmte Armatur - Budgetphase 2027 besetzen",         "kpi": "Profilaufrufe aus Zielunternehmen" },
+    { "week": 4,  "focus": "Waermebild vorher/nachher, anonymisiert",                                "kpi": "Kommentare von Fachtiteln" },
+    { "week": 5,  "focus": "Erster anonymisierter Projektbericht Stillstand",                        "kpi": "Speicherungen" },
+    { "week": 6,  "focus": "Dokumentationspaket erklaeren (AGI-Arbeitsblaetter)",                    "kpi": "Direktnachrichten mit Projektbezug" },
+    { "week": 7,  "focus": "Stillstandsplanung 2027 - direkte Ansprache der Zielgruppe",             "kpi": "Qualifizierte Anfragen" },
+    { "week": 8,  "focus": "Typische Isolierfehler an Kaelteleitungen (Taupunkt)",                   "kpi": "Speicherrate" },
+    { "week": 9,  "focus": "Freie Kapazitaeten Fruehjahr 2027 ankuendigen",                          "kpi": "Anfragen zu Terminfenstern" },
+    { "week": 10, "focus": "Ausbildungsplaetze 2027 - Azubi erzaehlt seinen Tag",                    "kpi": "Bewerbungen" },
+    { "week": 11, "focus": "Jahresrueckblick mit Betriebszahlen",                                    "kpi": "Follower-Zuwachs" },
+    { "week": 12, "focus": "Betriebsruhe und Notdienst kommunizieren, Kanaele ruhig stellen",        "kpi": "keine - Servicebeitrag" }
+  ]
+}

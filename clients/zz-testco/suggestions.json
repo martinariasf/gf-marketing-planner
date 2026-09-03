@@ -1,0 +1,40 @@
+{
+  "items": [
+    {
+      "id": "s001",
+      "kind": "post_idea",
+      "title": "Rechenbeispiel: was eine ungedaemmte DN100-Armatur pro Jahr kostet",
+      "rationale": "Der Brief nennt 'Amortisation vor Angebot' als Alleinstellungsmerkmal, und die Budgetphase 2027 laeuft im Oktober. Ein nachvollziehbares Rechenbeispiel ist der direkteste Weg, aus einem Fachbeitrag eine Anfrage zu machen.",
+      "suggestedAction": "draft p003 linkedin \"Fachbeitrag\" pillar=\"Technisches Wissen\" campaign=\"Jeder Meter zaehlt\" date=2026-10-14 hook=\"Eine ungedaemmte DN100-Armatur bei 180 Grad kostet Sie rund 900 Euro im Jahr. Hier ist die Rechnung.\"",
+      "relatedCampaign": "Jeder Meter zaehlt",
+      "relatedPillar": "Technisches Wissen",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-09-03T09:00:00Z"
+    },
+    {
+      "id": "s002",
+      "kind": "post_idea",
+      "title": "Anonymisierter Stillstandsbericht mit Zeitplan und Abweichung",
+      "rationale": "Termintreue ist laut Brief der eigentliche Kaufgrund, wird aber bisher nur behauptet. Ein Projekt mit Soll-, Ist- und Abweichungstagen belegt es, ohne den Kunden zu nennen - und trifft die Stillstandsplanung im November.",
+      "suggestedAction": "draft p004 linkedin \"Fachbeitrag\" pillar=\"Projekte & Referenzen\" campaign=\"Stillstand ohne Nachtrag\" date=2026-11-11 hook=\"Neun Tage geplant, neun Tage gebraucht. Was dahinter steckt, ist keine Magie, sondern Vorfertigung.\"",
+      "relatedCampaign": "Stillstand ohne Nachtrag",
+      "relatedPillar": "Projekte & Referenzen",
+      "confidence": "high",
+      "status": "open",
+      "createdAt": "2026-09-03T09:00:00Z"
+    },
+    {
+      "id": "s003",
+      "kind": "next_action",
+      "title": "Freigabeprozess fuer Kundenfotos klaeren, bevor die Referenzkampagne startet",
+      "rationale": "Der Brief verbietet Kundenanlagen ohne schriftliche Freigabe. Die Kampagne 'Stillstand ohne Nachtrag' startet in Woche 4 und braucht Bildmaterial. Ohne geklaerten Freigabeweg fallen die Beitraege auf Symbolbilder zurueck und verlieren genau die Glaubwuerdigkeit, die sie erzeugen sollen.",
+      "suggestedAction": "Andreas Vogt: eine Freigabevorlage fuer Anlagenfotos an die drei groessten Rahmenvertragskunden schicken, Rueckmeldung bis Ende Oktober.",
+      "relatedCampaign": "Stillstand ohne Nachtrag",
+      "confidence": "medium",
+      "status": "open",
+      "createdAt": "2026-09-03T09:00:00Z",
+      "expiresAt": "2026-10-31T00:00:00Z"
+    }
+  ]
+}
