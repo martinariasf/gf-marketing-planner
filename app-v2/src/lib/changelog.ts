@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-09-03',
+    title: 'Calendar post counts now match for everyone, in every timezone',
+    items: [
+      "Two people looking at the same client's calendar could see different numbers of posts. The cause: a post's date was converted through each viewer's own timezone before deciding which month it belonged to, so a post dated the 1st of a month could roll back into the previous month for anyone outside Europe and vanish from the calendar with no error shown.",
+      'Post counts, the content-mix breakdown, and the rejected-posts list are now identical for every viewer regardless of timezone. A key date on the Strategy page could also show the wrong day for the same reason; that is fixed too.',
+    ],
+  },
+  {
+    date: '2026-09-03',
     title: 'Viktor explains less and says it in plainer words',
     items: [
       'Viktor now leads with the thing you asked for. It no longer walks you through which brand brief it read, why it picked a format or a colour, or what it plans to do next, so a request for a picture comes back as a picture rather than as a report about making one. If you do want the reasoning, ask and you get it in full.',
