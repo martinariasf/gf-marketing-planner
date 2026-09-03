@@ -58,7 +58,10 @@ export function LinkedinMockup({
     onSlideChange?.(clamped)
   }
 
-  const activeImage = isCarousel && !video ? post.slides![idx]?.image : post.image
+  // `|| post.image` — a slide entry can legitimately carry no image URL (GF-105
+  // strips them on a strategy link), and blanking the frame would be worse than
+  // falling back to the cover, which is what rendered here before GF-103.
+  const activeImage = (isCarousel && !video ? post.slides![idx]?.image : post.image) || post.image
 
   return (
     <div className="mx-auto max-w-[420px] rounded-lg border border-neutral-200 bg-white shadow-sm overflow-hidden">
@@ -156,7 +159,10 @@ export function LinkedinMockup({
               type="button"
               onClick={() => goTo(i)}
               aria-label={t('calendar.goToSlide', { n: i + 1 })}
-              className="relative p-1.5 -m-1.5"
+              // p-0.5/-m-0.5 grows the tap target from 6px to the row's full 10px pitch
+                // without shifting a pixel; anything larger overlaps the next dot and
+                // the later button would swallow clicks aimed at this one.
+                className="relative p-0.5 -m-0.5"
             >
               <span
                 className={

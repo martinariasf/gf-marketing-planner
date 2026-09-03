@@ -46,7 +46,11 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel, storyLabe
     onSlideChange?.(clamped)
   }
 
-  const activeImage = isCarousel && !video && !isStory ? post.slides![idx]?.image : post.image
+  // `|| post.image` — a slide entry can legitimately carry no image URL (GF-105
+  // strips them on a strategy link), and blanking the frame would be worse than
+  // falling back to the cover, which is what rendered here before GF-103.
+  const activeImage =
+    (isCarousel && !video && !isStory ? post.slides![idx]?.image : post.image) || post.image
 
   return (
     <div className="mx-auto max-w-[340px] rounded-[2.2rem] border-8 border-neutral-900 bg-white shadow-xl">
@@ -157,7 +161,10 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel, storyLabe
                 type="button"
                 onClick={() => goTo(i)}
                 aria-label={t('calendar.goToSlide', { n: i + 1 })}
-                className="relative p-1.5 -m-1.5"
+                // p-0.5/-m-0.5 grows the tap target from 6px to the row's full 10px pitch
+                // without shifting a pixel; anything larger overlaps the next dot and
+                // the later button would swallow clicks aimed at this one.
+                className="relative p-0.5 -m-0.5"
               >
                 <span
                   className={

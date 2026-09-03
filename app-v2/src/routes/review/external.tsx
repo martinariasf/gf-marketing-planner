@@ -399,7 +399,11 @@ function PostContent({
   // still remounts the mockup, and a payload refresh that edits the slides of
   // the same post id resets this counter too. Adjust-state-during-render, so no
   // effect and no lint suppression.
-  const mockupKey = `${post.id}|${withImage(post.slides).map((s) => s.image).join('|')}`
+  // `tab` is in the key because switching to "details" unmounts the mockup and
+  // switching back mounts a fresh one at slide 0 — without it this counter would
+  // survive that round trip and the magnifier would open a slide the preview is
+  // no longer showing.
+  const mockupKey = `${tab}|${post.id}|${withImage(post.slides).map((s) => s.image).join('|')}`
   const [slide, setSlide] = useState(0)
   const [seenKey, setSeenKey] = useState(mockupKey)
   if (seenKey !== mockupKey) {
