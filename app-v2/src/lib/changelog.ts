@@ -30,6 +30,14 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    date: '2026-09-02',
+    title: 'Fixed: the Delete button no longer jumps when you edit a post',
+    items: [
+      'In the post editor, Save changes and Discard used to appear next to Delete the moment you typed. On most window sizes that made the row too wide, so Delete was pushed onto a second line and moved under your cursor mid-edit.',
+      'Delete now sits on the status line on its own, where nothing can displace it, and Save changes and Discard appear on their own line just below. A post you have not edited shows no extra row.',
+    ],
+  },
+  {
     date: '2026-08-31',
     title: 'New: a per-client time zone, so "today" means the client\'s today',
     items: [
