@@ -19,6 +19,16 @@
       "headline": "Summer Strength: turn the July dip into our biggest brand moment of the year",
       "status": "demo",
       "agency": "gf"
+    },
+    {
+      "slug": "zz-test-workspace",
+      "name": "ZZ Test Workspace",
+      "industry": "Internal test fixture",
+      "logoInitials": "ZZ",
+      "quarter": "Test",
+      "headline": "Disposable workspace for measuring workspace-creation cost/risk. Safe to delete.",
+      "status": "demo",
+      "agency": "gf"
     }
   ]
 }

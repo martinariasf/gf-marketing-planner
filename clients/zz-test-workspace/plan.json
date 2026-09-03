@@ -1,0 +1,26 @@
+{
+  "agency": { "name": "GF Innovative Solutions", "tagline": "AI-led marketing operations for ambitious brands" },
+  "client": {
+    "name": "ZZ Test Workspace",
+    "industry": "Internal test fixture",
+    "handle": "@zztest",
+    "logoInitials": "ZZ",
+    "primaryChannels": ["instagram"]
+  },
+  "quarter": {
+    "label": "Test",
+    "year": 2026,
+    "theme": "Disposable test fixture",
+    "months": [{ "key": "test", "name": "Test", "weeks": [1] }]
+  },
+  "headline": "Disposable workspace for measuring workspace-creation cost/risk.",
+  "positioningStatement": "Not a real client.",
+  "strategy": "N/A - test fixture, deleted after measurement.",
+  "strategicPriorities": [],
+  "kpis": [],
+  "pillars": [],
+  "campaigns": [],
+  "monthlyFocus": [],
+  "keyDates": [],
+  "platforms": []
+}
