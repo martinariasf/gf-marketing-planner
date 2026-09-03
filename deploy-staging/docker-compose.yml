@@ -56,7 +56,7 @@ services:
       # set directly here (compose ${:-} interpolation can't carry JSON braces).
       # NOTE: the DASHBOARD client slug for GF is "gf-internal", not "gf-innov".
       # A slug absent from this map falls back to DEFAULT_LANG.
-      CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es"}'
+      CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es","zz-testco":"de"}'
       DEFAULT_LANG: "en"
       # Per-client Google Drive service-account email (GF-80). The address each
       # client shares their Drive folder with — it is the agent's own identity

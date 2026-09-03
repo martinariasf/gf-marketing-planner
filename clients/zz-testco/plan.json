@@ -1,0 +1,139 @@
+{
+  "agency": {
+    "name": "GF Innovative Solutions",
+    "tagline": "KI-gestuetzte Marketing-Operations fuer den Mittelstand"
+  },
+  "client": {
+    "name": "TestCo Demo GmbH",
+    "industry": "Technische Isolierung / Industrieisolierung",
+    "handle": "@testco.demo",
+    "logoInitials": "TD",
+    "primaryChannels": ["linkedin", "instagram", "facebook"]
+  },
+  "quarter": {
+    "label": "Q4 2026",
+    "year": 2026,
+    "theme": "Heizperiode: jeder ungedaemmte Meter kostet Geld",
+    "months": [
+      { "key": "okt", "name": "Oktober",  "weeks": [1, 2, 3, 4] },
+      { "key": "nov", "name": "November", "weeks": [5, 6, 7, 8] },
+      { "key": "dez", "name": "Dezember", "weeks": [9, 10, 11, 12] }
+    ]
+  },
+  "headline": "Heizperiode Q4: Waermeverluste sichtbar machen und die Stillstandsplanung 2027 fruehzeitig besetzen.",
+  "positioningStatement": "TestCo ist der Isolierbetrieb im Rhein-Main-Gebiet, der vor dem Angebot ausrechnet, was die fehlende Daemmung pro Jahr kostet - und der im Stillstand tatsaechlich zum vereinbarten Termin fertig ist.",
+  "strategy": "Im Oktober die Heizperiode nutzen, um Waermeverlust an Armaturen und Flanschen zu einem konkreten Euro-Betrag zu machen. Im November die Termintreue im Stillstand belegen und die Budgetrunde fuer 2027 besetzen. Im Dezember die Kapazitaetsplanung fuer das Fruehjahr verkaufen und parallel den Nachwuchskanal auf Instagram aufbauen.",
+  "strategicPriorities": [
+    { "label": "Autoritaet",      "description": "Waermeverlust, Normen und Amortisation verstaendlich erklaeren. Rechnen statt behaupten." },
+    { "label": "Stillstand",      "description": "Termintreue und Dokumentation als Kaufgrund belegen - mit anonymisierten Projektdaten." },
+    { "label": "Pipeline 2027",   "description": "In der Budgetphase Oktober bis Dezember praesent sein, bevor die Rahmenvertraege vergeben werden." },
+    { "label": "Arbeitgebermarke","description": "Monteure sichtbar machen. Ohne Personal gibt es keine Kapazitaet zu verkaufen." }
+  ],
+  "kpis": [
+    { "label": "LinkedIn Impressionen",     "value": "180.000" },
+    { "label": "Qualifizierte Anfragen",    "value": "12" },
+    { "label": "Bewerbungen ueber Social",  "value": "18" },
+    { "label": "Energiecheck-Termine",      "value": "8" }
+  ],
+  "pillars": [
+    { "name": "Technisches Wissen", "weight": 35, "color": "#1F3A5F", "description": "Waermeverlust, Normen, Materialkunde, typische Fehler. Baut Autoritaet auf und erzeugt Speicherungen." },
+    { "name": "Projekte & Referenzen", "weight": 25, "color": "#C8552B", "description": "Anonymisierte Stillstands- und Sanierungsprojekte mit Zahlen. Belegt Termintreue." },
+    { "name": "Menschen & Handwerk", "weight": 25, "color": "#4C8C5A", "description": "Monteure, Blechwerkstatt, Ausbildung. Zahlt auf Recruiting und Vertrauen ein." },
+    { "name": "Angebot & Kapazitaet", "weight": 15, "color": "#8A6D3B", "description": "Freie Stillstandsfenster, Energiecheck, Rahmenvertraege. Wird sparsam eingesetzt." }
+  ],
+  "campaigns": [
+    { "name": "Jeder Meter zaehlt",        "pillar": "Technisches Wissen",   "startWeek": 1,  "endWeek": 5,  "color": "#1F3A5F" },
+    { "name": "Stillstand ohne Nachtrag",  "pillar": "Projekte & Referenzen","startWeek": 4,  "endWeek": 9,  "color": "#C8552B" },
+    { "name": "Aus unserer Blechwerkstatt","pillar": "Menschen & Handwerk",  "startWeek": 2,  "endWeek": 12, "color": "#4C8C5A" },
+    { "name": "Kapazitaet Fruehjahr 2027", "pillar": "Angebot & Kapazitaet", "startWeek": 8,  "endWeek": 12, "color": "#8A6D3B" },
+    { "name": "Ausbildung 2027",           "pillar": "Menschen & Handwerk",  "startWeek": 9,  "endWeek": 12, "color": "#4C8C5A" }
+  ],
+  "monthlyFocus": [
+    {
+      "month": "Oktober",
+      "theme": "Waermeverlust sichtbar machen",
+      "intent": "Die Heizperiode startet. Ungedaemmte Armaturen werden jetzt teuer und sind mit der Waermebildkamera belegbar. Reines Wissensmonat, kaum Angebot.",
+      "priorities": [
+        "Erklaerposts zu Waermeverlust an Flanschen und Armaturen",
+        "Waermebild-Vorher-Nachher (anonymisiert)",
+        "Blechwerkstatt als Serienstart auf Instagram"
+      ],
+      "keyMoments": ["Beginn der Heizperiode", "Budgetphase 2027 startet in den Betrieben"],
+      "watch": "Speicherrate auf LinkedIn bei den Erklaerposts - das ist unser Basiswert fuer 2027."
+    },
+    {
+      "month": "November",
+      "theme": "Termintreue belegen",
+      "intent": "Die Stillstandsplanung fuer 2027 wird jetzt gemacht. Wir zeigen anonymisierte Projekte mit Zeitplan, Abweichung und Dokumentation.",
+      "priorities": [
+        "Projektberichte mit Zahlen statt Adjektiven",
+        "Dokumentationspaket erklaeren (AGI-Arbeitsblaetter)",
+        "Erste Ansprache zu freien Stillstandsfenstern im Fruehjahr"
+      ],
+      "keyMoments": ["Budgetfreigaben in den Betrieben", "Jahresgespraeche mit Rahmenvertragskunden"],
+      "watch": "Anteil der Impressionen bei Instandhaltungs- und Betriebsleiter-Titeln."
+    },
+    {
+      "month": "Dezember",
+      "theme": "Kapazitaet und Nachwuchs",
+      "intent": "Verkaufsfenster fuer das Fruehjahr schliessen, danach ruhiger Jahresabschluss mit Fokus auf Ausbildung und Team.",
+      "priorities": [
+        "Freie Kapazitaeten Fruehjahr 2027 kommunizieren",
+        "Ausbildungsplaetze 2027 auf Instagram und Facebook",
+        "Jahresrueckblick mit Kennzahlen des Betriebs"
+      ],
+      "keyMoments": ["Ausbildungsmessen im Rhein-Main-Gebiet", "Betriebsruhe ab dem 22. Dezember"],
+      "watch": "Bewerbungen ueber Social Media - der Engpass 2027 ist Personal, nicht Nachfrage."
+    }
+  ],
+  "keyDates": [
+    { "date": "2026-10-01", "title": "Beginn der Heizperiode",                  "type": "seasonal",   "relevance": "high",   "angle": "Aufhaenger fuer die gesamte Kampagne 'Jeder Meter zaehlt'. Waermeverlust wird ab jetzt real bezahlt." },
+    { "date": "2026-10-14", "title": "Budgetphase 2027 in den Betrieben",       "type": "industry",   "relevance": "high",   "angle": "Instandhaltungsbudgets werden jetzt geschrieben. Post mit Rechenbeispiel: was eine ungedaemmte DN100-Armatur pro Jahr kostet." },
+    { "date": "2026-10-28", "title": "Tag der Ausbildung Rhein-Main",           "type": "industry",   "relevance": "medium", "angle": "Instagram-Serie aus der Blechwerkstatt, Auszubildender erzaehlt seinen Tag. Kein Stellenanzeigen-Ton." },
+    { "date": "2026-11-11", "title": "Stillstandsplanung 2027 Deadline",        "type": "industry",   "relevance": "high",   "angle": "Kernmoment des Quartals. Anonymisierter Projektbericht: Zeitplan, Abweichung null Tage, Dokumentation am Uebergabetag." },
+    { "date": "2026-11-20", "title": "Bundesweiter Vorlesetag",                 "type": "observance", "relevance": "low",    "angle": "Nur wenn der Kalender leer ist. Bezug zu Ausbildung und Nachwuchsfoerderung, sonst weglassen." },
+    { "date": "2026-12-02", "title": "Freie Kapazitaeten Fruehjahr 2027",       "type": "brand",      "relevance": "high",   "angle": "Eigener Moment. Konkrete freie Montagefenster nennen, ohne Preise. Kapazitaet statt Rabatt." },
+    { "date": "2026-12-15", "title": "Jahresrueckblick",                        "type": "brand",      "relevance": "medium", "angle": "Zahlen des Betriebs: laufende Meter, Stillstaende, neue Kollegen. Ruhig, ohne Selbstlob." },
+    { "date": "2026-12-22", "title": "Betriebsruhe",                            "type": "holiday",    "relevance": "medium", "angle": "Kurzer Hinweis auf Erreichbarkeit im Notdienst. Danach Kanaele bis 07.01. still." }
+  ],
+  "platforms": [
+    {
+      "name": "LinkedIn",
+      "channelKey": "linkedin",
+      "role": "Primaer - Entscheider, Pipeline, Autoritaet",
+      "rationale": "Instandhaltungs- und Betriebsleiter sowie technischer Einkauf sind hier waehrend der Arbeitszeit erreichbar. Lange, sachliche Beitraege funktionieren; die Kaufentscheidung faellt ueber Vertrauen und Referenz, nicht ueber Reichweite.",
+      "cadence": "3x/Woche",
+      "formatMix": [
+        { "label": "Fachbeitrag (Text)", "weight": "50%" },
+        { "label": "Bildbeitrag",        "weight": "30%" },
+        { "label": "Dokument/Karussell", "weight": "20%" }
+      ],
+      "watch": ["Impressionen bei Zieltiteln", "Profilaufrufe aus Zielunternehmen", "Speicherungen", "Direktnachrichten mit Projektbezug"]
+    },
+    {
+      "name": "Instagram",
+      "channelKey": "instagram",
+      "role": "Sekundaer - Arbeitgebermarke und Nachwuchs",
+      "rationale": "Monteure, Auszubildende und Quereinsteiger sind hier. Bilder aus der Blechwerkstatt und von der Baustelle wirken staerker als jede Stellenanzeige. Zahlt indirekt auf Kapazitaet ein.",
+      "cadence": "2x/Woche",
+      "formatMix": [
+        { "label": "Reel",     "weight": "50%" },
+        { "label": "Karussell","weight": "30%" },
+        { "label": "Bild",     "weight": "20%" }
+      ],
+      "watch": ["Reichweite in Hessen", "Profilaufrufe", "Nachrichten mit Bewerbungsabsicht", "Follower-Zuwachs"]
+    },
+    {
+      "name": "Facebook",
+      "channelKey": "facebook",
+      "role": "Tertiaer - regionale Reichweite und Recruiting",
+      "rationale": "Im Rhein-Main-Handwerk noch aktiv genutzt, besonders in regionalen Gruppen und bei aelteren Fachkraeften. Geringer Aufwand: Zweitverwertung der Instagram-Inhalte.",
+      "cadence": "1x/Woche",
+      "formatMix": [
+        { "label": "Bildbeitrag", "weight": "70%" },
+        { "label": "Stellenpost", "weight": "30%" }
+      ],
+      "watch": ["Regionale Reichweite", "Kommentare", "Bewerbungen"]
+    }
+  ]
+}
