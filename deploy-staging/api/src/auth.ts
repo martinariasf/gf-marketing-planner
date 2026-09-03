@@ -1,6 +1,6 @@
 // Bearer-token auth.
 //
-// Two token kinds:
+// Token kinds:
 //   - agent_*  — issued per Viktor instance, scoped to one clientSlug.
 //                Read-only for user-owned data (brief/plan/goals/learnings);
 //                read+write for Viktor-owned data (posts/suggestions/performance).
@@ -8,6 +8,9 @@
 //                basicauth identity for a dash_* token on first load.
 //                Read+write for user-owned data. On staging only, write for
 //                approvals/suggestion-actions/post-quick-edits is permitted.
+//   - viewer   — GF-144. Reads everything a `dash` token reads; blocked from
+//                every mutation (any method other than GET/HEAD/OPTIONS),
+//                enforced centrally in requireAuth — see the comment there.
 //
 // Tokens are stored in PocketBase `api_tokens` collection. We also accept a
 // comma-separated BOOTSTRAP_TOKENS env value so the first agent can call
@@ -17,8 +20,10 @@ import type { Context, MiddlewareHandler } from 'hono'
 import { env } from './env.js'
 import { withPb, verifyUserToken, PbUnavailableError } from './pb.js'
 import { agencyForClient, resolveUserScope } from './tenancy.js'
+// audit.ts imports TokenPrincipal from here, but type-only — no runtime cycle.
+import { audit } from './audit.js'
 
-export type Role = 'agent' | 'dash' | 'admin'
+export type Role = 'agent' | 'dash' | 'admin' | 'viewer'
 
 export interface TokenPrincipal {
   token: string
@@ -58,7 +63,7 @@ const bootstrap: TokenPrincipal[] = env.bootstrapTokens
         `Invalid BOOTSTRAP_TOKENS entry "${entry}" — expected <token>:<role>:<slug>`,
       )
     }
-    if (role !== 'agent' && role !== 'dash' && role !== 'admin') {
+    if (role !== 'agent' && role !== 'dash' && role !== 'admin' && role !== 'viewer') {
       throw new Error(`Invalid role "${role}" in BOOTSTRAP_TOKENS`)
     }
     return { token, role, slug, label: 'bootstrap' }
@@ -166,6 +171,48 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
   if (!principal) return unauthorized(c, 'Unknown or revoked token')
   c.set('principal', principal)
+
+  // GF-144 — deny-by-default write guard for the viewer role, placed HERE
+  // (immediately after the principal is set) rather than as a global
+  // app.use('/api/v1/*', ...) in server.ts. requireAuth is registered
+  // PER-SUBAPP (`use('*', requireAuth)` inside each file in src/routes/), not
+  // globally on `app`, so a global middleware would run before any principal
+  // exists and would never see this. Do NOT "helpfully" move this to
+  // server.ts — it would silently stop firing.
+  //
+  // This is deny-by-default (checked centrally, before any route-specific
+  // requireRole/requireScope) rather than added to each mutating route's
+  // requireRole allowlist: several mutating routes (see userOwned.ts,
+  // viktorOwned.ts) have no requireRole call at all and rely on requireAuth +
+  // requireScope alone, so an allowlist-based approach would miss them.
+  if (principal.role === 'viewer' && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    // GF-144 criterion 3 — a viewer never mutates, so without logging the
+    // REFUSALS the token would never appear in the audit trail at all. Reads
+    // are deliberately not audited: that would be a PB write on every GET.
+    //
+    // audit() already swallows its own failures, but the .catch() here is not
+    // redundant: this call sits on a response path, and a future change inside
+    // audit.ts must never be able to turn a clean 403 into a 500.
+    const path = new URL(c.req.url).pathname
+    await audit(principal, {
+      action: 'viewer.denied',
+      // c.req.param() is not reliably populated for wildcard middleware across
+      // Hono versions, so fall back to parsing the path before the token's own
+      // scope. Worst case this is cosmetic — it only labels the audit row.
+      slug: c.req.param('slug') ?? path.match(/\/clients\/([^/]+)/)?.[1] ?? principal.slug ?? '-',
+      note: `${c.req.method} ${path}`,
+    }).catch(() => {})
+    return c.json(
+      {
+        type: 'about:blank',
+        title: 'Forbidden',
+        status: 403,
+        detail: 'Viewer tokens are read-only',
+      },
+      403,
+    )
+  }
+
   await next()
 }
 
@@ -219,6 +266,20 @@ export const requireScope = (paramName = 'slug'): MiddlewareHandler<AppEnv> => {
 export const requireRole = (...allowed: Role[]): MiddlewareHandler<AppEnv> => {
   return async (c, next) => {
     const principal = c.get('principal')
+    // GF-144 — a viewer reads exactly what a `dash` token reads, so anywhere
+    // `dash` is allowed, `viewer` is too. Without this, the 20+ read routes
+    // guarded by requireRole('dash', ...) would 403 a viewer and the role
+    // would be useless for its one purpose.
+    //
+    // This cannot leak a write: requireAuth has already rejected every method
+    // other than GET/HEAD/OPTIONS for a viewer before this middleware runs, so
+    // reaching here as a viewer implies a safe method. Routes that exclude
+    // `dash` (e.g. the agent/admin-only plaintext Postiz key at
+    // routes/integration.ts:261) stay closed to viewers by construction.
+    if (principal.role === 'viewer' && allowed.includes('dash')) {
+      await next()
+      return
+    }
     if (!allowed.includes(principal.role)) {
       return c.json(
         {

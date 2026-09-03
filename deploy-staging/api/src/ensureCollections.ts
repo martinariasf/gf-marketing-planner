@@ -77,7 +77,12 @@ const collections: CollectionSpec[] = [
     name: 'api_tokens',
     fields: [
       { name: 'token', type: 'text', required: true, max: 128 },
-      { name: 'role', type: 'select', required: true, values: ['agent', 'dash', 'admin'] },
+      // GF-144 — `viewer` is a read-only token role (see auth.ts). NOTE: this
+      // array only takes effect when the collection is CREATED. ensureCollections
+      // reconciles missing fields and text `max` raises, never an existing
+      // select's `values`, so on live staging the `role` field must be widened
+      // once by hand in the PB admin UI.
+      { name: 'role', type: 'select', required: true, values: ['agent', 'dash', 'admin', 'viewer'] },
       { name: 'slug', type: 'text', required: true, max: 100 },
       { name: 'label', type: 'text' },
       { name: 'revoked', type: 'bool' },
