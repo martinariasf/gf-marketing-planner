@@ -145,8 +145,11 @@ export function InstagramMockup({ post, handle, logoInitials, aiLabel, storyLabe
           )}
         </div>
 
-        {/* Carousel dots (IG shows them below the image) — never on a story. */}
-        {isCarousel && !isStory && (
+        {/* Carousel dots (IG shows them below the image) — never on a story, and
+            never on a video post: `format`/`slides` are independent, so a video
+            can legally carry >1 slides, and its media frame renders the reel
+            rather than a slide. Same guard as the arrows and the counter. */}
+        {!video && !isStory && isCarousel && (
           <div className="flex items-center justify-center gap-1 pt-2">
             {Array.from({ length: slideCount }).map((_, i) => (
               <button

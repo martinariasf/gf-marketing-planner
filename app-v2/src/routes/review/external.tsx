@@ -391,14 +391,19 @@ function PostContent({
   const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
   const cover = post.image || post.slides?.[0]?.image
 
-  // GF-103 — the mockup's carousel is navigable now; track which slide it is
-  // on so the zoom button opens the lightbox there instead of always at 0.
-  // Reset on post change (the deck/list views reuse one PostContent instance
-  // per card) using the adjust-state-during-render pattern, no effect needed.
+  // GF-103 — the mockup's carousel is navigable now; track which slide it is on
+  // so the zoom button opens the lightbox there instead of always at 0. The key
+  // is the post id PLUS the slide URLs the mockup itself keys off, and it is
+  // also the mockup's `key` below, so the two never reset independently: a
+  // different post that reuses the same images (a duplicated/templated post)
+  // still remounts the mockup, and a payload refresh that edits the slides of
+  // the same post id resets this counter too. Adjust-state-during-render, so no
+  // effect and no lint suppression.
+  const mockupKey = `${post.id}|${withImage(post.slides).map((s) => s.image).join('|')}`
   const [slide, setSlide] = useState(0)
-  const [seenPostId, setSeenPostId] = useState(post.id)
-  if (seenPostId !== post.id) {
-    setSeenPostId(post.id)
+  const [seenKey, setSeenKey] = useState(mockupKey)
+  if (seenKey !== mockupKey) {
+    setSeenKey(mockupKey)
     setSlide(0)
   }
 
@@ -406,6 +411,7 @@ function PostContent({
     return (
       <div className="bg-paper-muted/40 px-4 py-5 relative">
         <ChannelMockup
+          key={mockupKey}
           post={{
             title: post.title,
             copy: post.copy ?? '',
