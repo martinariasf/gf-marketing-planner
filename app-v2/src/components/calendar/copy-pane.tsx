@@ -386,8 +386,18 @@ function ChannelPicker({ s, post }: { s: PaneState; post: Post }) {
   )
 }
 
-/** Save / discard / delete, identical across the layouts. */
-function ActionBar({
+/**
+ * GF-138 — Delete shares the bottom bar's first line with the status control
+ * and nothing else, so no other button can ever displace it.
+ *
+ * All three actions used to sit in one wrapping row beside the status. Save
+ * and Discard mount on the first keystroke, which pushed the row past the
+ * pane and dropped Delete onto a second line — and the pane is too narrow to
+ * hold all four on one line anyway (status 122px + a dirty action group of
+ * 303px in English, 347 in Spanish, 386 in German, against ~423px of pane on
+ * a 1024px window). Save and Discard live on their own line below instead.
+ */
+function DeleteAction({
   s,
   approving,
   onDelete,
@@ -398,30 +408,35 @@ function ActionBar({
   onDelete: () => void
   className?: string
 }) {
-  const { t, dirty, saving, save, reset } = s
+  const { t } = s
   if (!isApiEnabled) return null
   return (
-    <div className={cn('flex items-center gap-2 flex-wrap', className)}>
-      {dirty && (
-        <>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-            {t('common.saveChanges')}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
-            {t('common.discard')}
-          </Button>
-        </>
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={approving}
-        onClick={onDelete}
-        className="ml-auto text-ink-muted hover:text-rose-700"
-      >
-        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-        {t('calendar.deletePost')}
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={approving}
+      onClick={onDelete}
+      className={cn('shrink-0 text-ink-muted hover:text-rose-700', className)}
+    >
+      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+      {t('calendar.deletePost')}
+    </Button>
+  )
+}
+
+/** Save/Discard, on their own line under the status row. Absent while clean,
+ *  so a post that has not been touched shows no empty second row. */
+function SaveDiscardActions({ s }: { s: PaneState }) {
+  const { t, dirty, saving, save, reset } = s
+  if (!isApiEnabled || !dirty) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+      <Button size="sm" onClick={save} disabled={saving} className="shrink-0">
+        {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+        {t('common.saveChanges')}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={reset} disabled={saving} className="shrink-0">
+        {t('common.discard')}
       </Button>
     </div>
   )
@@ -547,10 +562,18 @@ export function CopyPane(props: CopyPaneProps) {
 
         <BlockerNote s={s} post={post} />
 
-        {/* Bottom bar: the coloured status stays exactly where it already was. */}
-        <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-border-subtle">
-          <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} tinted />
-          <ActionBar s={s} approving={approving} onDelete={onDelete} className="ml-auto" />
+        {/* Bottom bar: the coloured status stays exactly where it already was,
+            with Delete alone beside it (GF-138) and Save/Discard below. */}
+        <div className="pt-3 border-t border-border-subtle">
+          {/* `flex-wrap` is safe on this row: it holds only the status and
+              Delete, so where it breaks never depends on whether the post is
+              dirty. Without it a pane narrower than the measured floor would
+              clip Delete instead of wrapping it. */}
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusSelect post={post} busy={approving} onSetStatus={onSetStatus} tinted />
+            <DeleteAction s={s} approving={approving} onDelete={onDelete} className="ml-auto" />
+          </div>
+          <SaveDiscardActions s={s} />
         </div>
       </fieldset>
     </div>
