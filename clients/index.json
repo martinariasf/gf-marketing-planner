@@ -39,16 +39,6 @@
       "headline": "Reactivar los canales de BVF y convertirlos en la vitrina tecnica que abastece la temporada de plantacion 2026-2027.",
       "status": "active",
       "agency": "gf"
-    },
-    {
-      "slug": "zz-testco",
-      "name": "TestCo Demo GmbH",
-      "industry": "Technische Isolierung / Industrieisolierung",
-      "logoInitials": "TD",
-      "quarter": "Q4 2026",
-      "headline": "Heizperiode Q4: Waermeverluste sichtbar machen und die Stillstandsplanung 2027 fruehzeitig besetzen.",
-      "status": "demo",
-      "agency": "gf"
     }
   ]
 }
