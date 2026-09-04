@@ -386,15 +386,36 @@ function PostContent({
   // `settings` block at all) never blanks the badge for external reviewers.
   showAiLabel?: boolean
   tab: 'preview' | 'details'
-  onZoom: () => void
+  onZoom: (slide: number) => void
 }) {
   const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
   const cover = post.image || post.slides?.[0]?.image
+
+  // GF-103 — the mockup's carousel is navigable now; track which slide it is on
+  // so the zoom button opens the lightbox there instead of always at 0. The key
+  // is the post id PLUS the slide URLs the mockup itself keys off, and it is
+  // also the mockup's `key` below, so the two never reset independently: a
+  // different post that reuses the same images (a duplicated/templated post)
+  // still remounts the mockup, and a payload refresh that edits the slides of
+  // the same post id resets this counter too. Adjust-state-during-render, so no
+  // effect and no lint suppression.
+  // `tab` is in the key because switching to "details" unmounts the mockup and
+  // switching back mounts a fresh one at slide 0 — without it this counter would
+  // survive that round trip and the magnifier would open a slide the preview is
+  // no longer showing.
+  const mockupKey = `${tab}|${post.id}|${withImage(post.slides).map((s) => s.image).join('|')}`
+  const [slide, setSlide] = useState(0)
+  const [seenKey, setSeenKey] = useState(mockupKey)
+  if (seenKey !== mockupKey) {
+    setSeenKey(mockupKey)
+    setSlide(0)
+  }
 
   if (hasMockup && tab === 'preview') {
     return (
       <div className="bg-paper-muted/40 px-4 py-5 relative">
         <ChannelMockup
+          key={mockupKey}
           post={{
             title: post.title,
             copy: post.copy ?? '',
@@ -414,10 +435,11 @@ function PostContent({
           logoInitials={brand?.logoInitials ?? ''}
           aiLabel={(showAiLabel ?? true) ? t('common.aiGenerated') : undefined}
           storyLabel={t('mockup.storyBadge')}
+          onSlideChange={setSlide}
         />
         {cover && (
           <button
-            onClick={onZoom}
+            onClick={() => onZoom(slide)}
             title={t('review.ext.viewLarger')}
             className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/75 transition-colors"
           >
@@ -432,7 +454,7 @@ function PostContent({
     <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr]">
       <div className="bg-paper-muted/40 flex items-center justify-center p-3 min-h-[140px]">
         {cover ? (
-          <button onClick={onZoom} title={t('review.ext.viewLarger')} className="group relative w-full">
+          <button onClick={() => onZoom(0)} title={t('review.ext.viewLarger')} className="group relative w-full">
             <img src={cover} alt={post.title} className="max-h-48 w-full object-contain rounded-md" />
             <span className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/55 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Maximize2 className="h-3.5 w-3.5" />
@@ -750,7 +772,7 @@ function DeckView({
             busy={busy}
             onAccept={() => void accept()}
             onReject={() => setSheetOpen(true)}
-            onZoom={() => onZoom({ post, slide: 0 })}
+            onZoom={(slide) => onZoom({ post, slide })}
           />
         </AnimatePresence>
       </div>
@@ -817,7 +839,7 @@ function DeckCard({
   busy: boolean
   onAccept: () => void
   onReject: () => void
-  onZoom: () => void
+  onZoom: (slide: number) => void
 }) {
   const hasMockup = !!post.channel && MOCKUP_CHANNELS.has(post.channel)
   const [tab, setTab] = useState<'preview' | 'details'>(hasMockup ? 'preview' : 'details')
@@ -1166,7 +1188,7 @@ function ListView({
             token={token}
             reviewerName={reviewerName}
             decide={decide}
-            onZoom={() => onZoom({ post, slide: 0 })}
+            onZoom={(slide) => onZoom({ post, slide })}
             onRefreshed={onRefreshed}
           />
         ))
@@ -1254,7 +1276,7 @@ function ListPostCard({
   token: string
   reviewerName: string
   decide: (postId: string, d: 'approved' | 'changes_requested', comment?: string) => Promise<void>
-  onZoom: () => void
+  onZoom: (slide: number) => void
   onRefreshed: (p: PublicReviewPayload) => void
 }) {
   const [body, setBody] = useState('')

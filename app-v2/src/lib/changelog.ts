@@ -22,6 +22,15 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-09-03',
+    title: 'Carousels can be flipped through in the preview, not just in the big view',
+    items: [
+      'A carousel post shared on a review link only ever showed its first image. The counter in the corner was stuck on "1/5" and the dots underneath never moved, so the only way to see the other slides was to open the picture full-screen — which is not obvious, and easy to miss.',
+      'The preview itself now flips: arrows sit on the image, the dots below it are clickable, and the counter follows along. This works on the Instagram and the LinkedIn preview, on the shared review link and in the dashboard.',
+      'Opening the full-screen view now starts on whichever slide you were looking at instead of jumping back to the first one. Single images, stories and videos are unchanged.',
+    ],
+  },
+  {
+    date: '2026-09-03',
     title: 'Calendar post counts now match for everyone, in every timezone',
     items: [
       "Two people looking at the same client's calendar could see different numbers of posts. The cause: a post's date was converted through each viewer's own timezone before deciding which month it belonged to, so a post dated the 1st of a month could roll back into the previous month for anyone outside Europe and vanish from the calendar with no error shown.",

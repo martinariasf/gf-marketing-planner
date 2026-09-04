@@ -31,6 +31,8 @@ interface Props {
   aiLabel?: string
   /** GF-69 — localized "Story" badge shown on an Instagram story post. Omit to hide. */
   storyLabel?: string
+  /** GF-103 — fires whenever the carousel's active slide changes. */
+  onSlideChange?: (index: number) => void
 }
 
 export function ChannelMockup({
@@ -42,6 +44,7 @@ export function ChannelMockup({
   metrics,
   aiLabel,
   storyLabel,
+  onSlideChange,
 }: Props) {
   if (post.channel === 'linkedin') {
     return (
@@ -52,6 +55,7 @@ export function ChannelMockup({
         subtitle={subtitle}
         metrics={metrics}
         aiLabel={aiLabel}
+        onSlideChange={onSlideChange}
       />
     )
   }
@@ -62,6 +66,7 @@ export function ChannelMockup({
       logoInitials={logoInitials}
       aiLabel={aiLabel}
       storyLabel={storyLabel}
+      onSlideChange={onSlideChange}
     />
   )
 }
