@@ -55,8 +55,15 @@ services:
       # relay localizes it (see api/src/agentMessages.ts). Non-secret policy, so
       # set directly here (compose ${:-} interpolation can't carry JSON braces).
       # NOTE: the DASHBOARD client slug for GF is "gf-internal", not "gf-innov".
-      # A slug absent from this map falls back to DEFAULT_LANG.
-      CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es"}'
+      # A slug absent from this map falls back to DEFAULT_LANG. That is a silent
+      # failure mode, not an error: black-venture-farm ran as a de-facto English
+      # client from its 2026-08-19 launch until 2026-09-04 — Spanish quota and
+      # run-failure notices shown in English, and the GF-122b attachment-block
+      # localization a no-op for it — purely because nobody added the slug here
+      # when the agent was deployed. STANDING RULE: every new client agent gets
+      # its slug added to this map in the same change that deploys it. See the
+      # deploy-hermes-company-agent skill.
+      CLIENT_LANGS_JSON: '{"gf-internal":"es","biomas":"es","black-venture-farm":"es"}'
       DEFAULT_LANG: "en"
       # Per-client Google Drive service-account email (GF-80). The address each
       # client shares their Drive folder with — it is the agent's own identity
