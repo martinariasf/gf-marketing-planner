@@ -6,6 +6,7 @@
 // existence by name first.
 
 import { withPb } from './pb.js'
+import { SUMMARY_MAX_CHARS } from './limits.js'
 
 // GF-110 — the length option is NOT interchangeable across PB field types:
 // `text` is bounded by `max` (characters), while `json`/`editor`/`file` use
@@ -71,13 +72,6 @@ interface CollectionSpec {
   updateRule?: string | null
   deleteRule?: string | null
 }
-
-// GF-142 — the `summary` cap, exported so the information-sources upload route
-// can reject an over-cap document itself with an actionable message instead of
-// letting PocketBase's bare validation sentence reach the dashboard. Declared
-// here because this is where the live schema is reconciled; a second literal in
-// the route would drift the day this one is raised.
-export const SUMMARY_MAX_CHARS = 1_000_000
 
 const collections: CollectionSpec[] = [
   {

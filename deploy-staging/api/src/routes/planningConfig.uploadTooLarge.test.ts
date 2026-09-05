@@ -72,16 +72,22 @@ async function upload(content: string, name = 'notes.md') {
 }
 
 /** A document just over the cap, shaped like the real one: a little prose and
- *  a base64 image reference definition that dwarfs it. */
+ *  a base64 image reference definition that dwarfs it. Sized to an exact,
+ *  distinctive character count so the reported size can be asserted against
+ *  something that is not the limit. */
+const OVER_CAP_CHARS = 1_234_567
 function overCapDocument(): string {
   const prose = '# Buyer Persona\n\nAcme targets Mittelstand operations leads.\n\n'
-  const payload = 'A'.repeat(1_000_001 - prose.length)
-  return `${prose}[image1]: data:image/png;base64,${payload}`
+  const prefix = '[image1]: data:image/png;base64,'
+  const payload = 'A'.repeat(OVER_CAP_CHARS - prose.length - prefix.length)
+  return `${prose}${prefix}${payload}`
 }
 
 test('an over-cap document is rejected by the route, not by PocketBase', async () => {
   reset()
-  const { res } = await upload(overCapDocument())
+  const doc = overCapDocument()
+  assert.equal(doc.length, OVER_CAP_CHARS, 'fixture is the size the assertions assume')
+  const { res } = await upload(doc)
   assert.equal(res.status, 413)
   assert.deepEqual(createsSeen, [], 'must not attempt a create PB is certain to reject')
 })
@@ -90,10 +96,23 @@ test('the rejection names the actual size, the limit, and embedded images', asyn
   reset()
   const { body } = await upload(overCapDocument())
   const detail = String(body.detail)
-  // The two numbers are the whole point: "too large" alone is what GF-142 already had.
-  assert.match(detail, /1,000,00[01]/, 'states the actual size of the document')
+  // The ACTUAL size is the point: "too large" alone is what GF-142 already had.
+  // It must be asserted against a number that is NOT the limit — an earlier
+  // version of this test matched /1,000,00[01]/, which the limit itself
+  // satisfies, so it passed without ever checking the reported size.
+  assert.match(detail, /1,234,567/, 'states the actual size of the document')
   assert.match(detail, /1,000,000/, 'states the limit')
   assert.match(detail, /image/i, 'explains that embedded images count toward the size')
+})
+
+test('size is measured in code points, as PocketBase measures it', async () => {
+  // PB's text validator counts runes; `String.length` counts UTF-16 units and
+  // reports 2 per emoji. Measuring in UTF-16 units would refuse this document —
+  // 600,000 code points, comfortably legal — at an apparent 1,200,000.
+  reset()
+  const { res } = await upload('\u{1F600}'.repeat(600_000))
+  assert.equal(res.status, 201, 'an emoji document under the rune cap must be accepted')
+  assert.deepEqual(createsSeen, ['information_sources'])
 })
 
 test('a document exactly at the cap is still accepted', async () => {
