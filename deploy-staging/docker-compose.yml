@@ -73,6 +73,25 @@ services:
       # map show "not connected yet". Add a client's entry once its Drive SA is
       # provisioned + the folder shared (GF-19).
       DRIVE_SHARE_EMAILS_JSON: '{"gf-internal":"viktor-staging-demo@gf-agents-drive.iam.gserviceaccount.com"}'
+      # Per-client usage lookup (GF-104): slug -> the agent's key hash + the
+      # monthly guardrail id, used to render the usage card on Configuration.
+      # Neither value is a secret (the hash is a SHA-256 of the key, not the
+      # key), so like CLIENT_LANGS_JSON it is set inline here — it contains
+      # JSON braces, which ${} interpolation from .env cannot carry. A slug
+      # absent from this map renders no usage card at all (the route returns
+      # configured:false), which is also how a client with no agent behaves.
+      #
+      # WARNING: guardrail d93620ca is currently UNASSIGNED on the OpenRouter
+      # account, so the monthly bar shows a real $100 denominator that
+      # ENFORCES NOTHING. Assign a per-client guardrail and swap its id in
+      # before treating that bar as a real limit. The daily bar is genuine —
+      # it reads the key's own daily cap, which is live.
+      OPENROUTER_CLIENTS_JSON: '{"staging-demo":{"keyHash":"d9292e14f0db4588a711af710587ec22a8ea9ae6937b5cf2b395cb49101f4e67","guardrailId":"d93620ca-69b2-4934-b46e-8e43ba192f45"}}'
+      # Management-scope key for the usage reads above. SECRET, so it comes
+      # from the box-only .env and never from this file. It grants key and
+      # billing control over the whole OpenRouter account — rotate it if this
+      # box is ever compromised.
+      OPENROUTER_MGMT_KEY: "${OPENROUTER_MGMT_KEY:-}"
       RELEASE: "${RELEASE:-dev}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
     expose:
