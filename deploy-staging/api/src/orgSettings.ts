@@ -17,16 +17,6 @@ export type OrgSettings = {
   // that has never set this keeps exactly the UTC-based behavior it has
   // today — additive, not a breaking change.
   timezone: string
-  // GF-104 — links this client to the OpenRouter key/guardrail the usage
-  // card reads from. Both optional, defaulting to undefined (not present in
-  // DEFAULTS below): a client that has never had these set keeps loading
-  // fine (loadOrgSettings never throws), and the usage route treats a
-  // missing key hash as "not configured" rather than an error. Neither
-  // value is a secret — openrouterKeyHash is a SHA-256 hash, not the key
-  // itself — but both are still only ever returned to callers scoped to
-  // this client, same as every other org_configs field.
-  openrouterKeyHash?: string
-  openrouterGuardrailId?: string
 }
 
 // showAiGeneratedLabel defaults to TRUE — GF-65 already shipped the "AI
@@ -63,13 +53,6 @@ function coerce(raw: unknown): Partial<OrgSettings> {
   // no longer recognizes) falls back to DEFAULTS.timezone rather than
   // poisoning every date comparison for this client.
   if (isValidIanaTimezone(obj.timezone)) out.timezone = obj.timezone
-  // GF-104 — plain strings, no further validation (a key hash is opaque and
-  // a guardrail id is an OpenRouter-assigned identifier; neither has a
-  // client-side format to check). A malformed or stale value simply fails
-  // to resolve later in usage.ts's own lookup, it does not corrupt loading
-  // of the rest of OrgSettings.
-  if (typeof obj.openrouterKeyHash === 'string') out.openrouterKeyHash = obj.openrouterKeyHash
-  if (typeof obj.openrouterGuardrailId === 'string') out.openrouterGuardrailId = obj.openrouterGuardrailId
   return out
 }
 

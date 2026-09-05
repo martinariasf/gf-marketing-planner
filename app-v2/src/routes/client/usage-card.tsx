@@ -2,16 +2,18 @@
 //
 // Reads GET /clients/:slug/usage (see api-client.ts's apiLoadClientUsage /
 // deploy-staging/api/src/usage.ts for the contract) and renders it as:
+//   - a horizontal bar for `percentUsedDaily` (share of TODAY's key-level
+//     daily cap used),
 //   - a horizontal bar for `percentUsed` (share of THIS CALENDAR MONTH's
 //     guardrail allowance used), and
 //   - a recharts pie for `categories` (share of the LAST 30 DAYS of activity).
 //
-// These are DELIBERATELY two different time windows — see usage.ts's own
-// comment for why — so the two labels below must never claim the same
-// period, and the pie must never render an "unused" slice: the API's
-// `categories` already sums to 1 across only the non-zero categories that
-// saw activity, with no "free" remainder baked in. The unused portion of the
-// allowance is conveyed by the bar alone.
+// These are DELIBERATELY three different time windows — see usage.ts's own
+// comment for why the month/30-day split exists — so the labels below must
+// never claim the same period, and the pie must never render an "unused"
+// slice: the API's `categories` already sums to 1 across only the non-zero
+// categories that saw activity, with no "free" remainder baked in. The
+// unused portion of an allowance is conveyed by its own bar alone.
 //
 // Hard product rule, not a UI preference: no EUR/USD figure, and no model or
 // provider name (no "kimi-k3", no "seedance"), may ever render here — the
@@ -80,27 +82,15 @@ export default function UsageCard({ slug }: { slug: string }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             <div className="space-y-4">
-              {usage.hasLimit ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-xs text-ink-muted">{t('usage.bar.label')}</p>
-                    <p className="text-sm font-medium text-ink tabular-nums">
-                      {Math.round(usage.percentUsed * 100)}%
-                    </p>
-                  </div>
-                  <div
-                    role="progressbar"
-                    aria-label={t('usage.bar.label')}
-                    aria-valuenow={Math.round(usage.percentUsed * 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    className="h-2 w-full rounded-full bg-paper-muted overflow-hidden"
-                  >
-                    <div
-                      className="h-full rounded-full bg-brand-blue transition-[width]"
-                      style={{ width: `${Math.min(100, Math.max(0, usage.percentUsed * 100))}%` }}
+              {usage.hasDailyLimit || usage.hasLimit ? (
+                <div className="space-y-3">
+                  {usage.hasDailyLimit && (
+                    <UsageBar
+                      label={t('usage.bar.daily.label')}
+                      percent={usage.percentUsedDaily}
                     />
-                  </div>
+                  )}
+                  {usage.hasLimit && <UsageBar label={t('usage.bar.label')} percent={usage.percentUsed} />}
                 </div>
               ) : (
                 <p className="text-xs text-ink-muted">{t('usage.noLimit')}</p>
@@ -112,6 +102,30 @@ export default function UsageCard({ slug }: { slug: string }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// Shared bar shell for both the daily and monthly figures — same markup,
+// different label/value, so the two windows can never visually drift apart.
+function UsageBar({ label, percent }: { label: string; percent: number }) {
+  const pct = Math.min(100, Math.max(0, percent * 100))
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-xs text-ink-muted">{label}</p>
+        <p className="text-sm font-medium text-ink tabular-nums">{Math.round(pct)}%</p>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="h-2 w-full rounded-full bg-paper-muted overflow-hidden"
+      >
+        <div className="h-full rounded-full bg-brand-blue transition-[width]" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
   )
 }
 

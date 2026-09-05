@@ -47,10 +47,21 @@ export interface ClientUsage {
   percentUsed: number
   categories: Record<UsageCategory, number>
   hasLimit: boolean
+  percentUsedDaily: number
+  hasDailyLimit: boolean
 }
 
 export interface OpenRouterKeyData {
   usage_monthly: number
+  // GF-104 daily-usage extension — every client key already carries a daily
+  // cap (unlike the monthly figure, which needs a separately-configured
+  // guardrail), so these ride along on the same key read. Optional so every
+  // pre-existing test fixture/object literal that only sets `usage_monthly`
+  // keeps compiling; a key genuinely missing `limit_reset: 'daily'` just
+  // means `hasDailyLimit` comes out false, same as no guardrail today.
+  usage_daily?: number
+  limit?: number
+  limit_reset?: string | null
 }
 
 export interface OpenRouterGuardrailData {
@@ -84,6 +95,12 @@ const CATEGORY_RULES: Array<{ match: string; category: UsageCategory }> = [
 // silently melting into "writing".
 const warnedUnmappedModels = new Set<string>()
 
+// Same warn-once-per-process Set pattern as `warnedUnmappedModels` above,
+// applied to activity rows whose date string doesn't parse at all — a
+// separate Set because dates and model ids are different key spaces, but
+// the identical dedupe mechanism (no second logging approach introduced).
+const warnedUnparseableDates = new Set<string>()
+
 function categoryFor(model: string): UsageCategory {
   for (const rule of CATEGORY_RULES) {
     if (model.includes(rule.match)) return rule.category
@@ -101,9 +118,24 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 // what OpenRouter returns. Replacing the space with "T" and appending "Z"
 // makes it a valid ISO-8601 UTC string Date can parse unambiguously — the
 // same UTC interpretation the old calendar-month check got for free from
-// `now.toISOString()`.
+// `now.toISOString()`. A date-only row ("YYYY-MM-DD", no time component)
+// gets a midnight-UTC time appended instead, rather than falling through to
+// the space-replace path (which is a no-op on a string with no space,
+// leaving `Z` appended directly and still valid, but explicit is clearer
+// than relying on that coincidence). Anything else that still fails to
+// parse is logged once per process — same warn-once Set pattern as unmapped
+// models — and the row is excluded rather than silently corrupting the sum
+// with a NaN.
 function isWithinLast30Days(dateStr: string, now: Date): boolean {
-  const rowTime = new Date(`${dateStr.replace(' ', 'T')}Z`).getTime()
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? `${dateStr}T00:00:00Z` : `${dateStr.replace(' ', 'T')}Z`
+  const rowTime = new Date(iso).getTime()
+  if (Number.isNaN(rowTime)) {
+    if (!warnedUnparseableDates.has(dateStr)) {
+      warnedUnparseableDates.add(dateStr)
+      console.warn(`[usage] unparseable activity date "${dateStr}" — row excluded`)
+    }
+    return false
+  }
   return rowTime <= now.getTime() && rowTime > now.getTime() - THIRTY_DAYS_MS
 }
 
@@ -130,8 +162,12 @@ export function computeUsage(
   for (const row of activity) {
     if (!isWithinLast30Days(row.date, now)) continue
     const cat = categoryFor(row.model)
-    totalsByCategory[cat] += row.usage
-    totalUsage += row.usage
+    // A refund/credit row can carry a negative `usage`, which would produce
+    // a negative category share and pollute the denominator. Clamp at 0 —
+    // a refund reduces spend, not this client's activity mix.
+    const amount = Math.max(0, row.usage)
+    totalsByCategory[cat] += amount
+    totalUsage += amount
   }
 
   // Pure shares of the 30-day window — sum to 1 when there's any activity,
@@ -144,14 +180,54 @@ export function computeUsage(
 
   if (!hasLimit) {
     // No monthly guardrail to measure against, so percentUsed stays 0 rather
-    // than being computed from a mismatched denominator.
-    return { percentUsed: 0, categories, hasLimit: false }
+    // than being computed from a mismatched denominator. The daily figure is
+    // independent of the monthly guardrail (it comes off the key itself), so
+    // it's still computed here rather than also zeroed out.
+    const { percentUsedDaily, hasDailyLimit } = computeDailyUsage(key)
+    return { percentUsed: 0, categories, hasLimit: false, percentUsedDaily, hasDailyLimit }
+  }
+
+  // Layer-5 review finding 4 — OpenRouter returning a string or null for
+  // either field would otherwise turn percentUsed into NaN, which
+  // JSON-serializes as null and renders client-side as a silent 0% bar
+  // with hasLimit still true. Throwing here routes it through the route
+  // handler's existing catch into the honest "unavailable" state instead.
+  if (!Number.isFinite(key.usage_monthly) || !Number.isFinite(guardrail.limit_usd)) {
+    throw new Error('OpenRouter returned a non-numeric usage_monthly or limit_usd')
   }
 
   const percentUsed =
     guardrail.limit_usd > 0 ? Math.min(1, Math.max(0, key.usage_monthly / guardrail.limit_usd)) : 0
 
-  return { percentUsed, categories, hasLimit: true }
+  const { percentUsedDaily, hasDailyLimit } = computeDailyUsage(key)
+
+  return { percentUsed, categories, hasLimit: true, percentUsedDaily, hasDailyLimit }
+}
+
+// GF-104 daily-usage extension. Mirrors the monthly flow above exactly: first
+// decide whether the reset interval even matches (no finiteness check yet —
+// that mirrors `hasLimit` above, which is interval-only), then, only in the
+// case where we're actually about to compute something, apply the same
+// Number.isFinite guard the monthly path uses and throw on a non-numeric
+// value so the route's existing catch turns it into the honest "unavailable"
+// state rather than a silent NaN. Every client key already carries its own
+// daily cap, so this needs no guardrail lookup — that's what makes it work
+// even for a client with no guardrail configured at all.
+function computeDailyUsage(key: OpenRouterKeyData): { percentUsedDaily: number; hasDailyLimit: boolean } {
+  if (key.limit_reset !== 'daily') {
+    return { percentUsedDaily: 0, hasDailyLimit: false }
+  }
+
+  if (!Number.isFinite(key.usage_daily) || !Number.isFinite(key.limit)) {
+    throw new Error('OpenRouter returned a non-numeric usage_daily or limit')
+  }
+
+  const hasDailyLimit = (key.limit as number) > 0
+  const percentUsedDaily = hasDailyLimit
+    ? Math.min(1, Math.max(0, (key.usage_daily as number) / (key.limit as number)))
+    : 0
+
+  return { percentUsedDaily, hasDailyLimit }
 }
 
 async function orGet<T>(path: string): Promise<T> {
@@ -159,6 +235,13 @@ async function orGet<T>(path: string): Promise<T> {
   try {
     res = await fetch(`${OPENROUTER_BASE}${path}`, {
       headers: { Authorization: `Bearer ${env.openrouterMgmtKey}` },
+      // Layer-5 review finding 3 — without a timeout a hung connection hangs
+      // the request indefinitely; the 5-minute cache only helps after a
+      // success has already happened once. AbortSignal.timeout rejects the
+      // fetch, which the catch below turns into a thrown Error same as any
+      // other network failure, so the route's existing catch still routes
+      // it to { configured: true, unavailable: true }.
+      signal: AbortSignal.timeout(10_000),
     })
   } catch (err) {
     throw new Error(`Could not reach OpenRouter (${path}).`, { cause: err })

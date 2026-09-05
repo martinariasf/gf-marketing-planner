@@ -460,13 +460,6 @@ export type OrgSettings = {
   // point: it closes that client/server mismatch rather than only relocating
   // it.
   timezone: string
-  // GF-104 — links this client to the OpenRouter key/guardrail the usage
-  // card reads from. Both optional and absent by default, mirroring the
-  // server (deploy-staging/api/src/orgSettings.ts): a client that has never
-  // set these keeps loading the rest of OrgSettings unaffected. Edited on
-  // the Integration page, not here — see integration.tsx.
-  openrouterKeyHash?: string
-  openrouterGuardrailId?: string
 }
 
 export const ORG_SETTINGS_DEFAULTS: OrgSettings = {
@@ -507,6 +500,10 @@ export type ClientUsageResponse =
       percentUsed: number
       categories: Record<UsageCategory, number>
       hasLimit: boolean
+      /** Share of TODAY's cap used, from the key's own daily limit. Independent
+       *  of the monthly guardrail — a client can have one and not the other. */
+      percentUsedDaily: number
+      hasDailyLimit: boolean
     }
 
 export async function apiLoadClientUsage(slug: string): Promise<ClientUsageResponse> {

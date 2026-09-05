@@ -13,6 +13,7 @@ import {
 import { isTextUpload } from '../textUpload.js'
 import { clientExists } from '../tenancy.js'
 import { getClientUsage, type ClientUsage } from '../usage.js'
+import { resolveOpenRouterClient } from '../env.js'
 
 export type CalendarRange = {
   startMonth: string
@@ -51,6 +52,16 @@ function principalLabel(c: Context<AppEnv>): string {
 
 export const planningConfig = new OpenAPIHono<AppEnv>()
 planningConfig.use('*', requireAuth)
+
+// GF-104 — 5-minute in-process usage cache, keyed by slug, shared by the
+// /usage route below. The OpenRouter key hash / guardrail id now live in a
+// server-side env map (see env.ts's OPENROUTER_CLIENTS_JSON), not in
+// client-editable org_configs.settings, so there is no settings PUT path
+// that can change them at runtime — nothing needs to invalidate this cache
+// early; it simply expires after USAGE_CACHE_TTL_MS.
+type UsageCacheEntry = { at: number; body: Record<string, unknown> }
+const USAGE_CACHE_TTL_MS = 5 * 60 * 1000
+const usageCache = new Map<string, UsageCacheEntry>()
 
 planningConfig.get('/clients/:slug/config/calendar-range', requireScope(), async (c) => {
   const slug = c.req.param('slug')
@@ -128,12 +139,6 @@ type OrgSettingsInput = {
   showAiGeneratedLabel: boolean
   autoScheduleOnApprove: boolean
   timezone?: string
-  // GF-104 — optional, same treatment as timezone: absent on write leaves
-  // whatever the client currently has stored untouched (see the PUT handler
-  // below), rather than resetting it to undefined every time some other
-  // toggle is saved.
-  openrouterKeyHash?: string
-  openrouterGuardrailId?: string
 }
 
 // GF-37 follow-up, Layer-5 review round 1 finding 1 — `timezone` is OPTIONAL
@@ -149,27 +154,15 @@ function validateOrgSettings(data: unknown): OrgSettingsInput | null {
   if (!data || typeof data !== 'object') return null
   const raw = data as Record<string, unknown>
   const keys = Object.keys(raw)
-  const allowed = new Set([
-    'showAiGeneratedLabel',
-    'autoScheduleOnApprove',
-    'timezone',
-    'openrouterKeyHash',
-    'openrouterGuardrailId',
-  ])
+  const allowed = new Set(['showAiGeneratedLabel', 'autoScheduleOnApprove', 'timezone'])
   if (keys.some((k) => !allowed.has(k))) return null
   if (typeof raw.showAiGeneratedLabel !== 'boolean') return null
   if (typeof raw.autoScheduleOnApprove !== 'boolean') return null
   if ('timezone' in raw && !isValidIanaTimezone(raw.timezone)) return null
-  // GF-104 — same optional-string shape for both, no further format check
-  // (see coerce() in orgSettings.ts for why).
-  if ('openrouterKeyHash' in raw && typeof raw.openrouterKeyHash !== 'string') return null
-  if ('openrouterGuardrailId' in raw && typeof raw.openrouterGuardrailId !== 'string') return null
   return {
     showAiGeneratedLabel: raw.showAiGeneratedLabel,
     autoScheduleOnApprove: raw.autoScheduleOnApprove,
     ...('timezone' in raw ? { timezone: raw.timezone as string } : {}),
-    ...('openrouterKeyHash' in raw ? { openrouterKeyHash: raw.openrouterKeyHash as string } : {}),
-    ...('openrouterGuardrailId' in raw ? { openrouterGuardrailId: raw.openrouterGuardrailId as string } : {}),
   }
 }
 
@@ -223,16 +216,17 @@ planningConfig.put(
 
 // GF-104 TASK-002 — GET /clients/:slug/usage.
 //
-// A plain 5-minute in-process cache keyed by slug: the OpenRouter reads
-// behind getClientUsage() are network calls a human opening the
-// Configuration page repeatedly (or a flaky connection retrying) has no
+// A plain 5-minute in-process cache keyed by slug (declared above): the
+// OpenRouter reads behind getClientUsage() are network calls a human opening
+// the Configuration page repeatedly (or a flaky connection retrying) has no
 // reason to keep re-triggering. A Map + timestamp is intentionally the
 // whole cache — no dependency, no eviction policy, no per-instance
 // coordination needed for a handful of clients.
-type UsageCacheEntry = { at: number; body: Record<string, unknown> }
-const USAGE_CACHE_TTL_MS = 5 * 60 * 1000
-const usageCache = new Map<string, UsageCacheEntry>()
-
+//
+// GF-104 rework: the key hash / guardrail id are no longer read from
+// client-editable org_configs.settings — they come from the server-side
+// OPENROUTER_CLIENTS_JSON env map (see env.ts, resolveOpenRouterClient()),
+// which Martin configures directly. Clients never see or set these values.
 planningConfig.get('/clients/:slug/usage', requireScope(), async (c) => {
   const slug = c.req.param('slug')
 
@@ -241,8 +235,8 @@ planningConfig.get('/clients/:slug/usage', requireScope(), async (c) => {
     return c.json(cached.body)
   }
 
-  const settings = await loadOrgSettings(slug)
-  if (!settings.openrouterKeyHash || !settings.openrouterGuardrailId) {
+  const client = resolveOpenRouterClient(slug)
+  if (!client) {
     // Not an error: the card hides itself on `configured: false`. Not
     // cached — a client can get configured at any time and the very next
     // load should pick that up immediately, not wait out a stale cache.
@@ -251,7 +245,7 @@ planningConfig.get('/clients/:slug/usage', requireScope(), async (c) => {
 
   let usage: ClientUsage
   try {
-    usage = await getClientUsage(settings.openrouterKeyHash, settings.openrouterGuardrailId)
+    usage = await getClientUsage(client.keyHash, client.guardrailId)
   } catch (err) {
     // OpenRouter being down, slow, or returning garbage must never turn
     // into a 500 on the Configuration page — a third party's outage is not
