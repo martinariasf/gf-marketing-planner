@@ -12,7 +12,7 @@
 // Read-only for now. Token rotation / issuance is a future hardening item.
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { useOutletContext, useParams } from 'react-router'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +35,7 @@ import {
   ChevronRight,
   Sparkles,
   HardDrive,
+  Gauge,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -42,15 +43,24 @@ import {
   apiLoadAnalytics,
   apiSavePostizKey,
   apiDeletePostizKey,
+  apiSaveOrgSettings,
+  isApiEnabled,
   type IntegrationInfo,
   type PostizStatus,
+  type OrgSettings,
 } from '@/lib/api-client'
 import { useT } from '@/lib/i18n'
 import type { ClientAnalytics } from '@/types'
+import type { ClientBundle } from '@/lib/client-data'
 
 export default function IntegrationView() {
   const t = useT()
   const { slug = '' } = useParams<{ slug: string }>()
+  // GF-104 — the client layout route already loads OrgSettings (and a
+  // refetch()) for the Configuration page's toggles; reused here rather than
+  // fetching it a second time, since the two new fields live in the same
+  // record.
+  const { settings, refetch } = useOutletContext<ClientBundle & { refetch: () => void }>()
   const [info, setInfo] = useState<IntegrationInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   // GF-27 (TASK-021a): the detailed, agent-facing manual setup (curl examples +
@@ -249,6 +259,15 @@ export default function IntegrationView() {
         <PostizCard slug={info.slug} initial={info.postiz} />
       </section>
 
+      {/* ── OpenRouter usage link (GF-104) ──────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Gauge className="h-4 w-4 text-brand-blue" />
+          {t('integration.openrouterTitle')}
+        </h2>
+        <OpenRouterCard slug={slug} settings={settings} onSaved={refetch} />
+      </section>
+
       {/* ── Google Drive share email (GF-80) ────────────────────────── */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold flex items-center gap-2">
@@ -357,6 +376,109 @@ function PostizCard({ slug, initial }: { slug: string; initial: PostizStatus }) 
             tab says "no channels", so it closes that loop instead of leaving
             them guessing whether the key or the connection is at fault. */}
         {status.configured && <ChannelHealth slug={slug} />}
+      </CardContent>
+    </Card>
+  )
+}
+
+// GF-104 — links this client to the OpenRouter key/guardrail its usage card
+// (Configuration page) reads from. Lives here, not on Configuration, because
+// these two ids are credential-adjacent plumbing (see the header comment at
+// the top of this file, and configuration.tsx:1-5 for the split rationale).
+// The key hash is not a secret — it's a SHA-256 hash, not the key — so a
+// plain text input is fine, unlike the Postiz card's masked password field.
+function OpenRouterCard({
+  slug,
+  settings,
+  onSaved,
+}: {
+  slug: string
+  settings: OrgSettings
+  onSaved: () => void
+}) {
+  const t = useT()
+  const [keyHash, setKeyHash] = useState(settings.openrouterKeyHash ?? '')
+  const [guardrailId, setGuardrailId] = useState(settings.openrouterGuardrailId ?? '')
+  const [saving, setSaving] = useState(false)
+
+  // Keep the fields in sync if the underlying settings change out from under
+  // us (e.g. another tab saved, and the layout's refetch() ran).
+  useEffect(() => {
+    setKeyHash(settings.openrouterKeyHash ?? '')
+    setGuardrailId(settings.openrouterGuardrailId ?? '')
+  }, [settings.openrouterKeyHash, settings.openrouterGuardrailId])
+
+  const dirty =
+    keyHash.trim() !== (settings.openrouterKeyHash ?? '') ||
+    guardrailId.trim() !== (settings.openrouterGuardrailId ?? '')
+
+  const save = async () => {
+    if (!isApiEnabled || saving || !dirty) return
+    setSaving(true)
+    try {
+      const next: OrgSettings = {
+        ...settings,
+        openrouterKeyHash: keyHash.trim() || undefined,
+        openrouterGuardrailId: guardrailId.trim() || undefined,
+      }
+      await apiSaveOrgSettings(slug, next)
+      toast.success(t('config.saved'))
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('config.saveFailed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-3 text-sm">
+        <p className="text-ink-muted text-xs max-w-2xl">{t('integration.openrouterIntro')}</p>
+
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-wider text-ink-muted" htmlFor="openrouter-key-hash">
+            {t('integration.openrouterKeyHashLabel')}
+          </label>
+          <input
+            id="openrouter-key-hash"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={keyHash}
+            onChange={(e) => setKeyHash(e.target.value)}
+            disabled={!isApiEnabled || saving}
+            className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 disabled:opacity-50"
+          />
+          <p className="text-[11px] text-ink-muted">{t('integration.openrouterKeyHashHint')}</p>
+        </div>
+
+        <div className="space-y-1">
+          <label
+            className="text-[11px] uppercase tracking-wider text-ink-muted"
+            htmlFor="openrouter-guardrail-id"
+          >
+            {t('integration.openrouterGuardrailIdLabel')}
+          </label>
+          <input
+            id="openrouter-guardrail-id"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={guardrailId}
+            onChange={(e) => setGuardrailId(e.target.value)}
+            disabled={!isApiEnabled || saving}
+            className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border-subtle bg-paper focus:outline-none focus:ring-2 focus:ring-brand-blue/30 disabled:opacity-50"
+          />
+          <p className="text-[11px] text-ink-muted">{t('integration.openrouterGuardrailIdHint')}</p>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={save} disabled={!isApiEnabled || !dirty || saving} size="sm" className="h-9">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            <span className="ml-1.5">{t('integration.openrouterSave')}</span>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

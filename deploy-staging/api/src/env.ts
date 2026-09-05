@@ -135,6 +135,13 @@ export const env = {
   // un-encrypted (with a loud warning) — set this on every real deploy.
   integrationSecretKey: process.env.INTEGRATION_SECRET_KEY ?? '',
 
+  // OpenRouter management key (GF-104). SERVER-SIDE ONLY — used by usage.ts to
+  // read a client's monthly spend/guardrail/activity from OpenRouter so the
+  // dashboard can show a usage percentage without ever seeing a raw USD
+  // amount. Must never be exposed as a VITE_ variable; only `usage.ts` reads
+  // this field.
+  openrouterMgmtKey: process.env.OPENROUTER_MGMT_KEY ?? '',
+
   // GF-68: absolute external base URL for this API, e.g.
   // "https://staging.marketing.gfinnov.com/api/v1". Needed because the chat
   // relay hands the Hermes agent container an absolute URL to fetch an

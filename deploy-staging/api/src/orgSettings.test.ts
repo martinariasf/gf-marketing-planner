@@ -85,3 +85,44 @@ test('loadOrgSettings never throws — a PB failure of any kind falls back to DE
   storedRecord = null // getFirstListItem throws 'not found' above
   await assert.doesNotReject(() => loadOrgSettings('does-not-exist'))
 })
+
+// GF-104 — openrouterKeyHash / openrouterGuardrailId are optional and absent
+// from DEFAULTS; an existing client that has never set them must keep
+// loading exactly as before (no new keys appearing, no error).
+test('loadOrgSettings: a stored record with neither OpenRouter field set has no such keys on the result', async () => {
+  storedRecord = {
+    settings: { showAiGeneratedLabel: true, autoScheduleOnApprove: false, timezone: 'UTC' },
+  }
+  const settings = await loadOrgSettings('acme')
+  assert.deepEqual(settings, DEFAULTS)
+  assert.equal('openrouterKeyHash' in settings, false)
+  assert.equal('openrouterGuardrailId' in settings, false)
+})
+
+test('loadOrgSettings: a stored record with both OpenRouter fields round-trips them as strings', async () => {
+  storedRecord = {
+    settings: {
+      showAiGeneratedLabel: true,
+      autoScheduleOnApprove: false,
+      timezone: 'UTC',
+      openrouterKeyHash: 'abc123hash',
+      openrouterGuardrailId: 'guardrail-42',
+    },
+  }
+  const settings = await loadOrgSettings('acme')
+  assert.equal(settings.openrouterKeyHash, 'abc123hash')
+  assert.equal(settings.openrouterGuardrailId, 'guardrail-42')
+})
+
+test('loadOrgSettings: a non-string OpenRouter field is dropped rather than poisoning the result', async () => {
+  storedRecord = {
+    settings: {
+      showAiGeneratedLabel: true,
+      autoScheduleOnApprove: false,
+      timezone: 'UTC',
+      openrouterKeyHash: 12345,
+    },
+  }
+  const settings = await loadOrgSettings('acme')
+  assert.equal('openrouterKeyHash' in settings, false)
+})

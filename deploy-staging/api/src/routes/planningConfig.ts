@@ -12,6 +12,7 @@ import {
 } from '../orgSettings.js'
 import { isTextUpload } from '../textUpload.js'
 import { clientExists } from '../tenancy.js'
+import { getClientUsage, type ClientUsage } from '../usage.js'
 
 export type CalendarRange = {
   startMonth: string
@@ -127,6 +128,12 @@ type OrgSettingsInput = {
   showAiGeneratedLabel: boolean
   autoScheduleOnApprove: boolean
   timezone?: string
+  // GF-104 — optional, same treatment as timezone: absent on write leaves
+  // whatever the client currently has stored untouched (see the PUT handler
+  // below), rather than resetting it to undefined every time some other
+  // toggle is saved.
+  openrouterKeyHash?: string
+  openrouterGuardrailId?: string
 }
 
 // GF-37 follow-up, Layer-5 review round 1 finding 1 — `timezone` is OPTIONAL
@@ -142,15 +149,27 @@ function validateOrgSettings(data: unknown): OrgSettingsInput | null {
   if (!data || typeof data !== 'object') return null
   const raw = data as Record<string, unknown>
   const keys = Object.keys(raw)
-  const allowed = new Set(['showAiGeneratedLabel', 'autoScheduleOnApprove', 'timezone'])
+  const allowed = new Set([
+    'showAiGeneratedLabel',
+    'autoScheduleOnApprove',
+    'timezone',
+    'openrouterKeyHash',
+    'openrouterGuardrailId',
+  ])
   if (keys.some((k) => !allowed.has(k))) return null
   if (typeof raw.showAiGeneratedLabel !== 'boolean') return null
   if (typeof raw.autoScheduleOnApprove !== 'boolean') return null
   if ('timezone' in raw && !isValidIanaTimezone(raw.timezone)) return null
+  // GF-104 — same optional-string shape for both, no further format check
+  // (see coerce() in orgSettings.ts for why).
+  if ('openrouterKeyHash' in raw && typeof raw.openrouterKeyHash !== 'string') return null
+  if ('openrouterGuardrailId' in raw && typeof raw.openrouterGuardrailId !== 'string') return null
   return {
     showAiGeneratedLabel: raw.showAiGeneratedLabel,
     autoScheduleOnApprove: raw.autoScheduleOnApprove,
     ...('timezone' in raw ? { timezone: raw.timezone as string } : {}),
+    ...('openrouterKeyHash' in raw ? { openrouterKeyHash: raw.openrouterKeyHash as string } : {}),
+    ...('openrouterGuardrailId' in raw ? { openrouterGuardrailId: raw.openrouterGuardrailId as string } : {}),
   }
 }
 
@@ -201,6 +220,51 @@ planningConfig.put(
     return c.json({ data: result.after })
   },
 )
+
+// GF-104 TASK-002 — GET /clients/:slug/usage.
+//
+// A plain 5-minute in-process cache keyed by slug: the OpenRouter reads
+// behind getClientUsage() are network calls a human opening the
+// Configuration page repeatedly (or a flaky connection retrying) has no
+// reason to keep re-triggering. A Map + timestamp is intentionally the
+// whole cache — no dependency, no eviction policy, no per-instance
+// coordination needed for a handful of clients.
+type UsageCacheEntry = { at: number; body: Record<string, unknown> }
+const USAGE_CACHE_TTL_MS = 5 * 60 * 1000
+const usageCache = new Map<string, UsageCacheEntry>()
+
+planningConfig.get('/clients/:slug/usage', requireScope(), async (c) => {
+  const slug = c.req.param('slug')
+
+  const cached = usageCache.get(slug)
+  if (cached && Date.now() - cached.at < USAGE_CACHE_TTL_MS) {
+    return c.json(cached.body)
+  }
+
+  const settings = await loadOrgSettings(slug)
+  if (!settings.openrouterKeyHash || !settings.openrouterGuardrailId) {
+    // Not an error: the card hides itself on `configured: false`. Not
+    // cached — a client can get configured at any time and the very next
+    // load should pick that up immediately, not wait out a stale cache.
+    return c.json({ configured: false })
+  }
+
+  let usage: ClientUsage
+  try {
+    usage = await getClientUsage(settings.openrouterKeyHash, settings.openrouterGuardrailId)
+  } catch (err) {
+    // OpenRouter being down, slow, or returning garbage must never turn
+    // into a 500 on the Configuration page — a third party's outage is not
+    // this dashboard's outage. Log for our own visibility, tell the caller
+    // "configured, but we couldn't read it right now".
+    console.warn(`[usage] getClientUsage failed for slug "${slug}":`, err)
+    return c.json({ configured: true, unavailable: true })
+  }
+
+  const body = { configured: true, ...usage }
+  usageCache.set(slug, { at: Date.now(), body })
+  return c.json(body)
+})
 
 // GF-116 — the agent-facing read. An uploaded document's full text is in each
 // item's `summary`, so this one GET is how Viktor sees what a human put in the
