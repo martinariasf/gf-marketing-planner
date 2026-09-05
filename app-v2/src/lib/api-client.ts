@@ -460,6 +460,13 @@ export type OrgSettings = {
   // point: it closes that client/server mismatch rather than only relocating
   // it.
   timezone: string
+  // GF-104 — links this client to the OpenRouter key/guardrail the usage
+  // card reads from. Both optional and absent by default, mirroring the
+  // server (deploy-staging/api/src/orgSettings.ts): a client that has never
+  // set these keeps loading the rest of OrgSettings unaffected. Edited on
+  // the Integration page, not here — see integration.tsx.
+  openrouterKeyHash?: string
+  openrouterGuardrailId?: string
 }
 
 export const ORG_SETTINGS_DEFAULTS: OrgSettings = {
@@ -482,6 +489,29 @@ export async function apiSaveOrgSettings(slug: string, settings: OrgSettings): P
   if (!isApiEnabled) return { ...settings }
   const r = await apiSend<{ data: OrgSettings }>('PUT', `/clients/${slug}/config/settings`, { data: settings })
   return r.data
+}
+
+// GF-104 — usage card on the Configuration page. Mirrors
+// deploy-staging/api/src/usage.ts's `ClientUsage` plus the route's two extra
+// flags (`configured`, `unavailable`). Every number here is a fraction 0..1;
+// the server contract deliberately never emits a raw USD amount, so there is
+// nothing here to hide in the UI layer either.
+export type UsageCategory = 'writing' | 'image' | 'video' | 'audio'
+
+export type ClientUsageResponse =
+  | { configured: false }
+  | { configured: true; unavailable: true }
+  | {
+      configured: true
+      unavailable?: false
+      percentUsed: number
+      categories: Record<UsageCategory, number>
+      hasLimit: boolean
+    }
+
+export async function apiLoadClientUsage(slug: string): Promise<ClientUsageResponse> {
+  if (!isApiEnabled) return { configured: false }
+  return apiGet<ClientUsageResponse>(`/clients/${slug}/usage`)
 }
 
 export type InformationSourceType = 'website' | 'note' | 'news' | 'reference' | 'other'

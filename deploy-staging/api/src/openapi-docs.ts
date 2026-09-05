@@ -604,6 +604,45 @@ export function registerApiDocs(app: OpenAPIHono): void {
     },
   })
 
+  // ── GF-104: OpenRouter usage summary (percentages only, never USD) ─────────
+  reg({
+    method: 'get',
+    path: '/api/v1/clients/{slug}/usage',
+    tags: ['config'],
+    summary: 'Read this client\'s monthly usage against its OpenRouter guardrail',
+    description:
+      'Percentages and category shares only — no raw USD amount ever leaves this endpoint. ' +
+      '`configured: false` means this client has no OpenRouter key/guardrail linked (card should hide). ' +
+      '`unavailable: true` means OpenRouter could not be reached; this endpoint never returns 500 for that. ' +
+      'Cached in-process for 5 minutes per client.',
+    security: bearer,
+    request: { params: slugParam },
+    responses: {
+      200: {
+        description: 'Usage summary, or a not-configured / unavailable flag',
+        content: json(
+          z.union([
+            z.object({ configured: z.literal(false) }),
+            z.object({ configured: z.literal(true), unavailable: z.literal(true) }),
+            z.object({
+              configured: z.literal(true),
+              percentUsed: z.number().openapi({ description: 'Fraction 0..1 of the monthly guardrail used.', example: 0.42 }),
+              categories: z.object({
+                writing: z.number().openapi({ example: 0.2 }),
+                image: z.number().openapi({ example: 0.15 }),
+                video: z.number().openapi({ example: 0.05 }),
+                audio: z.number().openapi({ example: 0 }),
+              }),
+              hasLimit: z.boolean().openapi({ description: 'False when the linked guardrail is not reset_interval=monthly.' }),
+            }),
+          ]),
+        ),
+      },
+      401: errs[401],
+      403: errs[403],
+    },
+  })
+
   // ── Inspiration image library (dashboard-owned: dash/admin write) ──────────
   reg({
     method: 'get',

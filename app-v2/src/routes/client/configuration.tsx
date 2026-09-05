@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { isApiEnabled, apiSaveOrgSettings, type OrgSettings } from '@/lib/api-client'
 import type { ClientBundle } from '@/lib/client-data'
 import { useT } from '@/lib/i18n'
+import UsageCard from './usage-card'
 
 // GF-37 residual — curated fallback for browsers without `Intl.supportedValuesOf`
 // (all evergreen browsers this app targets have it, but the API isn't
@@ -108,6 +109,7 @@ export default function ConfigurationView() {
       )}
 
       <div className="space-y-4 max-w-2xl">
+        {isApiEnabled && <UsageCard slug={slug} />}
         <ToggleCard
           icon={Sparkles}
           title={t('config.aiLabel.title')}

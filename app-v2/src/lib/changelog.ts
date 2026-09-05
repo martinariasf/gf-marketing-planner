@@ -21,6 +21,14 @@ export type ChangelogEntry = {
 // Newest first. The top entry drives the "What's new" dot.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-09-05',
+    title: 'See how much of your monthly allowance you have used',
+    items: [
+      'Configuration now opens with a usage card: a bar showing how much of this month’s allowance you have used, and a chart breaking your activity down into writing and editing, image generation and video generation.',
+      'The breakdown covers the last 30 days, so it stays meaningful at the start of a month. The bar always reflects the current calendar month.',
+    ],
+  },
+  {
     date: '2026-09-03',
     title: 'Carousels can be flipped through in the preview, not just in the big view',
     items: [
