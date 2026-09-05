@@ -232,8 +232,17 @@ planningConfig.get('/clients/:slug/usage', requireScope(), async (c) => {
   const slug = c.req.param('slug')
 
   const cached = usageCache.get(slug)
-  if (cached && Date.now() - cached.at < USAGE_CACHE_TTL_MS) {
-    return c.json(cached.body)
+  if (cached) {
+    if (Date.now() - cached.at < USAGE_CACHE_TTL_MS) {
+      return c.json(cached.body)
+    }
+    // Layer-5 review (round 2) finding 5 — evict on read instead of leaving
+    // the stale entry to be silently overwritten on the next miss. The map
+    // is bounded by the number of configured clients (one entry per slug in
+    // OPENROUTER_CLIENTS_JSON), so this isn't a leak either way, but explicit
+    // eviction keeps the map's actual size matching "currently fresh", not
+    // "ever queried".
+    usageCache.delete(slug)
   }
 
   const client = resolveOpenRouterClient(slug)

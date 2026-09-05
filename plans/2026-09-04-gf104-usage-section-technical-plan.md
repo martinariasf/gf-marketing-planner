@@ -14,10 +14,11 @@ items:
 
 ## Simple Words
 
-A client opens **Configuration** and sees one new card at the top: a bar saying
-how much of this month's allowance they have used, and a pie splitting that use
-into writing/editing, image generation and video generation, plus the unused
-remainder.
+A client opens **Configuration** and sees one new card at the top: two bars —
+how much of today's cap and how much of this month's allowance they have used —
+and a pie splitting the last 30 days of activity into writing/editing, image
+generation and video generation. There is no "unused" slice in the pie; the
+unused portion is what the bars show as not yet filled.
 
 No money is ever shown to the client. Only percentages.
 
@@ -55,8 +56,13 @@ item (which had an empty body):
 2. **Denominator is the guardrail, not a typed-in number.** Martin chose the real
    enforced limit over a configured allowance, so the bar cannot drift from
    reality.
-3. **Daily key limits stay as they are.** `limit_reset=daily` on all four client
-   keys is the runaway brake and is not part of this task.
+3. **Daily key limits stay as they are (revised — now also surfaced).** `limit_reset=daily`
+   on all four client keys is the runaway brake and enforcement is not part of
+   this task. As shipped, the card also renders a second, independent daily
+   bar (`percentUsedDaily`/`hasDailyLimit`) read straight off the key's own
+   `usage_daily`/`limit`/`limit_reset` fields — no guardrail lookup needed —
+   so the client sees both brakes, even though only the monthly one gained
+   new enforcement.
 4. **The key/guardrail link is stored per client**, because OpenRouter exposes no
    way to read which guardrail applies to a key: `GET /keys/{hash}` has no
    guardrail field, and every guessed assignment path (`/guardrails/{id}/keys`,
@@ -75,6 +81,17 @@ item (which had an empty body):
    `percentUsed` (scaling a 30-day share by a month fraction is meaningless),
    so there is no "unused" slice in the pie. The unused portion is the bar's
    remainder only.
+6. **Key hash / guardrail id are server-side config, not client-editable
+   (supersedes TASK-003 below).** As shipped, `resolveOpenRouterClient(slug)`
+   in `deploy-staging/api/src/env.ts` reads the mapping from a single
+   server-side env var, `OPENROUTER_CLIENTS_JSON` (a JSON object of
+   `slug -> { keyHash, guardrailId }`), parsed once at process start —
+   Martin sets it on deploy. This replaced the originally-planned
+   `OrgSettings.openrouterKeyHash` / `openrouterGuardrailId` fields (TASK-003)
+   before ship: those two ids never lived in client-editable
+   `org_configs.settings`, or on the Integration page, at all. `resolveOpenRouterClient`
+   returns `undefined` for an unconfigured or unrecognized slug, which the
+   `/usage` route treats as `{ configured: false }`.
 
 ### TASK-001: Add the OpenRouter usage client and model-to-category map
 status: todo
@@ -98,7 +115,8 @@ notes:
 - New file: `deploy-staging/api/src/usage.ts`, tests in `deploy-staging/api/src/usage.test.ts`.
 - Fixtures: capture one real `/activity` response and one `/keys/{hash}` response, strip the key `label` field (it contains a truncated secret) before committing.
 - The management key is read from a new env var in `deploy-staging/api/src/env.ts`, following the existing pattern there. It is SERVER-SIDE ONLY and must never be added to any `VITE_` variable.
-- Category shares are computed as a share of the month's total activity usage, then scaled by `percentUsed` so the pie and the bar agree; the remainder is the "free/unused" slice.
+- Category shares are computed as a pure share of the last-30-days `/activity` window's total usage (see Decision 5, revised 2026-09-05) and are NOT scaled by `percentUsed` — the pie and the bar deliberately cover different windows, so there is no "unused" slice in the pie; the unused portion is conveyed by the bar alone.
+- Also computes a second, independent figure off the same key read: `percentUsedDaily` / `hasDailyLimit`, from the key's own `usage_daily`/`limit`/`limit_reset` fields (no guardrail lookup needed — every client key already carries its own daily cap). `hasDailyLimit` is false whenever `limit_reset !== 'daily'` or either daily field is non-numeric (the latter degrades gracefully rather than throwing; only the monthly path's non-numeric case throws).
 
 ### TASK-002: Expose GET /clients/:slug/usage on the API
 status: todo
@@ -119,10 +137,10 @@ acceptance:
 notes:
 - Add to `deploy-staging/api/src/routes/planningConfig.ts` (already holds the per-client config routes and the `requireScope()` pattern) or a sibling route file if that file is getting long.
 - Auth: reuse `requireAuth` + `requireScope()` exactly as the neighbouring routes do; do not invent a new guard.
-- Read `openrouterKeyHash` / `openrouterGuardrailId` via `loadOrgSettings` — see TASK-003.
+- As shipped: read the key hash / guardrail id via `resolveOpenRouterClient(slug)` in `deploy-staging/api/src/env.ts` (server-side `OPENROUTER_CLIENTS_JSON` env map) — see Decision 6, which supersedes TASK-003's `loadOrgSettings` plan.
 
 ### TASK-003: Store the key hash and guardrail id per client
-status: todo
+status: superseded — see Decision 6 (OPENROUTER_CLIENTS_JSON shipped instead of OrgSettings fields)
 owner: martin
 agent: claude
 reviewer: kimi-k3
@@ -180,7 +198,7 @@ tags: [gf-104, i18n]
 acceptance:
 - Every visible string in the card comes from `useT()`; no literal English in the component.
 - Keys exist in all three locales with no missing-key fallback warnings in the console.
-- Category labels read as plain client language ("Writing & editing", "Image generation", "Video generation", "Unused"), never model or provider names.
+- Category labels read as plain client language ("Writing & editing", "Image generation", "Video generation"), never model or provider names. There is no "Unused" category label — per Decision 5 (revised 2026-09-05) the pie has no unused slice; the unused allowance is conveyed only by the bar's remainder.
 notes:
 - Follow the `config.*` key namespace already used in configuration.tsx; add a `usage.*` group.
 - Pilar reviews the ES/DE wording before prod promotion, not before staging merge.
@@ -201,7 +219,8 @@ acceptance:
 - Staging bundle is in API mode and `/api/v1/health` reports `pb:"up"`.
 - Configuration page for the staging-demo client shows the card with real numbers, and the bar percentage matches `usage_monthly / limit_usd` computed independently from the OpenRouter API.
 - A client with no key hash configured shows no card (checked on a second client).
-- Category shares sum to 100% with the unused slice included.
+- Category shares sum to 100% (pure shares of the last-30-days activity window; no unused slice — see Decision 5, revised 2026-09-05).
+- The daily bar (`percentUsedDaily`/`hasDailyLimit`) reflects the key's own daily cap independently of the monthly guardrail.
 - Browser console is free of errors on the Configuration page.
 notes:
 - Requires TASK-007 to have set a guardrail on the staging key first, otherwise `hasLimit` is false and the bar cannot be verified.

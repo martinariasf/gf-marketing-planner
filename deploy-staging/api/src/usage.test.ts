@@ -73,15 +73,42 @@ test('computeUsage: a key with no daily fields at all still computes the monthly
   assert.equal(result.hasLimit, true, 'monthly figure is unaffected by missing daily fields')
 })
 
-test('computeUsage: throws when key.usage_daily is not a finite number and limit_reset is daily', () => {
+// Layer-5 review (round 2) finding 4 — a malformed DAILY field must only
+// degrade the daily bar (hasDailyLimit false, percentUsedDaily 0), not throw
+// and take the whole card down with it. The MONTHLY path below still throws
+// — that one is the core contract and is unchanged.
+test('computeUsage: non-finite key.usage_daily with limit_reset daily degrades only the daily bar, does not throw', () => {
   const key: OpenRouterKeyData = { ...keyFixture, limit_reset: 'daily', usage_daily: '0.6' as unknown as number }
-  assert.throws(() => computeUsage(key, guardrailFixture, activityFixture, CAPTURE_DAY))
+  const result = computeUsage(key, guardrailFixture, activityFixture, CAPTURE_DAY)
+  assert.equal(result.hasDailyLimit, false)
+  assert.equal(result.percentUsedDaily, 0)
 })
 
-test('computeUsage: throws when key.limit is not a finite number and limit_reset is daily', () => {
+test('computeUsage: non-finite key.limit with limit_reset daily degrades only the daily bar, does not throw', () => {
   const key: OpenRouterKeyData = { ...keyFixture, limit_reset: 'daily', limit: null as unknown as number }
-  assert.throws(() => computeUsage(key, guardrailFixture, activityFixture, CAPTURE_DAY))
+  const result = computeUsage(key, guardrailFixture, activityFixture, CAPTURE_DAY)
+  assert.equal(result.hasDailyLimit, false)
+  assert.equal(result.percentUsedDaily, 0)
 })
+
+test('computeUsage: a malformed daily field still returns a valid monthly percentUsed and categories', () => {
+  const key: OpenRouterKeyData = { ...keyFixture, limit_reset: 'daily', usage_daily: 'not-a-number' as unknown as number }
+  const result = computeUsage(key, guardrailFixture, activityFixture, CAPTURE_DAY)
+  assert.equal(result.hasDailyLimit, false, 'daily bar degraded')
+  assert.equal(result.percentUsedDaily, 0, 'daily bar degraded')
+  assert.equal(result.hasLimit, true, 'monthly guardrail unaffected by the malformed daily field')
+  const expectedPercentUsed = keyFixture.usage_monthly / guardrailFixture.limit_usd
+  assert.ok(
+    Math.abs(result.percentUsed - expectedPercentUsed) < 1e-9,
+    `expected monthly percentUsed ~${expectedPercentUsed}, got ${result.percentUsed}`,
+  )
+  const categorySum = Object.values(result.categories).reduce((a, b) => a + b, 0)
+  assert.ok(Math.abs(categorySum - 1) < 1e-9, `expected categories to sum to 1, got ${categorySum}`)
+})
+
+// The monthly path's throw-on-malformed-input behavior (the core contract,
+// unchanged by this fix) is already pinned below by
+// "computeUsage: throws when key.usage_monthly is not a finite number".
 
 test('computeUsage: daily figure is still computed when the monthly guardrail has no limit (non-monthly reset_interval)', () => {
   const weeklyGuardrail: OpenRouterGuardrailData = { ...guardrailFixture, reset_interval: 'weekly' }

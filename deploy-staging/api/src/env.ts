@@ -234,6 +234,15 @@ export function resolveDriveShareEmail(slug: string): string | null {
 // Resolve the OpenRouter key hash / guardrail id for a client (GF-104
 // rework). Returns undefined when the slug has no server-side entry — the
 // /usage route treats that as "not configured" rather than an error.
+//
+// Layer-5 review (round 2) finding 3 — `slug` comes straight off a URL path
+// param, and `env.openrouterClients` is a plain JSON.parse'd object, so a
+// bracket lookup walks the prototype chain: resolveOpenRouterClient('constructor')
+// would return Object's constructor function instead of undefined, which the
+// /usage route would then treat as "configured" and attempt an upstream call
+// with garbage ids. Object.hasOwn guards the lookup to the object's own
+// enumerable keys only, closing that off without needing a null-prototype
+// object at parse time.
 export function resolveOpenRouterClient(slug: string): OpenRouterClient | undefined {
-  return env.openrouterClients[slug]
+  return Object.hasOwn(env.openrouterClients, slug) ? env.openrouterClients[slug] : undefined
 }
