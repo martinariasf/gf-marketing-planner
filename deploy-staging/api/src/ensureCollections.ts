@@ -72,6 +72,13 @@ interface CollectionSpec {
   deleteRule?: string | null
 }
 
+// GF-142 — the `summary` cap, exported so the information-sources upload route
+// can reject an over-cap document itself with an actionable message instead of
+// letting PocketBase's bare validation sentence reach the dashboard. Declared
+// here because this is where the live schema is reconciled; a second literal in
+// the route would drift the day this one is raised.
+export const SUMMARY_MAX_CHARS = 1_000_000
+
 const collections: CollectionSpec[] = [
   {
     name: 'api_tokens',
@@ -361,8 +368,8 @@ const collections: CollectionSpec[] = [
       { name: 'title', type: 'text', required: true, max: 300 },
       { name: 'url', type: 'url' },
       { name: 'sourceType', type: 'select', values: ['website', 'note', 'news', 'reference', 'other'] },
-      { name: 'summary', type: 'text', max: 1_000_000 },
-      { name: 'prompt', type: 'text', max: 1_000_000 },
+      { name: 'summary', type: 'text', max: SUMMARY_MAX_CHARS },
+      { name: 'prompt', type: 'text', max: SUMMARY_MAX_CHARS },
       { name: 'approved', type: 'bool' },
       { name: 'approvedAt', type: 'text', max: 40 },
       { name: 'lastImportedAt', type: 'text', max: 40 },
