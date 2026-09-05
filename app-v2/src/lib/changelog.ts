@@ -22,6 +22,14 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2026-09-05',
+    title: 'A clearer message when a knowledge file is too large',
+    items: [
+      'Uploading an oversized document to Information Sources now explains the problem in plain language, including the document size and the limit, instead of showing a database error.',
+      'The message points out that images embedded in a Markdown export are stored as text and count toward the limit — which is why a file that looks like a few pages can be far too large.',
+    ],
+  },
+  {
+    date: '2026-09-05',
     title: 'See how much of your monthly allowance you have used',
     items: [
       'Configuration now opens with a usage card: a bar showing how much of this month’s allowance you have used, and a chart breaking your activity down into writing and editing, image generation and video generation.',

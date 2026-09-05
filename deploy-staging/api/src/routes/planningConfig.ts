@@ -11,6 +11,7 @@ import {
   type OrgSettings,
 } from '../orgSettings.js'
 import { isTextUpload } from '../textUpload.js'
+import { SUMMARY_MAX_CHARS, countCodePoints } from '../limits.js'
 import { clientExists } from '../tenancy.js'
 import { getClientUsage, type ClientUsage } from '../usage.js'
 
@@ -393,6 +394,26 @@ planningConfig.post(
     }
     if (!text) {
       return problem(c, { title: 'Bad Request', status: 400, detail: 'File is empty.' })
+    }
+    // GF-142 — reject an over-cap document here rather than letting PocketBase
+    // do it. PB's message ("summary must be no more than 1,000,000 characters")
+    // is technically right and practically useless: the document that triggered
+    // it reads as a few pages, because 94% of its characters were images the
+    // Markdown export inlined as base64 text. Naming both sizes and the cause is
+    // the difference between "it broke" and "remove the images or split it".
+    // Count code points, not `text.length`: PocketBase's validator counts runes,
+    // so UTF-16 units would refuse an emoji-heavy document PB would have taken.
+    const charCount = countCodePoints(text)
+    if (charCount > SUMMARY_MAX_CHARS) {
+      return problem(c, {
+        title: 'Payload Too Large',
+        status: 413,
+        detail:
+          `This document is ${charCount.toLocaleString('en-US')} characters; the limit is ` +
+          `${SUMMARY_MAX_CHARS.toLocaleString('en-US')}. Images embedded in a Markdown export ` +
+          'are stored as text and count toward that, so a file that looks like a few pages can ' +
+          'be far over the limit. Remove the embedded images, or split the document into parts.',
+      })
     }
 
     const now = new Date().toISOString()

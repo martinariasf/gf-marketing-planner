@@ -6,6 +6,7 @@
 // existence by name first.
 
 import { withPb } from './pb.js'
+import { SUMMARY_MAX_CHARS } from './limits.js'
 
 // GF-110 — the length option is NOT interchangeable across PB field types:
 // `text` is bounded by `max` (characters), while `json`/`editor`/`file` use
@@ -361,8 +362,8 @@ const collections: CollectionSpec[] = [
       { name: 'title', type: 'text', required: true, max: 300 },
       { name: 'url', type: 'url' },
       { name: 'sourceType', type: 'select', values: ['website', 'note', 'news', 'reference', 'other'] },
-      { name: 'summary', type: 'text', max: 1_000_000 },
-      { name: 'prompt', type: 'text', max: 1_000_000 },
+      { name: 'summary', type: 'text', max: SUMMARY_MAX_CHARS },
+      { name: 'prompt', type: 'text', max: SUMMARY_MAX_CHARS },
       { name: 'approved', type: 'bool' },
       { name: 'approvedAt', type: 'text', max: 40 },
       { name: 'lastImportedAt', type: 'text', max: 40 },
