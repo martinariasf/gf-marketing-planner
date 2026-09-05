@@ -604,16 +604,20 @@ export function registerApiDocs(app: OpenAPIHono): void {
     },
   })
 
-  // ── GF-104: OpenRouter usage summary (percentages only, never USD) ─────────
+  // ── GF-104: usage summary (percentages only, never USD) ────────────────────
+  // Layer-5 review (round 2) finding 1 — /api/v1/openapi.json is registered
+  // BEFORE the auth-gated subapps (see server.ts:63) and is served with no
+  // authentication at all, so this text is a publicly readable document.
+  // Never name the upstream provider here.
   reg({
     method: 'get',
     path: '/api/v1/clients/{slug}/usage',
     tags: ['config'],
-    summary: 'Read this client\'s monthly usage against its OpenRouter guardrail',
+    summary: "Read this client's monthly and daily usage against its upstream provider guardrails",
     description:
       'Percentages and category shares only — no raw USD amount ever leaves this endpoint. ' +
-      '`configured: false` means this client has no OpenRouter key/guardrail linked (card should hide). ' +
-      '`unavailable: true` means OpenRouter could not be reached; this endpoint never returns 500 for that. ' +
+      '`configured: false` means this client has no upstream provider key/guardrail linked (card should hide). ' +
+      '`unavailable: true` means the upstream provider could not be reached; this endpoint never returns 500 for that. ' +
       'Cached in-process for 5 minutes per client.',
     security: bearer,
     request: { params: slugParam },
@@ -634,6 +638,10 @@ export function registerApiDocs(app: OpenAPIHono): void {
                 audio: z.number().openapi({ example: 0 }),
               }),
               hasLimit: z.boolean().openapi({ description: 'False when the linked guardrail is not reset_interval=monthly.' }),
+              percentUsedDaily: z
+                .number()
+                .openapi({ description: 'Fraction 0..1 of the daily cap used.', example: 0.1 }),
+              hasDailyLimit: z.boolean().openapi({ description: 'False when the key has no limit_reset=daily cap.' }),
             }),
           ]),
         ),

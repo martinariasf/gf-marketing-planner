@@ -101,6 +101,15 @@ const warnedUnmappedModels = new Set<string>()
 // the identical dedupe mechanism (no second logging approach introduced).
 const warnedUnparseableDates = new Set<string>()
 
+// Same warn-once-per-process Set pattern again, this time for a client whose
+// key claims limit_reset=daily but carries a non-numeric usage_daily/limit.
+// Layer-5 review (round 2) finding 4 — degrading only the daily bar (instead
+// of throwing, which the route turns into losing the whole card) means the
+// same malformed key would otherwise log on every single request if it
+// weren't deduped. Keyed by the offending values themselves (stringified),
+// same as `warnedUnparseableDates` is keyed by the offending date string.
+const warnedNonNumericDaily = new Set<string>()
+
 function categoryFor(model: string): UsageCategory {
   for (const rule of CATEGORY_RULES) {
     if (model.includes(rule.match)) return rule.category
@@ -204,22 +213,35 @@ export function computeUsage(
   return { percentUsed, categories, hasLimit: true, percentUsedDaily, hasDailyLimit }
 }
 
-// GF-104 daily-usage extension. Mirrors the monthly flow above exactly: first
-// decide whether the reset interval even matches (no finiteness check yet —
-// that mirrors `hasLimit` above, which is interval-only), then, only in the
-// case where we're actually about to compute something, apply the same
-// Number.isFinite guard the monthly path uses and throw on a non-numeric
-// value so the route's existing catch turns it into the honest "unavailable"
-// state rather than a silent NaN. Every client key already carries its own
-// daily cap, so this needs no guardrail lookup — that's what makes it work
-// even for a client with no guardrail configured at all.
+// GF-104 daily-usage extension. Mirrors the monthly flow above: first decide
+// whether the reset interval even matches (no finiteness check yet — that
+// mirrors `hasLimit` above, which is interval-only), then, only in the case
+// where we're actually about to compute something, apply the same
+// Number.isFinite guard the monthly path uses. Every client key already
+// carries its own daily cap, so this needs no guardrail lookup — that's what
+// makes it work even for a client with no guardrail configured at all.
+//
+// Layer-5 review (round 2) finding 4 — unlike the monthly path (which stays a
+// hard throw: that's the core contract, and the route's catch losing the
+// whole card on a monthly failure is intentional), a malformed DAILY field
+// must NOT take down the monthly bar and pie with it. So this degrades in
+// place — hasDailyLimit: false, percentUsedDaily: 0 — and logs once per
+// process via the same warn-once Set pattern used above, instead of
+// throwing.
 function computeDailyUsage(key: OpenRouterKeyData): { percentUsedDaily: number; hasDailyLimit: boolean } {
   if (key.limit_reset !== 'daily') {
     return { percentUsedDaily: 0, hasDailyLimit: false }
   }
 
   if (!Number.isFinite(key.usage_daily) || !Number.isFinite(key.limit)) {
-    throw new Error('OpenRouter returned a non-numeric usage_daily or limit')
+    const warnKey = `${String(key.usage_daily)}|${String(key.limit)}`
+    if (!warnedNonNumericDaily.has(warnKey)) {
+      warnedNonNumericDaily.add(warnKey)
+      console.warn(
+        `[usage] non-numeric usage_daily or limit with limit_reset=daily (usage_daily=${String(key.usage_daily)}, limit=${String(key.limit)}) — daily bar degraded to no-limit`,
+      )
+    }
+    return { percentUsedDaily: 0, hasDailyLimit: false }
   }
 
   const hasDailyLimit = (key.limit as number) > 0
