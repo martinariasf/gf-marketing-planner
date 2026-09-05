@@ -85,6 +85,48 @@ function parseDriveEmails(raw: string | undefined): Record<string, string> {
   }
 }
 
+export interface OpenRouterClient {
+  keyHash: string
+  guardrailId: string
+}
+
+// Parse the optional OPENROUTER_CLIENTS_JSON per-client map. GF-104 rework:
+// clients must never see or set their own OpenRouter key hash / guardrail id
+// (org_configs.settings is client-editable) — Martin provisions the
+// per-client OpenRouter key/guardrail himself and wires the pair here,
+// server-side only. Shape:
+//   { "<slug>": { "keyHash": "<sha256 hex>", "guardrailId": "<uuid>" } }
+// Malformed JSON, or an entry that isn't an object, or whose keyHash/
+// guardrailId aren't non-empty strings, is dropped with a warning rather
+// than crashing boot — the affected slug's usage card just reads as
+// "not configured" (see the /usage route in routes/planningConfig.ts).
+function parseOpenRouterClients(raw: string | undefined): Record<string, OpenRouterClient> {
+  if (!raw || raw.trim() === '') return {}
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>
+    const out: Record<string, OpenRouterClient> = {}
+    for (const [slug, v] of Object.entries(obj)) {
+      if (
+        v &&
+        typeof v === 'object' &&
+        typeof (v as Record<string, unknown>).keyHash === 'string' &&
+        (v as Record<string, unknown>).keyHash !== '' &&
+        typeof (v as Record<string, unknown>).guardrailId === 'string' &&
+        (v as Record<string, unknown>).guardrailId !== ''
+      ) {
+        const entry = v as Record<string, unknown>
+        out[slug] = { keyHash: entry.keyHash as string, guardrailId: entry.guardrailId as string }
+      } else {
+        console.warn(`[env] OPENROUTER_CLIENTS_JSON entry "${slug}" missing keyHash/guardrailId — ignored`)
+      }
+    }
+    return out
+  } catch (err) {
+    console.warn('[env] OPENROUTER_CLIENTS_JSON is not valid JSON — ignored', err)
+    return {}
+  }
+}
+
 export const env = {
   // Bind address
   port: Number(process.env.PORT ?? 8080),
@@ -142,6 +184,13 @@ export const env = {
   // this field.
   openrouterMgmtKey: process.env.OPENROUTER_MGMT_KEY ?? '',
 
+  // Per-client OpenRouter key hash / guardrail id (GF-104 rework). SERVER-SIDE
+  // ONLY, same reasoning as openrouterMgmtKey above: clients must never see or
+  // configure their own OpenRouter wiring, so this no longer lives in
+  // org_configs.settings. Martin sets this map on deploy; see
+  // parseOpenRouterClients above and resolveOpenRouterClient below.
+  openrouterClients: parseOpenRouterClients(process.env.OPENROUTER_CLIENTS_JSON),
+
   // GF-68: absolute external base URL for this API, e.g.
   // "https://staging.marketing.gfinnov.com/api/v1". Needed because the chat
   // relay hands the Hermes agent container an absolute URL to fetch an
@@ -180,4 +229,11 @@ export function resolveClientLang(slug: string): Lang {
 // Returns null when the client's agent has no Drive identity wired yet.
 export function resolveDriveShareEmail(slug: string): string | null {
   return env.driveShareEmails[slug] ?? null
+}
+
+// Resolve the OpenRouter key hash / guardrail id for a client (GF-104
+// rework). Returns undefined when the slug has no server-side entry — the
+// /usage route treats that as "not configured" rather than an error.
+export function resolveOpenRouterClient(slug: string): OpenRouterClient | undefined {
+  return env.openrouterClients[slug]
 }
